@@ -1,4 +1,3 @@
-# A Graphical User Interface for JSBSim
 #
 # Copyright (c) 2023 Bertrand Coconnier
 #
@@ -15,21 +14,14 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import argparse
-from jsbsim.UI.app import App
-from jsbsim.UI.controller import Controller
+import jsbsim
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument(
-        "--version", action="version", version=f"JSBSim UI {Controller.get_version()}"
-    )
-    parser.add_argument(
-        "--root",
-        metavar="<path>",
-        help="specifies the JSBSim root directory (where aircraft/, engine/, etc. reside)",
-    )
-    args = parser.parse_args()
 
-    app = App(args.root)
-    app.mainloop()
+class Controller:
+    @staticmethod
+    def get_version():
+        return jsbsim.__version__
+
+    @staticmethod
+    def get_default_root_dir():
+        return jsbsim.get_default_root_dir()
