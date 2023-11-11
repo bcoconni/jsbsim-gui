@@ -1,4 +1,4 @@
-# A Graphical User Interface to JSBSim
+# A Graphical User Interface for JSBSim
 #
 # Copyright (c) 2023 Bertrand Coconnier
 #
@@ -15,18 +15,23 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import argparse
 import os
 import tkinter as tk
 from tkinter import filedialog as fd
-from tkinter.messagebox import showinfo
+from tkinter.messagebox import showerror, showinfo
 
 import jsbsim
 from PIL import Image, ImageTk
 
 
 class Controller:
-    def get_version(self):
+    @staticmethod
+    def get_version():
         return jsbsim.__version__
+    @staticmethod
+    def get_default_root_dir():
+        return jsbsim.get_default_root_dir()
 
 
 class MenuBar(tk.Menu):
@@ -42,7 +47,7 @@ class MenuBar(tk.Menu):
     def select_script_file(self):
         filename = fd.askopenfilename(
             title="Open a script",
-            initialdir=os.path.join(self.root_dir, "scripts"),
+            initialdir=self.root_dir,
             filetypes=(("script files", "*.xml"),),
         )
         if filename:
@@ -53,11 +58,9 @@ class MenuBar(tk.Menu):
 
 
 class App(tk.Tk):
-    def __init__(self, root_dir="."):
+    def __init__(self, root_dir=None):
         super().__init__()
-        self.root_dir = root_dir
-        self.controller = Controller()
-        self.title(f"JSBSim {self.controller.get_version()}")
+        self.title(f"JSBSim {Controller.get_version()}")
 
         menubar = MenuBar(self, root_dir)
         self.config(menu=menubar)
@@ -69,7 +72,23 @@ class App(tk.Tk):
             logo.image = logo_image
             logo.pack()
 
+        if root_dir:
+            self.root_dir = root_dir
+        else:
+            try:
+                self.root_dir = Controller.get_default_root_dir()
+            except IOError as e:
+                showerror("Error", message=e)
+                self.destroy()
+
 
 if __name__ == "__main__":
-    app = App(".")
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("--version", action="version",
+                        version=f"JSBSim UI {Controller.get_version()}")
+    parser.add_argument("--root", metavar="<path>",
+                        help="specifies the JSBSim root directory (where aircraft/, engine/, etc. reside)")
+    args = parser.parse_args()
+
+    app = App(args.root)
     app.mainloop()
