@@ -26,6 +26,22 @@ class Controller:
     def get_default_root_dir():
         return jsbsim.get_default_root_dir()
 
-    def __init__(self, root_dir:str, app):
+    def __init__(self, root_dir: str, app):
+        self.app = app
         with app.stdout_to_console():
             self.fdm = jsbsim.FGFDMExec(root_dir)
+
+    def load_script(self, filename: str) -> None:
+        # TODO Validate the script before loading
+        with self.app.stdout_to_console():
+            self.fdm.load_script(filename)
+
+    def get_property_list(self) -> list[str]:
+        return [
+            p.split(" ")[0]
+            for p in self.fdm.query_property_catalog("").split("\n")
+            if len(p) != 0
+        ]
+
+    def get_property_value(self, property_name: str) -> float:
+        return self.fdm[property_name]

@@ -22,6 +22,7 @@ import tkinter as tk
 from contextlib import contextmanager
 from tkinter import filedialog as fd
 from tkinter import ttk
+from tkinter.constants import *
 from tkinter.messagebox import showerror
 from typing import Optional
 
@@ -30,13 +31,13 @@ from PIL import Image, ImageTk
 
 
 class MenuBar(tk.Menu):
-    def __init__(self, root: tk.Widget, root_dir: str):
-        super().__init__(root)
+    def __init__(self, master: tk.Widget, root_dir: str):
+        super().__init__(master)
         self.root_dir = root_dir
 
         file_menu = tk.Menu(self, tearoff=False)
         file_menu.add_command(label="Open...", command=self.select_script_file)
-        file_menu.add_command(label="Exit", command=root.destroy)
+        file_menu.add_command(label="Exit", command=master.destroy)
         self.add_cascade(label="File", menu=file_menu)
 
     def select_script_file(self) -> None:
@@ -49,43 +50,75 @@ class MenuBar(tk.Menu):
             self.master.open_script(filename)
 
 
-class Text(ttk.Frame):
-    def __init__(self, root: tk.Widget, text: Optional[str] = None, **kw):
-        super().__init__(root)
+class TextView(ttk.Frame):
+    """Display text with scrollbar(s)"""
+
+    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
+        super().__init__(master)
         self.text = tk.Text(self, **kw)
-        self.text.grid(column=0, row=0, sticky="nwes")
+        self.text.grid(column=0, row=0, sticky=NSEW)
 
         # Vertical scrollbar
-        ys = ttk.Scrollbar(self, orient="vertical", command=self.text.yview)
-        ys.grid(column=1, row=0, sticky="ns")
+        ys = ttk.Scrollbar(self, orient=VERTICAL, command=self.text.yview)
+        ys.grid(column=1, row=0, sticky=NS)
         self.text["yscrollcommand"] = ys.set
 
         # Horizontal scrollbar if the text is not wrapped
-        if "wrap" in kw and kw["wrap"] == "none":
-            xs = ttk.Scrollbar(self, orient="horizontal", command=self.text.xview)
-            xs.grid(column=0, row=1, sticky="we")
+        if "wrap" in kw and kw["wrap"] == NONE:
+            xs = ttk.Scrollbar(self, orient=HORIZONTAL, command=self.text.xview)
+            xs.grid(column=0, row=1, sticky=EW)
             self.text["xscrollcommand"] = xs.set
 
         # Insert text
-        if text:
-            self.text.insert("1.0", text)
+        if contents:
+            self.text.insert("1.0", contents)
 
         # Widget layout
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
 
-class Console(Text):
-    def __init__(self, root: tk.Widget, text: Optional[str] = None, **kw):
-        super().__init__(root, text, **kw)
+class Console(TextView):
+    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
+        super().__init__(master, contents, **kw)
         # Set the text to read only
-        self.text["state"] = "disabled"
+        self.text.configure(state=DISABLED)
 
-    def write(self, text: str):
-        self.text["state"] = "normal"
-        self.text.insert("end", text)
-        self.text.see("end")
-        self.text["state"] = "disabled"
+    def write(self, contents: str):
+        self.text.configure(state=NORMAL)
+        self.text.insert(END, contents)
+        self.text.see(END)
+        self.text.configure(state=DISABLED)
+
+
+class PropertyList(ttk.Treeview):
+    def __init__(self, master: tk.Widget, properties: list[str], get_property_value):
+        super().__init__(master, columns=("prop", "val"))
+
+        self.heading("prop", text="Name", anchor=tk.W)
+        self.heading("val", text="Values", anchor=tk.W)
+        self.column("#0", width=60)
+
+        leafs = {}
+
+        for p in sorted(properties):
+            node = ""
+            for name in p.split("/"):
+                parent = node
+                node = "/".join((parent, name))
+                if node in leafs:
+                    continue
+
+                display_name = "  " * parent.count("/") + name
+                if parent:
+                    piid = leafs[parent]
+                else:
+                    piid = ""
+                leafs[node] = self.insert(
+                    piid, tk.END, values=(display_name, ""), open=False
+                )
+
+            self.set(leafs["/" + p], "val", get_property_value(p))
 
 
 class App(tk.Tk):
@@ -117,23 +150,34 @@ class App(tk.Tk):
         self.resizable(True, True)
         # Remove the logo
         self.logo.destroy()
+        frame = ttk.Frame(self)
 
         # Open the file in an text widget
         relpath = os.path.relpath(filename, self.root_dir)
         with open(filename, "r") as f:
             self.title(f"JSBSim {Controller.get_version()} - {relpath}")
-            self.code = Text(
-                self, "".join(f.readlines()), width=80, height=30, wrap="none"
+            self.code = TextView(
+                frame, "".join(f.readlines()), width=80, height=30, wrap=NONE
             )
-
-        self.code.grid(column=0, row=0, sticky="nwes")
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.code.grid(column=1, row=0, sticky=NSEW)
 
         self.console = Console(self, height=10)
-        self.console.grid(column=0, row=1, sticky="we")
+        self.console.grid(column=0, row=1, sticky=EW)
 
         self.controller = Controller(self.root_dir, self)
+        self.controller.load_script(relpath)
+
+        self.proplist = PropertyList(
+            frame,
+            self.controller.get_property_list(),
+            self.controller.get_property_value,
+        )
+        self.proplist.grid(column=0, row=0, sticky=NS)
+        frame.grid(column=0,row=0,sticky=NSEW)
+        frame.grid_columnconfigure(1, weight=1)
+        frame.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
     @contextmanager
     def stdout_to_console(self):
