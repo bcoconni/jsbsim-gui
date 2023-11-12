@@ -25,3 +25,7 @@ class Controller:
     @staticmethod
     def get_default_root_dir():
         return jsbsim.get_default_root_dir()
+
+    def __init__(self, root_dir:str, app):
+        with app.stdout_to_console():
+            self.fdm = jsbsim.FGFDMExec(root_dir)
