@@ -35,11 +35,13 @@ class Controller:
         with app.stdout_to_console():
             self.fdm = jsbsim.FGFDMExec(root_dir)
 
-    def load_script(self, filename: str) -> list[str]:
+    def load_script(self, filename: str) -> None:
         # TODO Validate the script before loading
+        script_name = os.path.relpath(filename, self.fdm.get_root_dir())
         with self.app.stdout_to_console():
-            self.fdm.load_script(filename)
+            self.fdm.load_script(script_name)
 
+    def get_input_files(self, filename) -> list[str]:
         root_dir = self.fdm.get_root_dir()
 
         def relpath_filename(filename):
@@ -52,7 +54,7 @@ class Controller:
         aircraft_filename = os.path.join(
             aircraft_path, aircraft_name, append_xml(aircraft_name)
         )
-        input_files = []
+        input_files = relpath_filename(filename)
         input_files += relpath_filename(aircraft_filename)
         IC_file = use_el.attrib["initialize"]
         input_files += relpath_filename(

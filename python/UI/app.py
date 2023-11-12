@@ -22,13 +22,15 @@ import tkinter as tk
 from contextlib import contextmanager
 from tkinter import filedialog as fd
 from tkinter import ttk
-from tkinter.constants import *
+from tkinter.constants import EW, NONE, NS, NSEW
 from tkinter.messagebox import showerror
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 from PIL import Image, ImageTk
 
 from .controller import Controller
+from .hierarchical_tree import FileTree, PropertyTree
+from .textview import Console, TextView
 
 
 class MenuBar(tk.Menu):
@@ -51,154 +53,39 @@ class MenuBar(tk.Menu):
             self.master.open_script(filename)
 
 
-class TextView(ttk.Frame):
-    """Display text with scrollbar(s)"""
-
-    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
+class SourceEditor(tk.Frame):
+    def __init__(
+        self,
+        master: tk.Widget,
+        filename: str,
+        root_dir: str,
+        get_controller: Callable[[str, tk.Widget], Controller],
+    ):
         super().__init__(master)
-        self.text = tk.Text(self, **kw)
-        self.text.grid(column=0, row=0, sticky=NSEW)
-
-        # Vertical scrollbar
-        ys = ttk.Scrollbar(self, orient=VERTICAL, command=self.text.yview)
-        ys.grid(column=1, row=0, sticky=NS)
-        self.text["yscrollcommand"] = ys.set
-
-        # Horizontal scrollbar if the text is not wrapped
-        if "wrap" in kw and kw["wrap"] == NONE:
-            xs = ttk.Scrollbar(self, orient=HORIZONTAL, command=self.text.xview)
-            xs.grid(column=0, row=1, sticky=EW)
-            self.text["xscrollcommand"] = xs.set
-
-        # Insert text
-        if contents:
-            self.text.insert("1.0", contents)
-
-        # Widget layout
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-
-class Console(TextView):
-    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
-        super().__init__(master, contents, **kw)
-        # Set the text to read only
-        self.text.configure(state=DISABLED)
-
-    def write(self, contents: str):
-        self.text.configure(state=NORMAL)
-        self.text.insert(END, contents)
-        self.text.see(END)
-        self.text.configure(state=DISABLED)
-
-
-class HierarchicalList(ttk.Treeview):
-    def __init__(
-        self,
-        master: tk.Widget,
-        elements: list[str],
-        columns_id: tuple[str],
-        columns_name: tuple[str],
-        is_open: bool = True,
-    ):
-        super().__init__(master, columns=columns_id)
-
-        for cid, name in zip(columns_id, columns_name):
-            self.heading(cid, text=name, anchor=tk.W)
-        self.column("#0", width=60, stretch=False)
-
-        self.leafs = {}
-
-        for elm in sorted(elements):
-            node = ""
-            for name in elm.split("/"):
-                parent = node
-                node = "/".join((parent, name))
-                if node in self.leafs:
-                    continue
-
-                display_name = "  " * parent.count("/") + name
-                if parent:
-                    piid = self.leafs[parent]
-                else:
-                    piid = ""
-                self.leafs[node] = self.insert(
-                    piid, tk.END, values=(display_name, ""), open=is_open
-                )
-
-
-class PropertyList(HierarchicalList):
-    def __init__(
-        self,
-        master: tk.Widget,
-        properties: list[str],
-        get_property_value: Callable[[str], float],
-    ):
-        super().__init__(master, properties, ("prop", "val"), ("Name", "Values"), False)
-
-        for p in sorted(properties):
-            self.set(self.leafs["/" + p], "val", get_property_value(p))
-
-
-class App(tk.Tk):
-    def __init__(self, root_dir: Optional[str] = None):
-        super().__init__()
-        self.title(f"JSBSim {Controller.get_version()}")
-        self.resizable(False, False)
-
-        menubar = MenuBar(self, root_dir)
-        self.config(menu=menubar)
-
-        with Image.open("logo_JSBSIM_globe.png") as image:
-            logo_resized = image.resize((image.width * 400 // image.height, 400))
-            logo_image = ImageTk.PhotoImage(logo_resized)
-            self.logo = ttk.Label(self, image=logo_image, background="white")
-            self.logo.image = logo_image
-            self.logo.grid(padx=(600 - logo_resized.width) // 2)
-
-        if root_dir:
-            self.root_dir = root_dir
-        else:
-            try:
-                self.root_dir = Controller.get_default_root_dir()
-            except IOError as e:
-                showerror("Error", message=e)
-                self.destroy()
-
-    def open_script(self, filename: str) -> None:
-        self.resizable(True, True)
-        # Remove the logo
-        self.logo.destroy()
+        self.root_dir = root_dir
         frame = ttk.Frame(self)
         left_frame = ttk.Frame(frame)
 
-        # Open the file in an text widget
-        script_relpath = os.path.relpath(filename, self.root_dir)
-        with open(filename, "r") as f:
-            self.title(f"JSBSim {Controller.get_version()} - {script_relpath}")
-            self.code = TextView(
-                frame, "".join(f.readlines()), width=80, height=30, wrap=NONE
-            )
-
         self.console = Console(self, height=10)
+        self.controller = get_controller(filename, self)
+        self.filetree = FileTree(left_frame, self.controller.get_input_files(filename))
 
-        self.controller = Controller(self.root_dir, self)
-        file_list = self.controller.load_script(script_relpath)
+        with open(filename, "r") as f:
+            self.code = TextView(frame, f.read(), width=80, height=30, wrap=NONE)
 
-        file_list.append(script_relpath)
-        self.filelist = HierarchicalList(left_frame, file_list, ("name",), ("Name",))
-
-        self.proplist = PropertyList(
+        self.proptree = PropertyTree(
             left_frame,
             self.controller.get_property_list(),
             self.controller.get_property_value,
         )
 
+        self.filetree.bind("<ButtonRelease>", self.open_source_file)
+
         # Window layout
         self.code.grid(column=1, row=0, sticky=NSEW)
         self.console.grid(column=0, row=1, sticky=EW)
-        self.filelist.grid(column=0, row=0, sticky=EW)
-        self.proplist.grid(column=0, row=1, sticky=NS)
+        self.filetree.grid(column=0, row=0, sticky=EW)
+        self.proptree.grid(column=0, row=1, sticky=NS)
         left_frame.grid(column=0, row=0, sticky=NS)
         left_frame.grid_columnconfigure(0, weight=1)
         left_frame.grid_rowconfigure(1, weight=1)
@@ -207,6 +94,10 @@ class App(tk.Tk):
         frame.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+
+    def open_source_file(self, filename: str) -> None:
+        with open(os.path.join(self.root_dir, filename), "r") as f:
+            self.code.new_content(f.read())
 
     @contextmanager
     def stdout_to_console(self):
@@ -239,3 +130,49 @@ class App(tk.Tk):
             self.console.write(f.read())
         finally:
             os.close(saved_stdout_fd)
+
+
+class App(tk.Tk):
+    def __init__(self, root_dir: Optional[str] = None):
+        super().__init__()
+        self.title(f"JSBSim {Controller.get_version()}")
+        self.resizable(False, False)
+
+        menubar = MenuBar(self, root_dir)
+        self.config(menu=menubar)
+
+        with Image.open("logo_JSBSIM_globe.png") as image:
+            logo_resized = image.resize((image.width * 400 // image.height, 400))
+            logo_image = ImageTk.PhotoImage(logo_resized)
+            self.main = ttk.Label(self, image=logo_image, background="white")
+            self.main.image = logo_image
+            self.main.grid(padx=(600 - logo_resized.width) // 2)
+
+        if root_dir:
+            self.root_dir = root_dir
+        else:
+            try:
+                self.root_dir = Controller.get_default_root_dir()
+            except IOError as e:
+                showerror("Error", message=e)
+                self.destroy()
+
+    def open_script(self, filename: str) -> None:
+        self.resizable(True, True)
+        # Remove the logo
+        self.main.destroy()
+
+        # Open the file in an text widget
+        script_relpath = os.path.relpath(filename, self.root_dir)
+        self.title(f"JSBSim {Controller.get_version()} - {script_relpath}")
+        self.main = SourceEditor(
+            self, filename, self.root_dir, self.initialize_controller
+        )
+        self.main.grid(column=0, row=0, sticky=NSEW)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+    def initialize_controller(self, script_name: str, widget: tk.Widget) -> Controller:
+        self.controller = Controller(self.root_dir, widget)
+        self.controller.load_script(script_name)
+        return self.controller
