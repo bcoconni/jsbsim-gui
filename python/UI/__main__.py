@@ -16,8 +16,8 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import argparse
-from jsbsim.UI.app import App
-from jsbsim.UI.controller import Controller
+from .app import App
+from .controller import Controller
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)

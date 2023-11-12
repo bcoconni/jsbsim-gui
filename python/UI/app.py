@@ -24,10 +24,11 @@ from tkinter import filedialog as fd
 from tkinter import ttk
 from tkinter.constants import *
 from tkinter.messagebox import showerror
-from typing import Optional
+from typing import Optional, Callable
 
-from jsbsim.UI.controller import Controller
 from PIL import Image, ImageTk
+
+from .controller import Controller
 
 
 class MenuBar(tk.Menu):
@@ -91,34 +92,52 @@ class Console(TextView):
         self.text.configure(state=DISABLED)
 
 
-class PropertyList(ttk.Treeview):
-    def __init__(self, master: tk.Widget, properties: list[str], get_property_value):
-        super().__init__(master, columns=("prop", "val"))
+class HierarchicalList(ttk.Treeview):
+    def __init__(
+        self,
+        master: tk.Widget,
+        elements: list[str],
+        columns_id: tuple[str],
+        columns_name: tuple[str],
+        is_open: bool = True,
+    ):
+        super().__init__(master, columns=columns_id)
 
-        self.heading("prop", text="Name", anchor=tk.W)
-        self.heading("val", text="Values", anchor=tk.W)
-        self.column("#0", width=60)
+        for cid, name in zip(columns_id, columns_name):
+            self.heading(cid, text=name, anchor=tk.W)
+        self.column("#0", width=60, stretch=False)
 
-        leafs = {}
+        self.leafs = {}
 
-        for p in sorted(properties):
+        for elm in sorted(elements):
             node = ""
-            for name in p.split("/"):
+            for name in elm.split("/"):
                 parent = node
                 node = "/".join((parent, name))
-                if node in leafs:
+                if node in self.leafs:
                     continue
 
                 display_name = "  " * parent.count("/") + name
                 if parent:
-                    piid = leafs[parent]
+                    piid = self.leafs[parent]
                 else:
                     piid = ""
-                leafs[node] = self.insert(
-                    piid, tk.END, values=(display_name, ""), open=False
+                self.leafs[node] = self.insert(
+                    piid, tk.END, values=(display_name, ""), open=is_open
                 )
 
-            self.set(leafs["/" + p], "val", get_property_value(p))
+
+class PropertyList(HierarchicalList):
+    def __init__(
+        self,
+        master: tk.Widget,
+        properties: list[str],
+        get_property_value: Callable[[str], float],
+    ):
+        super().__init__(master, properties, ("prop", "val"), ("Name", "Values"), False)
+
+        for p in sorted(properties):
+            self.set(self.leafs["/" + p], "val", get_property_value(p))
 
 
 class App(tk.Tk):
@@ -151,29 +170,39 @@ class App(tk.Tk):
         # Remove the logo
         self.logo.destroy()
         frame = ttk.Frame(self)
+        left_frame = ttk.Frame(frame)
 
         # Open the file in an text widget
-        relpath = os.path.relpath(filename, self.root_dir)
+        script_relpath = os.path.relpath(filename, self.root_dir)
         with open(filename, "r") as f:
-            self.title(f"JSBSim {Controller.get_version()} - {relpath}")
+            self.title(f"JSBSim {Controller.get_version()} - {script_relpath}")
             self.code = TextView(
                 frame, "".join(f.readlines()), width=80, height=30, wrap=NONE
             )
-        self.code.grid(column=1, row=0, sticky=NSEW)
 
         self.console = Console(self, height=10)
-        self.console.grid(column=0, row=1, sticky=EW)
 
         self.controller = Controller(self.root_dir, self)
-        self.controller.load_script(relpath)
+        file_list = self.controller.load_script(script_relpath)
+
+        file_list.append(script_relpath)
+        self.filelist = HierarchicalList(left_frame, file_list, ("name",), ("Name",))
 
         self.proplist = PropertyList(
-            frame,
+            left_frame,
             self.controller.get_property_list(),
             self.controller.get_property_value,
         )
-        self.proplist.grid(column=0, row=0, sticky=NS)
-        frame.grid(column=0,row=0,sticky=NSEW)
+
+        # Window layout
+        self.code.grid(column=1, row=0, sticky=NSEW)
+        self.console.grid(column=0, row=1, sticky=EW)
+        self.filelist.grid(column=0, row=0, sticky=EW)
+        self.proplist.grid(column=0, row=1, sticky=NS)
+        left_frame.grid(column=0, row=0, sticky=NS)
+        left_frame.grid_columnconfigure(0, weight=1)
+        left_frame.grid_rowconfigure(1, weight=1)
+        frame.grid(column=0, row=0, sticky=NSEW)
         frame.grid_columnconfigure(1, weight=1)
         frame.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -186,7 +215,7 @@ class App(tk.Tk):
         libc = ctypes.CDLL(None)
         c_stdout = ctypes.c_void_p.in_dll(libc, "stdout")
 
-        def _redirect_stdout(to_fd):
+        def _redirect_stdout(to_fd, mode):
             # Flush the C-level buffer stdout
             libc.fflush(c_stdout)
             # Flush and close sys.stdout - also closes the file descriptor (fd)
@@ -194,17 +223,17 @@ class App(tk.Tk):
             # Make original_stdout_fd point to the same file as to_fd
             os.dup2(to_fd, original_stdout_fd)
             # Create a new sys.stdout that points to the redirected fd
-            sys.stdout = os.fdopen(original_stdout_fd, "wb")
+            sys.stdout = os.fdopen(original_stdout_fd, mode)
 
         saved_stdout_fd = os.dup(original_stdout_fd)
         try:
             # Create a pipe and redirect stdout to it
             r_fd, w_fd = os.pipe()
-            _redirect_stdout(w_fd)
+            _redirect_stdout(w_fd, "wb")
             # Yield to caller, then redirect stdout back to the saved fd
             yield
             os.close(w_fd)
-            _redirect_stdout(saved_stdout_fd)
+            _redirect_stdout(saved_stdout_fd, "w")
             # Copy contents of pipe to the given stream
             f = os.fdopen(r_fd, "r")
             self.console.write(f.read())
