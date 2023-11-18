@@ -191,8 +191,13 @@ class XMLSourceCodeView(SourceCodeView):
         data_lines = data.split("\n")
         line1 = self.parser.CurrentLineNumber
         start = self.parser.CurrentColumnNumber
-        line2 = line1 + len(data_lines) - 1
-        end = len(data_lines[-1]) + 3
+        comment_lines = len(data_lines)
+        if comment_lines > 1:
+            line2 = line1 + comment_lines - 1
+            end = len(data_lines[-1]) + 3  # len("-->") == 3
+        else:
+            line2 = line1
+            end = start + len(data_lines[-1]) + 7  # len("<!--") + len("-->") == 7
         self.text.tag_add("XML_comment", f"{line1}.{start}", f"{line2}.{end}")
 
     def xmldecl(self, version: str, encoding: str, standalone: int) -> None:
