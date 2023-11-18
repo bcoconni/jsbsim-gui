@@ -26,7 +26,7 @@ from typing import Callable
 
 from .controller import Controller
 from .hierarchical_tree import FileTree, PropertyTree
-from .textview import Console, SourceCodeView
+from .textview import Console, XMLSourceCodeView
 
 
 class SourceEditor(tk.Frame):
@@ -47,7 +47,7 @@ class SourceEditor(tk.Frame):
         self.filetree = FileTree(left_frame, self.controller.get_input_files(filename))
 
         with open(filename, "r") as f:
-            self.code = SourceCodeView(
+            self.code = XMLSourceCodeView(
                 frame, f.read(), width=80, height=30, wrap=NONE
             )
 

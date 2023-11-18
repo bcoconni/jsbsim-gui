@@ -32,6 +32,7 @@ from tkinter.constants import (
     VERTICAL,
 )
 from typing import Optional
+from xml.parsers import expat
 
 
 class TextView(ttk.Frame):
@@ -71,6 +72,8 @@ class TextView(ttk.Frame):
 
 
 class SourceCodeView(TextView):
+    """Display text with line numbers"""
+
     def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
         super().__init__(master, contents, **kw)
         source_frame = ttk.Frame(self, relief=SUNKEN)
@@ -96,7 +99,7 @@ class SourceCodeView(TextView):
         source_frame.grid_rowconfigure(0, weight=1)
 
         if contents:
-            self.new_content(contents)
+            SourceCodeView.new_content(self, contents)
 
         self.line_numbers.bind("<Button-1>", self.goto_line)
         self.text.bind("<KeyRelease>", self.update_line_numbers)
@@ -123,11 +126,13 @@ class SourceCodeView(TextView):
 
     def update_line_numbers(self, _):
         num_text_lines = int(self.text.index(END).split(".", maxsplit=1)[0])
-        num_line_numbers = int(self.line_numbers.index(END).split(".", maxsplit=1)[0])-1
+        num_line_numbers = (
+            int(self.line_numbers.index(END).split(".", maxsplit=1)[0]) - 1
+        )
         self.line_numbers.configure(state=NORMAL)
         if num_text_lines < num_line_numbers:
             self.line_numbers.delete(f"{num_text_lines}.0", END)
-            self.line_numbers.insert(END,"\n")
+            self.line_numbers.insert(END, "\n")
         elif num_text_lines > num_line_numbers:
             self.line_numbers.insert(
                 END,
@@ -135,6 +140,71 @@ class SourceCodeView(TextView):
                 + "\n",
             )
         self.line_numbers.configure(state=DISABLED)
+
+
+class XMLSourceCodeView(SourceCodeView):
+    def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
+        super().__init__(master, contents, **kw)
+        self.parser = self.new_parser()
+        self.parser.Parse(contents)
+        self.text.tag_configure("XML_tag", foreground="#ff00ff")
+        self.text.tag_configure("XML_comment", foreground="#00aaaa")
+        self.text.tag_configure("XML_attr_name", foreground="#00aa00")
+        self.text.tag_configure("XML_attr_value", foreground="#aaaa00")
+
+    def new_parser(self):
+        parser = expat.ParserCreate()
+        parser.StartElementHandler = self.start_element
+        parser.EndElementHandler = self.end_element
+        parser.CommentHandler = self.comments
+        parser.XmlDeclHandler = self.xmldecl
+        return parser
+
+    def start_element(self, name: str, attrs: dict[str, str]):
+        line = self.parser.CurrentLineNumber
+        start = self.parser.CurrentColumnNumber + 1
+        end = start + len(name)
+        self.text.tag_add("XML_tag", f"{line}.{start}", f"{line}.{end}")
+
+        if attrs:
+            for attr_name, attr_value in attrs.items():
+                index = self.text.search(attr_name, f"{line}.{end+1}")
+                line, start = index.split(".")
+                end = int(start) + len(attr_name)
+                self.text.tag_add("XML_attr_name", index, f"{line}.{end}")
+
+                index = self.text.search(attr_value, f"{line}.{end+1}")
+                line, col = index.split(".")
+                start = int(col)
+                end = start + len(attr_value) + 1
+                self.text.tag_add(
+                    "XML_attr_value", f"{line}.{start-1}", f"{line}.{end}"
+                )
+
+    def end_element(self, name: str):
+        line = self.parser.CurrentLineNumber
+        start = self.parser.CurrentColumnNumber + 2
+        end = start + len(name)
+        self.text.tag_add("XML_tag", f"{line}.{start}", f"{line}.{end}")
+
+    def comments(self, data: str):
+        data_lines = data.split("\n")
+        line1 = self.parser.CurrentLineNumber
+        start = self.parser.CurrentColumnNumber
+        line2 = line1 + len(data_lines) - 1
+        end = len(data_lines[-1]) + 3
+        self.text.tag_add("XML_comment", f"{line1}.{start}", f"{line2}.{end}")
+
+    def xmldecl(self, version: str, encoding: str, standalone: int):
+        attrs = {"version": version}
+        if encoding:
+            attrs["encoding"] = encoding
+        self.start_element("?xml", attrs)
+
+    def new_content(self, contents: str):
+        super().new_content(contents)
+        self.parser = self.new_parser()
+        self.parser.Parse(contents)
 
 
 class Console(TextView):
