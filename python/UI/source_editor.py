@@ -73,10 +73,13 @@ class SourceEditor(ttk.Frame):
                 )
             )
 
-        proptree = PropertyTree(
-            left_frame,
-            controller.get_property_list(),
-            controller.get_property_value,
+        property_view = LabeledWidget(left_frame, "Property List")
+        property_view.set_widget(
+            PropertyTree(
+                property_view,
+                controller.get_property_list(),
+                controller.get_property_value,
+            )
         )
 
         fileview.widget.bind("<ButtonRelease>", self.open_source_file)
@@ -85,7 +88,7 @@ class SourceEditor(ttk.Frame):
         self.codeview.grid(column=1, row=0, sticky=NSEW)
         self.console.grid(column=0, row=1, sticky=EW)
         fileview.grid(column=0, row=0, sticky=EW)
-        proptree.grid(column=0, row=1, sticky=NS)
+        property_view.grid(column=0, row=1, sticky=NS)
         left_frame.grid(column=0, row=0, sticky=NS)
         left_frame.grid_columnconfigure(0, weight=1)
         left_frame.grid_rowconfigure(1, weight=1)
