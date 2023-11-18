@@ -49,9 +49,12 @@ class MenuBar(tk.Menu):
         if filename:
             root = et.parse(filename).getroot()
             if root.tag == "runscript":
-                self.master.open_file(filename, Controller.load_script)
-            elif root.tag == 'fdm_config':
-                self.master.open_file(filename, Controller.load_aircraft)
+                use_el = root.find("use")
+                aircraft_name = use_el.attrib["aircraft"]
+                self.master.open_file(filename, aircraft_name, Controller.load_script)
+            elif root.tag == "fdm_config":
+                aircraft_name = os.path.splitext(os.path.basename(filename))[0]
+                self.master.open_file(filename, aircraft_name, Controller.load_aircraft)
             else:
                 name = os.path.relpath(filename, self.root_dir)
                 showerror(
@@ -65,7 +68,6 @@ class App(tk.Tk):
         super().__init__()
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
-        self.controller: Optional[Controller] = None
 
         menubar = MenuBar(self, root_dir)
         self.config(menu=menubar)
@@ -86,19 +88,23 @@ class App(tk.Tk):
                 showerror("Error", message=e)
                 self.destroy()
 
-    def open_file(self, filename: str, load_file:Callable[[Controller,str], None])->None:
+    def open_file(
+        self,
+        filename: str,
+        aircraft_name: str,
+        load_file: Callable[[Controller, str], None],
+    ) -> None:
         self.resizable(True, True)
         # Remove the logo
         self.main.destroy()
+        self.title(f"JSBSim {Controller.get_version()} - {aircraft_name}")
 
-        def initialize_controller(aircraft_name: str, widget: tk.Widget) -> Controller:
-            self.controller = Controller(self.root_dir, widget)
-            load_file(self.controller, aircraft_name)
-            return self.controller
+        def initialize_controller(filename: str, widget: tk.Widget) -> Controller:
+            controller = Controller(self.root_dir, widget)
+            load_file(controller, filename)
+            return controller
 
         # Open the file in an text widget
-        script_relpath = os.path.relpath(filename, self.root_dir)
-        self.title(f"JSBSim {Controller.get_version()} - {script_relpath}")
         self.main = SourceEditor(self, filename, self.root_dir, initialize_controller)
 
         # Window layout
