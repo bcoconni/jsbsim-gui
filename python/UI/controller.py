@@ -16,6 +16,7 @@
 
 import os
 import xml.etree.ElementTree as et
+import platform
 
 import jsbsim
 from jsbsim._jsbsim import _append_xml as append_xml
@@ -57,7 +58,7 @@ class Controller:
         input_files = relpath_filename(filename)
         root = et.parse(os.path.join(root_dir, filename)).getroot()
 
-        if root.tag == 'runscript':
+        if root.tag == "runscript":
             use_el = root.find("use")
             aircraft_name = use_el.attrib["aircraft"]
             aircraft_filename = os.path.join(
@@ -105,6 +106,9 @@ class Controller:
                 input_files += relpath_filename(os.path.join(engine_path, filename))
             elif os.path.exists(os.path.join(systems_path, filename)):
                 input_files += relpath_filename(os.path.join(systems_path, filename))
+
+        if platform.system() == 'Windows':
+            return [name.replace("\\", "/") for name in input_files]
 
         return input_files
 
