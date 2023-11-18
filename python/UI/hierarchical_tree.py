@@ -35,24 +35,20 @@ class HierarchicalTree(ttk.Frame):
 
         self.tree.column("#0", width=60, stretch=False)
 
-        self.leafs = {}
-
         for elm in sorted(elements):
-            node = ""
-            for name in elm.split("/"):
-                parent = node
-                node = "/".join((parent, name))
-                if node in self.leafs:
-                    continue
-
-                display_name = "  " * parent.count("/") + name
-                if parent:
-                    piid = self.leafs[parent]
+            parent_id = ""
+            for depth, name in enumerate(elm.split("/")):
+                for child_id in self.tree.get_children(parent_id):
+                    child = self.tree.item(child_id)
+                    child_name = str(child["values"][0]).strip()
+                    if name == child_name:
+                        parent_id = child_id
+                        break
                 else:
-                    piid = ""
-                self.leafs[node] = self.tree.insert(
-                    piid, tk.END, values=(display_name, ""), open=is_open
-                )
+                    display_name = "  " * depth + name
+                    parent_id = self.tree.insert(
+                        parent_id, tk.END, values=(display_name, ""), open=is_open
+                    )
 
         # Vertical scrollbar
         ys = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
@@ -67,13 +63,12 @@ class HierarchicalTree(ttk.Frame):
         selected_prop = []
         for selected_item in self.tree.selection():
             item = self.tree.item(selected_item)
-            record = item["values"]
-            name = str(record[0]).strip()
+            name = str(item["values"][0]).strip()
 
             parent = self.tree.parent(selected_item)
             while parent:
                 item = self.tree.item(parent)
-                name = str(item["values"][0]).strip() + "/" + name
+                name = "/".join([str(item["values"][0]).strip(), name])
                 parent = self.tree.parent(parent)
 
             if not self.tree.get_children([selected_item]):
@@ -93,9 +88,24 @@ class PropertyTree(HierarchicalTree):
 
         self.tree.heading("prop", text="Name")
         self.tree.heading("val", text="Values")
+        self.set_values("", None, get_property_value)
 
-        for p in sorted(properties):
-            self.tree.set(self.leafs["/" + p], "val", get_property_value(p))
+    def set_values(
+        self,
+        parent_name: str,
+        parent_id: str,
+        get_property_value: Callable[[str], float],
+    ):
+        children = self.tree.get_children(parent_id)
+        for child_id in children:
+            child = self.tree.item(child_id)
+            child_name = str(child["values"][0]).strip()
+            if parent_name:
+                child_name = "/".join([parent_name, child_name])
+            self.set_values(child_name, child_id, get_property_value)
+
+        if not children:
+            self.tree.set(parent_id, "val", get_property_value(parent_name))
 
 
 class FileTree(HierarchicalTree):
