@@ -98,19 +98,15 @@ class PropertyTree(HierarchicalTree):
             self.tree.set(self.leafs["/" + p], "val", get_property_value(p))
 
 
-class FileTree(tk.Frame):
+class FileTree(HierarchicalTree):
     def __init__(self, master: tk.Widget, elements: list[str]):
-        super().__init__(master)
-        label = ttk.Label(self, text="Project Files")
-        self.filetree = HierarchicalTree(self, elements, ("name",))
-        self.filetree.tree.configure(show="tree", selectmode=BROWSE)
+        super().__init__(master, elements, ("name",))
+        self.tree.configure(show="tree", selectmode=BROWSE)
 
-        # Widget layout
-        label.grid(column=0, row=0)
-        self.filetree.grid(column=0, row=1, sticky=NSEW)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+    def bind(self, sequence: Optional[str], func, add: Optional[bool] = None) -> None:
+        def bind_func(_):
+            selection = self.get_selected_elements()
+            if selection:
+                func(selection[0])
 
-    def bind(self, sequence: Optional[str], func, add: Optional[bool] = None):
-        tree = self.filetree
-        tree.tree.bind(sequence, lambda _: func(tree.get_selected_elements()[0]), add)
+        self.tree.bind(sequence, bind_func, add)

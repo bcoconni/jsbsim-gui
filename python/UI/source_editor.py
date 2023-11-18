@@ -29,7 +29,24 @@ from .hierarchical_tree import FileTree, PropertyTree
 from .textview import Console, XMLSourceCodeView
 
 
-class SourceEditor(tk.Frame):
+class LabeledWidget(ttk.Frame):
+    def __init__(self, master: tk.Widget, label: str):
+        super().__init__(master)
+        self.widget: tk.Widget | None = None
+        self.label = ttk.Label(self, text=label)
+        self.label.grid(column=0, row=0)
+
+    def set_widget(self, widget: tk.Widget) -> None:
+        self.widget = widget
+        self.widget.grid(column=0, row=1, sticky=NSEW)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+    def set_label(self, label: str) -> None:
+        self.label.config(text=label)
+
+
+class SourceEditor(ttk.Frame):
     def __init__(
         self,
         master: tk.Widget,
@@ -39,43 +56,51 @@ class SourceEditor(tk.Frame):
     ):
         super().__init__(master)
         self.root_dir = root_dir
-        frame = ttk.Frame(self)
-        left_frame = ttk.Frame(frame)
+        main_frame = ttk.Frame(self)
+        left_frame = ttk.Frame(main_frame)
 
         self.console = Console(self, height=10)
-        self.controller = get_controller(filename, self)
-        self.filetree = FileTree(left_frame, self.controller.get_input_files(filename))
+        controller = get_controller(filename, self)
+        fileview = LabeledWidget(left_frame, "Project Files")
+        fileview.set_widget(FileTree(fileview, controller.get_input_files(filename)))
 
         with open(filename, "r") as f:
-            self.code = XMLSourceCodeView(
-                frame, f.read(), width=80, height=30, wrap=NONE
+            file_relpath = os.path.relpath(filename, self.root_dir)
+            self.codeview = LabeledWidget(main_frame, file_relpath)
+            self.codeview.set_widget(
+                XMLSourceCodeView(
+                    self.codeview, f.read(), width=80, height=30, wrap=NONE
+                )
             )
 
-        self.proptree = PropertyTree(
+        proptree = PropertyTree(
             left_frame,
-            self.controller.get_property_list(),
-            self.controller.get_property_value,
+            controller.get_property_list(),
+            controller.get_property_value,
         )
 
-        self.filetree.bind("<ButtonRelease>", self.open_source_file)
+        fileview.widget.bind("<ButtonRelease>", self.open_source_file)
 
         # Window layout
-        self.code.grid(column=1, row=0, sticky=NSEW)
+        self.codeview.grid(column=1, row=0, sticky=NSEW)
         self.console.grid(column=0, row=1, sticky=EW)
-        self.filetree.grid(column=0, row=0, sticky=EW)
-        self.proptree.grid(column=0, row=1, sticky=NS)
+        fileview.grid(column=0, row=0, sticky=EW)
+        proptree.grid(column=0, row=1, sticky=NS)
         left_frame.grid(column=0, row=0, sticky=NS)
         left_frame.grid_columnconfigure(0, weight=1)
         left_frame.grid_rowconfigure(1, weight=1)
-        frame.grid(column=0, row=0, sticky=NSEW)
-        frame.grid_columnconfigure(1, weight=1)
-        frame.grid_rowconfigure(0, weight=1)
+        main_frame.grid(column=0, row=0, sticky=NSEW)
+        main_frame.grid_columnconfigure(1, weight=1)
+        main_frame.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
     def open_source_file(self, filename: str) -> None:
-        with open(os.path.join(self.root_dir, filename), "r") as f:
-            self.code.new_content(f.read())
+        editor = self.codeview.widget
+        if editor:
+            with open(os.path.join(self.root_dir, filename), "r") as f:
+                self.codeview.set_label(filename)
+                editor.new_content(f.read())
 
     @contextmanager
     def stdout_to_console(self):
