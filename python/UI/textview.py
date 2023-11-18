@@ -76,15 +76,17 @@ class SourceCodeView(TextView):
 
     def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
         super().__init__(master, contents, **kw)
-        source_frame = ttk.Frame(self, relief=SUNKEN)
+        source_frame = ttk.Frame(self, borderwidth=1, relief=SUNKEN)
         source_frame.grid(column=0, row=0, sticky=NSEW)
 
-        self.line_numbers = tk.Text(source_frame, width=3, bg="light gray", relief=FLAT)
+        self.line_numbers = tk.Text(
+            source_frame, width=3, bg="#eeeeee", borderwidth=0, relief=FLAT
+        )
         self.line_numbers.grid(column=0, row=0, sticky=NS)
         self.line_numbers["yscrollcommand"] = self.move_text
 
         self.text.destroy()
-        self.text = tk.Text(source_frame, **kw)
+        self.text = tk.Text(source_frame, borderwidth=0, **kw)
         self.text.grid(column=1, row=0, sticky=NSEW)
         self.text["yscrollcommand"] = self.move_line_numbers
         self.text.configure(relief=FLAT)
