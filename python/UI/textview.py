@@ -66,7 +66,7 @@ class TextView(ttk.Frame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-    def new_content(self, contents: str):
+    def new_content(self, contents: str) -> None:
         self.text.delete("1.0", END)
         self.text.insert("1.0", contents)
 
@@ -104,27 +104,27 @@ class SourceCodeView(TextView):
         self.line_numbers.bind("<Button-1>", self.goto_line)
         self.text.bind("<KeyRelease>", self.update_line_numbers)
 
-    def move_text(self, first: float, last: float):
+    def move_text(self, first: float, last: float) -> None:
         self.yscrollbar.set(first, last)
         self.text.yview(MOVETO, first)
 
-    def move_line_numbers(self, first: float, last: float):
+    def move_line_numbers(self, first: float, last: float) -> None:
         self.yscrollbar.set(first, last)
         self.line_numbers.yview(MOVETO, first)
 
-    def yview(self, *args):
+    def yview(self, *args) -> tuple[float, float]:
         self.text.yview(*args)
-        self.line_numbers.yview(*args)
+        return self.line_numbers.yview(*args)
 
-    def new_content(self, contents: str):
+    def new_content(self, contents: str) -> None:
         super().new_content(contents)
         self.update_line_numbers(None)
 
-    def goto_line(self, event: tk.Event):
+    def goto_line(self, event: tk.Event) -> None:
         line = self.line_numbers.index(f"@{event.x},{event.y} linestart")
         self.text.see(f"{line}")
 
-    def update_line_numbers(self, _):
+    def update_line_numbers(self, _) -> None:
         num_text_lines = int(self.text.index(END).split(".", maxsplit=1)[0])
         num_line_numbers = (
             int(self.line_numbers.index(END).split(".", maxsplit=1)[0]) - 1
@@ -152,7 +152,7 @@ class XMLSourceCodeView(SourceCodeView):
         self.text.tag_configure("XML_attr_name", foreground="#00aa00")
         self.text.tag_configure("XML_attr_value", foreground="#aaaa00")
 
-    def new_parser(self):
+    def new_parser(self) -> expat.XMLParserType:
         parser = expat.ParserCreate()
         parser.StartElementHandler = self.start_element
         parser.EndElementHandler = self.end_element
@@ -160,7 +160,7 @@ class XMLSourceCodeView(SourceCodeView):
         parser.XmlDeclHandler = self.xmldecl
         return parser
 
-    def start_element(self, name: str, attrs: dict[str, str]):
+    def start_element(self, name: str, attrs: dict[str, str]) -> None:
         line = self.parser.CurrentLineNumber
         start = self.parser.CurrentColumnNumber + 1
         end = start + len(name)
@@ -181,13 +181,13 @@ class XMLSourceCodeView(SourceCodeView):
                     "XML_attr_value", f"{line}.{start-1}", f"{line}.{end}"
                 )
 
-    def end_element(self, name: str):
+    def end_element(self, name: str) -> None:
         line = self.parser.CurrentLineNumber
         start = self.parser.CurrentColumnNumber + 2
         end = start + len(name)
         self.text.tag_add("XML_tag", f"{line}.{start}", f"{line}.{end}")
 
-    def comments(self, data: str):
+    def comments(self, data: str) -> None:
         data_lines = data.split("\n")
         line1 = self.parser.CurrentLineNumber
         start = self.parser.CurrentColumnNumber
@@ -195,13 +195,13 @@ class XMLSourceCodeView(SourceCodeView):
         end = len(data_lines[-1]) + 3
         self.text.tag_add("XML_comment", f"{line1}.{start}", f"{line2}.{end}")
 
-    def xmldecl(self, version: str, encoding: str, standalone: int):
+    def xmldecl(self, version: str, encoding: str, standalone: int) -> None:
         attrs = {"version": version}
         if encoding:
             attrs["encoding"] = encoding
         self.start_element("?xml", attrs)
 
-    def new_content(self, contents: str):
+    def new_content(self, contents: str) -> None:
         super().new_content(contents)
         self.parser = self.new_parser()
         self.parser.Parse(contents)
@@ -213,7 +213,7 @@ class Console(TextView):
         # Set the text to read only
         self.text.configure(state=DISABLED)
 
-    def write(self, contents: str):
+    def write(self, contents: str) -> None:
         self.text.configure(state=NORMAL)
         self.text.insert(END, contents)
         self.text.see(END)
