@@ -76,6 +76,12 @@ class HierarchicalTree(ttk.Frame):
 
         return selected_prop
 
+    def collapse(self, parent_id: str = ""):
+        tree = self.tree
+        for child_id in tree.get_children(parent_id):
+            self.collapse(child_id)
+            tree.item(child_id, open=False)
+
 
 class PropertyTree(ttk.Frame):
     def __init__(
@@ -90,8 +96,8 @@ class PropertyTree(ttk.Frame):
 
         search_frame = ttk.Frame(self, padding=(0, 2))
         search_frame.grid(column=0, row=0)
-        search_label = ttk.Label(search_frame, text="Search:", padding=(10, 0))
-        search_label.grid(column=0, row=0)
+        search_label = ttk.Label(search_frame, text="Search:")
+        search_label.grid(column=0, row=0, padx=10)
         self.search_string = tk.StringVar()
         search_box = ttk.Entry(search_frame, textvariable=self.search_string)
         search_box.grid(column=1, row=0, sticky=EW)
@@ -102,6 +108,11 @@ class PropertyTree(ttk.Frame):
         tree.heading("prop", text="Name")
         tree.heading("val", text="Values")
         self.set_values()
+
+        collapse_button = ttk.Button(
+            search_frame, text="Collapse", command=self.proptree.collapse
+        )
+        collapse_button.grid(column=2, row=0, padx=10)
 
         # Widget layout
         search_frame.grid_columnconfigure(1, weight=1)
@@ -129,6 +140,7 @@ class PropertyTree(ttk.Frame):
         for child_id, parent_id, idx in reversed(self.hidden_items):
             tree.reattach(child_id, parent_id, idx)
 
+        self.hidden_items = []
         pattern = self.search_string.get()
         if pattern:
             self.filter(pattern)
