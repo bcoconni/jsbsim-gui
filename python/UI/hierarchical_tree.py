@@ -33,21 +33,17 @@ class HierarchicalTree(ttk.Frame):
         self.tree = ttk.Treeview(self, columns=columns_id)
         self.tree.grid(column=0, row=0, sticky=NSEW)
 
-        self.tree.column("#0", width=60, stretch=False)
-
         for elm in sorted(elements):
             parent_id = ""
-            for depth, name in enumerate(elm.split("/")):
+            for name in elm.split("/"):
                 for child_id in self.tree.get_children(parent_id):
                     child = self.tree.item(child_id)
-                    child_name = str(child["values"][0]).strip()
-                    if name == child_name:
+                    if name == child["text"]:
                         parent_id = child_id
                         break
                 else:
-                    display_name = "  " * depth + name
                     parent_id = self.tree.insert(
-                        parent_id, tk.END, values=(display_name, ""), open=is_open
+                        parent_id, tk.END, text=name, values=("",), open=is_open
                     )
 
         # Vertical scrollbar
@@ -63,15 +59,15 @@ class HierarchicalTree(ttk.Frame):
         selected_prop = []
         for selected_item in self.tree.selection():
             item = self.tree.item(selected_item)
-            name = str(item["values"][0]).strip()
+            name = item["text"]
 
             parent = self.tree.parent(selected_item)
             while parent:
                 item = self.tree.item(parent)
-                name = "/".join([str(item["values"][0]).strip(), name])
+                name = "/".join([item["text"], name])
                 parent = self.tree.parent(parent)
 
-            if not self.tree.get_children([selected_item]):
+            if not self.tree.get_children(selected_item):
                 selected_prop.append(name)
 
         return selected_prop
@@ -102,11 +98,11 @@ class PropertyTree(ttk.Frame):
         search_box = ttk.Entry(search_frame, textvariable=self.search_string)
         search_box.grid(column=1, row=0, sticky=EW)
 
-        self.proptree = HierarchicalTree(self, properties, ("prop", "val"), False)
+        self.proptree = HierarchicalTree(self, properties, ("val",), False)
         self.proptree.grid(column=0, row=1, sticky=NSEW)
         tree = self.proptree.tree
-        tree.heading("prop", text="Name")
-        tree.heading("val", text="Values")
+        tree.heading("#0", text="Property")
+        tree.heading("val", text="Value")
         self.set_values()
 
         collapse_button = ttk.Button(
@@ -127,7 +123,7 @@ class PropertyTree(ttk.Frame):
         children = tree.get_children(parent_id)
         for child_id in children:
             child = tree.item(child_id)
-            child_name = str(child["values"][0]).strip()
+            child_name = child["text"]
             if parent_name:
                 child_name = "/".join([parent_name, child_name])
             self.set_values(child_name, child_id)
@@ -151,8 +147,7 @@ class PropertyTree(ttk.Frame):
 
         for child_id in tree.get_children(parent_id):
             child = tree.item(child_id)
-            child_name = str(child["values"][0]).strip()
-            if pattern in child_name:
+            if pattern in child["text"]:
                 tree.see(child_id)
                 retVal = True
                 continue
@@ -165,7 +160,7 @@ class PropertyTree(ttk.Frame):
 
 class FileTree(HierarchicalTree):
     def __init__(self, master: tk.Widget, elements: list[str]):
-        super().__init__(master, elements, ("name",))
+        super().__init__(master, elements, None)
         self.tree.configure(show="tree", selectmode=BROWSE)
 
     def bind(self, sequence: Optional[str], func, add: Optional[bool] = None) -> None:
