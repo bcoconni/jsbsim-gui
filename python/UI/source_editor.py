@@ -82,7 +82,7 @@ class SourceEditor(ttk.Frame):
             )
         )
 
-        fileview.widget.bind("<ButtonRelease>", self.open_source_file)
+        fileview.widget.bind_selection(self.open_source_file)
 
         # Window layout
         self.codeview.grid(column=1, row=0, sticky=NSEW)

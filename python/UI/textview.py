@@ -147,12 +147,15 @@ class SourceCodeView(TextView):
 class XMLSourceCodeView(SourceCodeView):
     def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
         super().__init__(master, contents, **kw)
-        self.parser = self.new_parser()
-        self.parser.Parse(contents)
+
         self.text.tag_configure("XML_tag", foreground="#ff00ff")
         self.text.tag_configure("XML_comment", foreground="#00aaaa")
         self.text.tag_configure("XML_attr_name", foreground="#00aa00")
         self.text.tag_configure("XML_attr_value", foreground="#aaaa00")
+
+        self.parser = self.new_parser()
+        if contents:
+            self.parser.Parse(contents)
 
     def new_parser(self) -> expat.XMLParserType:
         parser = expat.ParserCreate()
@@ -202,7 +205,7 @@ class XMLSourceCodeView(SourceCodeView):
             end = start + len(data_lines[-1]) + 7  # len("<!--") + len("-->") == 7
         self.text.tag_add("XML_comment", f"{line1}.{start}", f"{line2}.{end}")
 
-    def xmldecl(self, version: str, encoding: str, standalone: int) -> None:
+    def xmldecl(self, version: str, encoding: str | None, standalone: int) -> None:
         attrs = {"version": version}
         if encoding:
             attrs["encoding"] = encoding

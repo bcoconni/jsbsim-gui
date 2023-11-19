@@ -18,7 +18,7 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NS, NSEW, VERTICAL
-from typing import Callable, Optional
+from typing import Callable
 
 
 class HierarchicalTree(ttk.Frame):
@@ -26,7 +26,7 @@ class HierarchicalTree(ttk.Frame):
         self,
         master: tk.Widget,
         elements: list[str],
-        columns_id: tuple[str],
+        columns_id: list[str],
         is_open: bool = True,
     ):
         super().__init__(master)
@@ -98,7 +98,7 @@ class PropertyTree(ttk.Frame):
         search_box = ttk.Entry(search_frame, textvariable=self.search_string)
         search_box.grid(column=1, row=0, sticky=EW)
 
-        self.proptree = HierarchicalTree(self, properties, ("val",), False)
+        self.proptree = HierarchicalTree(self, properties, ["val"], False)
         self.proptree.grid(column=0, row=1, sticky=NSEW)
         tree = self.proptree.tree
         tree.heading("#0", text="Property")
@@ -118,7 +118,7 @@ class PropertyTree(ttk.Frame):
 
         search_box.bind("<KeyRelease>", self.search)
 
-    def set_values(self, parent_name: str = "", parent_id: str | None = None) -> None:
+    def set_values(self, parent_name: str = "", parent_id: str = "") -> None:
         tree = self.proptree.tree
         children = tree.get_children(parent_id)
         for child_id in children:
@@ -160,13 +160,15 @@ class PropertyTree(ttk.Frame):
 
 class FileTree(HierarchicalTree):
     def __init__(self, master: tk.Widget, elements: list[str]):
-        super().__init__(master, elements, None)
+        super().__init__(master, elements, [])
         self.tree.configure(show="tree", selectmode=BROWSE)
 
-    def bind(self, sequence: Optional[str], func, add: Optional[bool] = None) -> None:
+    def bind_selection(
+        self, func: Callable[[str], None], add: bool | None = None
+    ) -> None:
         def bind_func(_):
             selection = self.get_selected_elements()
             if selection:
                 func(selection[0])
 
-        self.tree.bind(sequence, bind_func, add)
+        self.tree.bind("<<TreeviewSelect>>", bind_func, add)
