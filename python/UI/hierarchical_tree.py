@@ -17,7 +17,7 @@
 
 import tkinter as tk
 from tkinter import ttk
-from tkinter.constants import BROWSE, NS, NSEW, VERTICAL
+from tkinter.constants import BROWSE, EW, NS, NSEW, VERTICAL
 from typing import Callable, Optional
 
 
@@ -77,35 +77,78 @@ class HierarchicalTree(ttk.Frame):
         return selected_prop
 
 
-class PropertyTree(HierarchicalTree):
+class PropertyTree(ttk.Frame):
     def __init__(
         self,
         master: tk.Widget,
         properties: list[str],
         get_property_value: Callable[[str], float],
     ):
-        super().__init__(master, properties, ("prop", "val"), False)
+        super().__init__(master)
+        self.get_property_value = get_property_value
+        self.hidden_items: list[tuple[str, str, int]] = []
 
-        self.tree.heading("prop", text="Name")
-        self.tree.heading("val", text="Values")
-        self.set_values("", None, get_property_value)
+        search_frame = ttk.Frame(self, padding=(0, 2))
+        search_frame.grid(column=0, row=0)
+        search_label = ttk.Label(search_frame, text="Search:", padding=(10, 0))
+        search_label.grid(column=0, row=0)
+        self.search_string = tk.StringVar()
+        search_box = ttk.Entry(search_frame, textvariable=self.search_string)
+        search_box.grid(column=1, row=0, sticky=EW)
 
-    def set_values(
-        self,
-        parent_name: str,
-        parent_id: str,
-        get_property_value: Callable[[str], float],
-    ):
-        children = self.tree.get_children(parent_id)
+        self.proptree = HierarchicalTree(self, properties, ("prop", "val"), False)
+        self.proptree.grid(column=0, row=1, sticky=NSEW)
+        tree = self.proptree.tree
+        tree.heading("prop", text="Name")
+        tree.heading("val", text="Values")
+        self.set_values()
+
+        # Widget layout
+        search_frame.grid_columnconfigure(1, weight=1)
+        search_frame.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        search_box.bind("<KeyRelease>", self.search)
+
+    def set_values(self, parent_name: str = "", parent_id: str | None = None) -> None:
+        tree = self.proptree.tree
+        children = tree.get_children(parent_id)
         for child_id in children:
-            child = self.tree.item(child_id)
+            child = tree.item(child_id)
             child_name = str(child["values"][0]).strip()
             if parent_name:
                 child_name = "/".join([parent_name, child_name])
-            self.set_values(child_name, child_id, get_property_value)
+            self.set_values(child_name, child_id)
 
         if not children:
-            self.tree.set(parent_id, "val", get_property_value(parent_name))
+            tree.set(parent_id, "val", self.get_property_value(parent_name))
+
+    def search(self, _) -> None:
+        tree = self.proptree.tree
+        for child_id, parent_id, idx in reversed(self.hidden_items):
+            tree.reattach(child_id, parent_id, idx)
+
+        pattern = self.search_string.get()
+        if pattern:
+            self.filter(pattern)
+
+    def filter(self, pattern: str, parent_id: str = "") -> bool:
+        tree = self.proptree.tree
+        retVal = False
+
+        for child_id in tree.get_children(parent_id):
+            child = tree.item(child_id)
+            child_name = str(child["values"][0]).strip()
+            if pattern in child_name:
+                tree.see(child_id)
+                retVal = True
+                continue
+            if not self.filter(pattern, child_id):
+                idx = tree.index(child_id)
+                self.hidden_items.append((child_id, parent_id, idx))
+                tree.detach(child_id)
+        return retVal
 
 
 class FileTree(HierarchicalTree):
