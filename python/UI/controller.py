@@ -112,12 +112,14 @@ class Controller:
 
         return input_files
 
-    def get_property_list(self) -> list[str]:
-        return [
+    def get_property_list(self) -> list[jsbsim.FGPropertyNode]:
+        pm = self.fdm.get_property_manager()
+        names = [
             p.split(" ")[0]
             for p in self.fdm.query_property_catalog("").split("\n")
             if len(p) != 0
         ]
+        return [pm.get_node(name, False) for name in names]
 
     def get_property_value(self, property_name: str) -> float:
         return self.fdm[property_name]

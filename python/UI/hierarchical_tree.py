@@ -20,6 +20,8 @@ from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NS, NSEW, VERTICAL
 from typing import Callable
 
+from jsbsim import FGPropertyNode
+
 
 class HierarchicalTree(ttk.Frame):
     def __init__(
@@ -43,7 +45,11 @@ class HierarchicalTree(ttk.Frame):
                         break
                 else:
                     parent_id = self.tree.insert(
-                        parent_id, tk.END, text=name, values=("",), open=is_open
+                        parent_id,
+                        tk.END,
+                        text=name,
+                        values=[""] * len(columns_id),
+                        open=is_open,
                     )
 
         # Vertical scrollbar
@@ -84,11 +90,9 @@ class PropertyTree(ttk.Frame):
     def __init__(
         self,
         master: tk.Widget,
-        properties: list[str],
-        get_property_value: Callable[[str], float],
+        properties: list[FGPropertyNode],
     ):
         super().__init__(master)
-        self.get_property_value = get_property_value
         self.hidden_items: list[tuple[str, str, int]] = []
 
         search_frame = ttk.Frame(self, padding=(0, 2))
@@ -99,12 +103,15 @@ class PropertyTree(ttk.Frame):
         search_box = ttk.Entry(search_frame, textvariable=self.search_string)
         search_box.grid(column=1, row=0, sticky=EW)
 
-        self.proptree = HierarchicalTree(self, properties, ["val"], False)
+        self.proptree = HierarchicalTree(
+            self, [p.get_relative_name() for p in properties], ["value", "node"], False
+        )
         self.proptree.grid(column=0, row=1, sticky=NSEW)
         tree = self.proptree.tree
+        tree.configure(displaycolumns=("value",))  # Hide the node columns
         tree.heading("#0", text="Property")
-        tree.heading("val", text="Value")
-        self.set_values()
+        tree.heading("value", text="Value")
+        self.set_values(properties)
 
         collapse_button = ttk.Button(
             search_frame, text="Collapse", command=self.proptree.collapse
@@ -119,18 +126,20 @@ class PropertyTree(ttk.Frame):
 
         search_box.bind("<KeyRelease>", self.search)
 
-    def set_values(self, parent_name: str = "", parent_id: str = "") -> None:
+    def set_values(self, properties: list[FGPropertyNode]) -> None:
         tree = self.proptree.tree
-        children = tree.get_children(parent_id)
-        for child_id in children:
-            child = tree.item(child_id)
-            child_name = child["text"]
-            if parent_name:
-                child_name = "/".join([parent_name, child_name])
-            self.set_values(child_name, child_id)
-
-        if not children:
-            tree.set(parent_id, "val", self.get_property_value(parent_name))
+        for node in properties:
+            parent_id = ""
+            pname = node.get_relative_name()
+            for name in pname.split("/"):
+                for child_id in tree.get_children(parent_id):
+                    if name == tree.item(child_id,"text"):
+                        parent_id = child_id
+                        break
+                else:
+                    assert tree.item(child_id, "text") == name
+            tree.set(parent_id, "value", node.get_double_value())
+            tree.set(parent_id, "node", node)
 
     def search(self, _) -> None:
         tree = self.proptree.tree

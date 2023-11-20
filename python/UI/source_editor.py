@@ -60,9 +60,9 @@ class SourceEditor(ttk.Frame):
         left_frame = ttk.Frame(main_frame)
 
         self.console = Console(self, height=10)
-        controller = get_controller(filename, self)
+        self.controller = get_controller(filename, self)
         fileview = LabeledWidget(left_frame, "Project Files")
-        fileview.set_widget(FileTree(fileview, controller.get_input_files(filename)))
+        fileview.set_widget(FileTree(fileview, self.controller.get_input_files(filename)))
 
         with open(filename, "r") as f:
             file_relpath = os.path.relpath(filename, self.root_dir)
@@ -77,8 +77,7 @@ class SourceEditor(ttk.Frame):
         property_view.set_widget(
             PropertyTree(
                 property_view,
-                controller.get_property_list(),
-                controller.get_property_value,
+                self.controller.get_property_list()
             )
         )
 
