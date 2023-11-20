@@ -77,6 +77,7 @@ class HierarchicalTree(ttk.Frame):
         for child_id in tree.get_children(parent_id):
             self.collapse(child_id)
             tree.item(child_id, open=False)
+        tree.see(tree.get_children()[0])
 
 
 class PropertyTree(ttk.Frame):
@@ -91,7 +92,7 @@ class PropertyTree(ttk.Frame):
         self.hidden_items: list[tuple[str, str, int]] = []
 
         search_frame = ttk.Frame(self, padding=(0, 2))
-        search_frame.grid(column=0, row=0)
+        search_frame.grid(column=0, row=0, sticky=EW)
         search_label = ttk.Label(search_frame, text="Search:")
         search_label.grid(column=0, row=0, padx=10)
         self.search_string = tk.StringVar()
