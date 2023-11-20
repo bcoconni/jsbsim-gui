@@ -18,9 +18,10 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NS, NSEW, VERTICAL
+from tkinter.messagebox import showerror
 from typing import Callable
 
-from jsbsim import FGPropertyNode
+from jsbsim import Attribute, FGPropertyNode
 
 
 class HierarchicalTree(ttk.Frame):
@@ -39,8 +40,7 @@ class HierarchicalTree(ttk.Frame):
             parent_id = ""
             for name in elm.split("/"):
                 for child_id in self.tree.get_children(parent_id):
-                    child = self.tree.item(child_id)
-                    if name == child["text"]:
+                    if name == self.tree.item(child_id, "text"):
                         parent_id = child_id
                         break
                 else:
@@ -64,13 +64,10 @@ class HierarchicalTree(ttk.Frame):
     def get_selected_elements(self) -> list[str]:
         selected_prop = []
         for selected_item in self.tree.selection():
-            item = self.tree.item(selected_item)
-            name = item["text"]
-
+            name = self.tree.item(selected_item, "text")
             parent = self.tree.parent(selected_item)
             while parent:
-                item = self.tree.item(parent)
-                name = "/".join([item["text"], name])
+                name = "/".join([self.tree.item(parent, "text"), name])
                 parent = self.tree.parent(parent)
 
             if not self.tree.get_children(selected_item):
@@ -86,6 +83,36 @@ class HierarchicalTree(ttk.Frame):
         tree.see(tree.get_children()[0])
 
 
+class CellEntry(ttk.Entry):
+    def __init__(
+        self,
+        master: tk.Widget,
+        content: str,
+        update_value: Callable[[str], None],
+        **kw,
+    ):
+        super().__init__(master, **kw)
+        self.update_value = update_value
+        self.insert(0, content)
+        self.config(exportselection=False)
+        self.select_all()
+        self.focus_force()
+        self.bind("<Return>", self.set_value)
+        self.bind("<KP_Enter>", self.set_value)
+        self.bind("<Control-a>", self.select_all)
+        self.bind("<Escape>", lambda _: self.destroy())
+        self.bind("<FocusOut>", lambda _: self.destroy())
+
+    def set_value(self, _) -> None:
+        self.update_value(self.get())
+        self.destroy()
+
+    def select_all(self, *_) -> str:
+        self.selection_range(0, tk.END)
+        # Return break to interrupt the default key binding.
+        return "break"
+
+
 class PropertyTree(ttk.Frame):
     def __init__(
         self,
@@ -94,24 +121,24 @@ class PropertyTree(ttk.Frame):
     ):
         super().__init__(master)
         self.hidden_items: list[tuple[str, str, int]] = []
+        self.properties: dict[str, FGPropertyNode] = {}
 
         search_frame = ttk.Frame(self, padding=(0, 2))
         search_frame.grid(column=0, row=0, sticky=EW)
         search_label = ttk.Label(search_frame, text="Search:")
         search_label.grid(column=0, row=0, padx=10)
-        self.search_string = tk.StringVar()
-        search_box = ttk.Entry(search_frame, textvariable=self.search_string)
-        search_box.grid(column=1, row=0, sticky=EW)
+        self.search_box = ttk.Entry(search_frame)
+        self.search_box.grid(column=1, row=0, sticky=EW)
 
         self.proptree = HierarchicalTree(
-            self, [p.get_relative_name() for p in properties], ["value", "node"], False
+            self, [p.get_relative_name() for p in properties], ["value"], False
         )
         self.proptree.grid(column=0, row=1, sticky=NSEW)
         tree = self.proptree.tree
         tree.configure(displaycolumns=("value",))  # Hide the node columns
         tree.heading("#0", text="Property")
         tree.heading("value", text="Value")
-        self.set_values(properties)
+        self.initialize_values(properties)
 
         collapse_button = ttk.Button(
             search_frame, text="Collapse", command=self.proptree.collapse
@@ -124,30 +151,35 @@ class PropertyTree(ttk.Frame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        search_box.bind("<KeyRelease>", self.search)
+        self.search_box.bind("<KeyRelease>", self.search)
+        self.proptree.tree.bind("<Double-1>", self.edit_property_value)
 
-    def set_values(self, properties: list[FGPropertyNode]) -> None:
+    def initialize_values(self, properties: list[FGPropertyNode]) -> None:
         tree = self.proptree.tree
         for node in properties:
             parent_id = ""
             pname = node.get_relative_name()
             for name in pname.split("/"):
                 for child_id in tree.get_children(parent_id):
-                    if name == tree.item(child_id,"text"):
+                    if name == tree.item(child_id, "text"):
                         parent_id = child_id
                         break
                 else:
                     assert tree.item(child_id, "text") == name
             tree.set(parent_id, "value", node.get_double_value())
-            tree.set(parent_id, "node", node)
+            self.properties[parent_id] = node
 
     def search(self, _) -> None:
         tree = self.proptree.tree
-        for child_id, parent_id, idx in reversed(self.hidden_items):
-            tree.reattach(child_id, parent_id, idx)
 
-        self.hidden_items = []
-        pattern = self.search_string.get()
+        if self.hidden_items:
+            for child_id, parent_id, idx in reversed(self.hidden_items):
+                tree.reattach(child_id, parent_id, idx)
+
+            self.update_values()
+            self.hidden_items = []
+
+        pattern = self.search_box.get()
         if pattern:
             self.filter(pattern)
 
@@ -156,8 +188,7 @@ class PropertyTree(ttk.Frame):
         retVal = False
 
         for child_id in tree.get_children(parent_id):
-            child = tree.item(child_id)
-            if pattern in child["text"]:
+            if pattern in tree.item(child_id, "text"):
                 tree.see(child_id)
                 retVal = True
                 continue
@@ -166,6 +197,50 @@ class PropertyTree(ttk.Frame):
                 self.hidden_items.append((child_id, parent_id, idx))
                 tree.detach(child_id)
         return retVal
+
+    def edit_property_value(self, event: tk.Event) -> None:
+        tree = self.proptree.tree
+        # column = tree.identify_column(event.x)
+        item_id = tree.identify_row(event.y)
+
+        # Dismiss when the table header is selected
+        if not item_id:
+            return
+
+        content = tree.item(item_id, "values")[0]
+        # Dismiss when the cell is empty
+        if not content:
+            return
+
+        node = self.properties[item_id]
+        # Dismiss when the property is readonly
+        if not node.get_attribute(Attribute.WRITE):
+            return
+
+        x, y, width, height = tree.bbox(item_id, "value")
+        cell_entry = CellEntry(
+            tree, content, lambda value: self.set_value(item_id, value)
+        )
+        cell_entry.place(x=x, y=y, width=width, height=height)
+
+    def set_value(self, item_id: str, value: str) -> None:
+        try:
+            v = float(value)
+        except ValueError:
+            showerror("Error", message=f"'{value}' is not a number")
+
+        self.properties[item_id].set_double_value(v)
+        self.update_values()
+
+    def update_values(self, parent_id: str = "") -> None:
+        tree = self.proptree.tree
+        children = tree.get_children(parent_id)
+        if children:
+            for child_id in children:
+                self.update_values(child_id)
+        else:
+            node = self.properties[parent_id]
+            tree.set(parent_id, "value", node.get_double_value())
 
 
 class FileTree(HierarchicalTree):
