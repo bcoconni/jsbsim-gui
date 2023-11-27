@@ -244,6 +244,23 @@ class PropertyTree(ttk.Frame):
             node = self.properties[parent_id]
             tree.set(parent_id, "value", node.get_double_value())
 
+    def get_selected_elements(self) -> list[FGPropertyNode]:
+        selected_prop = []
+        tree = self.proptree.tree
+
+        def enumerate_children(parent_id: str) -> None:
+            children = tree.get_children(parent_id)
+            if children:
+                for item in children:
+                    enumerate_children(item)
+            else:
+                selected_prop.append(self.properties[parent_id])
+
+        for selected_item in tree.selection():
+            enumerate_children(selected_item)
+
+        return selected_prop
+
 
 class FileTree(HierarchicalTree):
     def __init__(self, master: tk.Widget, elements: list[str]):
