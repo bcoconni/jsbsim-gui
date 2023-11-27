@@ -15,9 +15,10 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import ctypes
+import io
 import os
 import sys
+import tempfile
 import tkinter as tk
 import xml.etree.ElementTree as et
 from contextlib import contextmanager
@@ -149,30 +150,26 @@ class App(tk.Tk):
     def stdout_to_console(self):
         """Redirect stdout to the console"""
         original_stdout_fd = sys.stdout.fileno()
-        libc = ctypes.CDLL(None)
-        c_stdout = ctypes.c_void_p.in_dll(libc, "stdout")
 
-        def _redirect_stdout(to_fd, mode):
-            # Flush the C-level buffer stdout
-            libc.fflush(c_stdout)
+        def _redirect_stdout(to_fd):
             # Flush and close sys.stdout - also closes the file descriptor (fd)
             sys.stdout.close()
             # Make original_stdout_fd point to the same file as to_fd
             os.dup2(to_fd, original_stdout_fd)
             # Create a new sys.stdout that points to the redirected fd
-            sys.stdout = os.fdopen(original_stdout_fd, mode)
+            sys.stdout = io.TextIOWrapper(os.fdopen(original_stdout_fd, "wb"))
 
         saved_stdout_fd = os.dup(original_stdout_fd)
         try:
-            # Create a pipe and redirect stdout to it
-            r_fd, w_fd = os.pipe()
-            _redirect_stdout(w_fd, "wb")
+            # Create a temporary file and redirect stdout to it
+            tfile = tempfile.TemporaryFile(mode="w+b")
+            _redirect_stdout(tfile.fileno())
             # Yield to caller, then redirect stdout back to the saved fd
             yield
-            os.close(w_fd)
-            _redirect_stdout(saved_stdout_fd, "w")
-            # Copy contents of pipe to the given stream
-            f = os.fdopen(r_fd, "r")
-            self.console.write(f.read())
+            _redirect_stdout(saved_stdout_fd)
+            # Copy contents of temporary file to the given stream
+            tfile.flush()
+            tfile.seek(0, io.SEEK_SET)
+            self.console.write(tfile.read())
         finally:
             os.close(saved_stdout_fd)
