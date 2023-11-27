@@ -30,6 +30,7 @@ from typing import Callable, Optional
 from PIL import Image, ImageTk
 
 from .controller import Controller
+from .run import Run
 from .source_editor import SourceEditor
 from .textview import Console
 
@@ -65,6 +66,12 @@ class MenuBar(tk.Menu):
                     "Error",
                     message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
                 )
+                return
+
+        view_menu = tk.Menu(self, tearoff=False)
+        view_menu.add_command(label="Edit", command=self.master.edit)
+        view_menu.add_command(label="Run", command=self.master.run)
+        self.add_cascade(label="View", menu=view_menu)
 
 
 class App(tk.Tk):
@@ -94,6 +101,30 @@ class App(tk.Tk):
 
         self.console: Console | None = None
         self.controller: Controller | None = None
+        self.filename: str | None = None
+
+    def run(self) -> None:
+        w = self.main.winfo_width()
+        h = self.main.winfo_height()
+        self.main.destroy()
+        self.main = Run(self, w, h)
+        self.main.grid_propagate(0)
+
+        # Window layout
+        self.main.grid(column=0, row=0, sticky=NSEW)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+    def edit(self) -> None:
+        self.main.destroy()
+
+        # Open the file in an text widget
+        self.main = SourceEditor(self, self.filename, self.root_dir)
+
+        # Window layout
+        self.main.grid(column=0, row=0, sticky=NSEW)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
     def open_file(
         self,
@@ -103,7 +134,6 @@ class App(tk.Tk):
     ) -> None:
         self.resizable(True, True)
         # Remove the logo
-        self.main.destroy()
         self.title(f"JSBSim {Controller.get_version()} - {aircraft_name}")
 
         if not self.console:
@@ -112,14 +142,8 @@ class App(tk.Tk):
 
         self.controller = Controller(self.root_dir, self)
         load_file(self.controller, filename)
-
-        # Open the file in an text widget
-        self.main = SourceEditor(self, filename, self.root_dir)
-
-        # Window layout
-        self.main.grid(column=0, row=0, sticky=NSEW)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.filename = filename
+        self.edit()
 
     @contextmanager
     def stdout_to_console(self):

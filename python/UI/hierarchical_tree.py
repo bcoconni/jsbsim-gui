@@ -58,8 +58,9 @@ class HierarchicalTree(ttk.Frame):
         self.tree["yscrollcommand"] = ys.set
 
         # Widget layout
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        tree_pos = self.tree.grid_info()
+        self.grid_columnconfigure(tree_pos["column"], weight=1)
+        self.grid_rowconfigure(tree_pos["row"], weight=1)
 
     def get_selected_elements(self) -> list[str]:
         selected_prop = []
@@ -133,7 +134,7 @@ class PropertyTree(ttk.Frame):
         self.proptree = HierarchicalTree(
             self, [p.get_relative_name() for p in properties], ["value"], False
         )
-        self.proptree.grid(column=0, row=1, sticky=NSEW)
+        self.proptree.grid(column=0, row=1, sticky=NS)
         tree = self.proptree.tree
         tree.configure(displaycolumns=("value",))  # Hide the node columns
         tree.heading("#0", text="Property")
@@ -185,18 +186,18 @@ class PropertyTree(ttk.Frame):
 
     def filter(self, pattern: str, parent_id: str = "") -> bool:
         tree = self.proptree.tree
-        retVal = False
+        success = False
 
         for child_id in tree.get_children(parent_id):
             if pattern in tree.item(child_id, "text"):
                 tree.see(child_id)
-                retVal = True
+                success = True
                 continue
             if not self.filter(pattern, child_id):
                 idx = tree.index(child_id)
                 self.hidden_items.append((child_id, parent_id, idx))
                 tree.detach(child_id)
-        return retVal
+        return success
 
     def edit_property_value(self, event: tk.Event) -> None:
         tree = self.proptree.tree
@@ -228,6 +229,7 @@ class PropertyTree(ttk.Frame):
             v = float(value)
         except ValueError:
             showerror("Error", message=f"'{value}' is not a number")
+            return
 
         self.properties[item_id].set_double_value(v)
         self.update_values()

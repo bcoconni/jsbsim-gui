@@ -48,6 +48,10 @@ class Controller:
         with self.widget.stdout_to_console():
             self.fdm.load_model(aircraft_name, True)
 
+    def run_ic(self):
+        with self.widget.stdout_to_console():
+            self.fdm.run_ic()
+
     def get_input_files(self, filename) -> list[str]:
         root_dir = self.fdm.get_root_dir()
 

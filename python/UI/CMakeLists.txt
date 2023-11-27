@@ -8,6 +8,7 @@ set(SOURCES __init__.py
             app.py
             controller.py
             hierarchical_tree.py
+            run.py
             source_editor.py
             textview.py)
 
