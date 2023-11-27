@@ -15,18 +15,13 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import ctypes
 import os
-import sys
 import tkinter as tk
-from contextlib import contextmanager
 from tkinter import ttk
 from tkinter.constants import EW, NONE, NS, NSEW
-from typing import Callable
 
-from .controller import Controller
 from .hierarchical_tree import FileTree, PropertyTree
-from .textview import Console, XMLSourceCodeView
+from .textview import XMLSourceCodeView
 
 
 class LabeledWidget(ttk.Frame):
@@ -52,17 +47,14 @@ class SourceEditor(ttk.Frame):
         master: tk.Widget,
         filename: str,
         root_dir: str,
-        get_controller: Callable[[str, tk.Widget], Controller],
     ):
         super().__init__(master)
         self.root_dir = root_dir
         main_frame = ttk.Frame(self)
         left_frame = ttk.Frame(main_frame)
 
-        self.console = Console(self, height=10)
-        self.controller = get_controller(filename, self)
         fileview = LabeledWidget(left_frame, "Project Files")
-        fileview.set_widget(FileTree(fileview, self.controller.get_input_files(filename)))
+        fileview.set_widget(FileTree(fileview, master.controller.get_input_files(filename)))
 
         with open(filename, "r") as f:
             file_relpath = os.path.relpath(filename, self.root_dir)
@@ -77,7 +69,7 @@ class SourceEditor(ttk.Frame):
         property_view.set_widget(
             PropertyTree(
                 property_view,
-                self.controller.get_property_list()
+                master.controller.get_property_list()
             )
         )
 
@@ -85,7 +77,6 @@ class SourceEditor(ttk.Frame):
 
         # Window layout
         self.codeview.grid(column=1, row=0, sticky=NSEW)
-        self.console.grid(column=0, row=1, sticky=EW)
         fileview.grid(column=0, row=0, sticky=EW)
         property_view.grid(column=0, row=1, sticky=NS)
         left_frame.grid(column=0, row=0, sticky=NS)
@@ -103,35 +94,3 @@ class SourceEditor(ttk.Frame):
             with open(os.path.join(self.root_dir, filename), "r") as f:
                 self.codeview.set_label(filename)
                 editor.new_content(f.read())
-
-    @contextmanager
-    def stdout_to_console(self):
-        """Redirect stdout to the console"""
-        original_stdout_fd = sys.stdout.fileno()
-        libc = ctypes.CDLL(None)
-        c_stdout = ctypes.c_void_p.in_dll(libc, "stdout")
-
-        def _redirect_stdout(to_fd, mode):
-            # Flush the C-level buffer stdout
-            libc.fflush(c_stdout)
-            # Flush and close sys.stdout - also closes the file descriptor (fd)
-            sys.stdout.close()
-            # Make original_stdout_fd point to the same file as to_fd
-            os.dup2(to_fd, original_stdout_fd)
-            # Create a new sys.stdout that points to the redirected fd
-            sys.stdout = os.fdopen(original_stdout_fd, mode)
-
-        saved_stdout_fd = os.dup(original_stdout_fd)
-        try:
-            # Create a pipe and redirect stdout to it
-            r_fd, w_fd = os.pipe()
-            _redirect_stdout(w_fd, "wb")
-            # Yield to caller, then redirect stdout back to the saved fd
-            yield
-            os.close(w_fd)
-            _redirect_stdout(saved_stdout_fd, "w")
-            # Copy contents of pipe to the given stream
-            f = os.fdopen(r_fd, "r")
-            self.console.write(f.read())
-        finally:
-            os.close(saved_stdout_fd)

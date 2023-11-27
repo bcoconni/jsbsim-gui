@@ -15,12 +15,15 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import ctypes
 import os
+import sys
 import tkinter as tk
 import xml.etree.ElementTree as et
+from contextlib import contextmanager
 from tkinter import filedialog as fd
 from tkinter import ttk
-from tkinter.constants import NSEW
+from tkinter.constants import EW, NSEW
 from tkinter.messagebox import showerror
 from typing import Callable, Optional
 
@@ -28,6 +31,7 @@ from PIL import Image, ImageTk
 
 from .controller import Controller
 from .source_editor import SourceEditor
+from .textview import Console
 
 
 class MenuBar(tk.Menu):
@@ -88,6 +92,9 @@ class App(tk.Tk):
                 showerror("Error", message=e)
                 self.destroy()
 
+        self.console: Console | None = None
+        self.controller: Controller | None = None
+
     def open_file(
         self,
         filename: str,
@@ -99,15 +106,49 @@ class App(tk.Tk):
         self.main.destroy()
         self.title(f"JSBSim {Controller.get_version()} - {aircraft_name}")
 
-        def initialize_controller(filename: str, widget: tk.Widget) -> Controller:
-            controller = Controller(self.root_dir, widget)
-            load_file(controller, filename)
-            return controller
+        if not self.console:
+            self.console = Console(self, height=10)
+            self.console.grid(column=0, row=1, sticky=EW)
+
+        self.controller = Controller(self.root_dir, self)
+        load_file(self.controller, filename)
 
         # Open the file in an text widget
-        self.main = SourceEditor(self, filename, self.root_dir, initialize_controller)
+        self.main = SourceEditor(self, filename, self.root_dir)
 
         # Window layout
         self.main.grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+
+    @contextmanager
+    def stdout_to_console(self):
+        """Redirect stdout to the console"""
+        original_stdout_fd = sys.stdout.fileno()
+        libc = ctypes.CDLL(None)
+        c_stdout = ctypes.c_void_p.in_dll(libc, "stdout")
+
+        def _redirect_stdout(to_fd, mode):
+            # Flush the C-level buffer stdout
+            libc.fflush(c_stdout)
+            # Flush and close sys.stdout - also closes the file descriptor (fd)
+            sys.stdout.close()
+            # Make original_stdout_fd point to the same file as to_fd
+            os.dup2(to_fd, original_stdout_fd)
+            # Create a new sys.stdout that points to the redirected fd
+            sys.stdout = os.fdopen(original_stdout_fd, mode)
+
+        saved_stdout_fd = os.dup(original_stdout_fd)
+        try:
+            # Create a pipe and redirect stdout to it
+            r_fd, w_fd = os.pipe()
+            _redirect_stdout(w_fd, "wb")
+            # Yield to caller, then redirect stdout back to the saved fd
+            yield
+            os.close(w_fd)
+            _redirect_stdout(saved_stdout_fd, "w")
+            # Copy contents of pipe to the given stream
+            f = os.fdopen(r_fd, "r")
+            self.console.write(f.read())
+        finally:
+            os.close(saved_stdout_fd)
