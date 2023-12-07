@@ -108,7 +108,7 @@ class App(tk.Tk):
         w = self.main.winfo_width()
         h = self.main.winfo_height()
         self.main.destroy()
-        self.main = Run(self, w, h)
+        self.main = Run(self, width=w, height=h)
         self.main.grid_propagate(0)
 
         # Window layout
@@ -119,7 +119,7 @@ class App(tk.Tk):
     def edit(self) -> None:
         self.main.destroy()
 
-        # Open the file in an text widget
+        # Open the file in a text widget
         self.main = SourceEditor(self, self.filename, self.root_dir)
 
         # Window layout

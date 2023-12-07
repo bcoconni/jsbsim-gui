@@ -16,6 +16,7 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import tkinter as tk
+from abc import ABC, abstractmethod
 from tkinter import font, ttk
 from tkinter.constants import EW, NS, NSEW, RAISED
 
@@ -25,16 +26,15 @@ from .hierarchical_tree import PropertyTree
 from .source_editor import LabeledWidget
 
 
-class DragNDropManager:
+class DragNDropManager(ABC):
     def __init__(self, widget: tk.Widget):
         widget.bind("<ButtonPress-1>", self.select)
         widget.bind("<B1-Motion>", self.drag)
         widget.bind("<ButtonRelease-1>", self.drop)
         self.root = widget.winfo_toplevel()
-        self.widget = widget
         self.offset_x = 0
         self.offset_y = 0
-        self.snapshot: tk.Widget | None = None
+        self.source_widget: tk.Widget | None = None
         self.target: tk.Widget | None = None
 
     def select(self, event: tk.Event):
@@ -43,18 +43,25 @@ class DragNDropManager:
         self.offset_y = root.winfo_rooty()
         self.target = None
 
+    @abstractmethod
+    def create_source_widget(self, master: tk.Widget) -> tk.Widget:
+        pass
+
     def drag(self, event: tk.Event):
-        if self.snapshot:
+        if not self.source_widget:
+            self.source_widget = self.create_source_widget(self.root)
+
+        if self.source_widget:
             x, y = event.widget.winfo_pointerxy()
-            self.snapshot.place(x=x - self.offset_x, y=y - self.offset_y)
+            self.source_widget.place(x=x - self.offset_x, y=y - self.offset_y)
 
     def drop(self, event: tk.Event):
-        if self.snapshot:
+        if self.source_widget:
             x, y = event.widget.winfo_pointerxy()
             self.target = event.widget.winfo_containing(x, y)
             print(self.target)
-            self.snapshot.destroy()
-            self.snapshot = None
+            self.source_widget.destroy()
+            self.source_widget = None
 
 
 class DnDProperties(DragNDropManager):
@@ -63,34 +70,31 @@ class DnDProperties(DragNDropManager):
         self.property_tree = widget
         self.property_list: list[FGPropertyNode] = []
 
-    def drag(self, event: tk.Event):
-        if self.snapshot:
-            super().drag(event)
-        else:
-            self.property_list = self.property_tree.get_selected_elements()
-            if self.property_list:
-                self.snapshot = tk.Frame(
-                    self.root, padx=5, pady=5, borderwidth=1, relief=RAISED
-                )
-                for idx, prop in enumerate(self.property_list):
-                    if idx < 3:
-                        propname = ttk.Label(
-                            self.snapshot,
-                            text=prop.get_relative_name(),
-                            justify=tk.LEFT,
-                        )
-                        propname.pack(anchor=tk.W)
-                    else:
-                        propname = ttk.Label(self.snapshot, text="...", justify=tk.LEFT)
-                        propname.pack(anchor=tk.W)
-                        break
-
-                super().drag(event)
+    def create_source_widget(self, master: tk.Widget) -> tk.Widget:
+        self.property_list = self.property_tree.get_selected_elements()
+        if self.property_list:
+            source_widget = tk.Frame(
+                master, padx=5, pady=5, borderwidth=1, relief=RAISED
+            )
+            for idx, prop in enumerate(self.property_list):
+                if idx < 3:
+                    propname = ttk.Label(
+                        source_widget,
+                        text=prop.get_relative_name(),
+                        justify=tk.LEFT,
+                    )
+                    propname.pack(anchor=tk.W)
+                else:
+                    propname = ttk.Label(source_widget, text="...", justify=tk.LEFT)
+                    propname.pack(anchor=tk.W)
+                    break
+            return source_widget
+        return None
 
 
 class Run(tk.Frame):
-    def __init__(self, master: tk.Widget, width: int, height: int):
-        super().__init__(master, width=width, height=height)
+    def __init__(self, master: tk.Widget, **kw):
+        super().__init__(master, **kw)
         self.property_view = LabeledWidget(self, "Property List")
         self.property_view.set_widget(
             PropertyTree(self.property_view, master.controller.get_property_list())

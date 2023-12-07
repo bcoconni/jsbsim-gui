@@ -201,7 +201,6 @@ class PropertyTree(ttk.Frame):
 
     def edit_property_value(self, event: tk.Event) -> None:
         tree = self.proptree.tree
-        # column = tree.identify_column(event.x)
         item_id = tree.identify_row(event.y)
 
         # Dismiss when the table header is selected
