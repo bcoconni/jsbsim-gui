@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 from tkinter import font, ttk
 from tkinter.constants import EW, NS, NSEW, RAISED
 
+import numpy as np
 from jsbsim import FGPropertyNode
 
 from .hierarchical_tree import PropertyTree
@@ -98,7 +99,48 @@ class DnDProperties(DragNDropManager):
         return None
 
     def drop_on_target(self, target: tk.Widget):
-        print(f"Dropped on {target}")
+        self.target.add_properties(self.property_list, target)
+
+
+class PlotsView(tk.Frame):
+    def __init__(self, master: tk.Widget, **kw):
+        super().__init__(master, **kw)
+        helper_font = font.Font(slant="italic")
+        helper_message = ttk.Label(
+            self,
+            text="Drop properties to plot",
+            anchor=tk.CENTER,
+            foreground="gray",
+            font=helper_font,
+        )
+        helper_message.grid(column=0, row=0, sticky=EW)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        self.properties: list[FGPropertyNode] = []
+        self.properties_values = np.empty((0, 0))
+
+    def add_properties(self, properties: list[FGPropertyNode], target: tk.Widget):
+        ncol = self.properties_values.shape[1]
+        rows = np.full((len(properties), max(ncol, 1)), np.nan)
+        for idx, prop in enumerate(properties):
+            if prop not in self.properties:
+                self.properties.append(prop)
+                rows[idx, -1] = prop.get_double_value()
+
+        if ncol > 0:
+            self.properties_values = np.vstack((self.properties_values, rows))
+        else:
+            self.run_ic()
+
+
+    def run_ic(self):
+        self.properties_values = np.array(
+            [[prop.get_double_value() for prop in self.properties]]
+        ).T
+
+    def update_values(self):
+        col = np.array([[prop.get_double_value() for prop in self.properties]]).T
+        self.properties_values = np.hstack((self.properties_values, col))
 
 
 class Run(tk.Frame):
@@ -118,7 +160,7 @@ class Run(tk.Frame):
         button.grid(column=0, row=1, sticky=EW, padx=5, pady=5)
         button_pos = button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
-        button = ttk.Button(controls_frame, text="Step")
+        button = ttk.Button(controls_frame, text="Step", command=self.step)
         button.grid(column=1, row=1, sticky=EW, padx=5, pady=5)
         button_pos = button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
@@ -128,27 +170,22 @@ class Run(tk.Frame):
         controls_frame.columnconfigure(button_pos["column"], weight=1)
         controls_frame.grid(column=0, row=1, sticky=EW)
 
-        plots_view = tk.Frame(self)
-        plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
-        helper_font = font.Font(slant="italic")
-        helper_message = ttk.Label(
-            plots_view,
-            text="Drop properties to plot",
-            anchor=tk.CENTER,
-            foreground="gray",
-            font=helper_font,
-        )
-        helper_message.grid(column=0, row=0, sticky=EW)
+        self.plots_view = PlotsView(self)
+        self.plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
 
-        DnDProperties(self.property_view.widget, plots_view)
+        DnDProperties(self.property_view.widget, self.plots_view)
 
         # Window Layout
-        plots_view.grid_columnconfigure(0, weight=1)
-        plots_view.grid_rowconfigure(0, weight=1)
-        plotsview_pos = plots_view.grid_info()
+        plotsview_pos = self.plots_view.grid_info()
         self.grid_columnconfigure(plotsview_pos["column"], weight=1)
         self.grid_rowconfigure(plotsview_pos["row"], weight=1)
 
     def run_ic(self):
         self.master.controller.run_ic()
         self.property_view.widget.update_values()
+        self.plots_view.run_ic()
+
+    def step(self):
+        self.master.controller.run()
+        self.property_view.widget.update_values()
+        self.plots_view.update_values()
