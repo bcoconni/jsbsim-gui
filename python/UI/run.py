@@ -22,6 +22,8 @@ from tkinter.constants import EW, NS, NSEW, RAISED
 
 import numpy as np
 from jsbsim import FGPropertyNode
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 from .hierarchical_tree import PropertyTree
 from .source_editor import LabeledWidget
@@ -106,32 +108,75 @@ class PlotsView(tk.Frame):
     def __init__(self, master: tk.Widget, **kw):
         super().__init__(master, **kw)
         helper_font = font.Font(slant="italic")
-        helper_message = ttk.Label(
+        self.helper_message = ttk.Label(
             self,
             text="Drop properties to plot",
             anchor=tk.CENTER,
             foreground="gray",
             font=helper_font,
         )
-        helper_message.grid(column=0, row=0, sticky=EW)
+        self.helper_message.grid(column=0, row=0, sticky=EW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self.properties: list[FGPropertyNode] = []
         self.properties_values = np.empty((0, 0))
 
+        root = master.winfo_toplevel()
+        pixels = root.winfo_screenwidth()
+        width = root.winfo_screenmmwidth()
+        self.dpi = 25.4 * pixels / width
+        self.canvas: FigureCanvasTkAgg | None = None
+
+        self.plots = []
+
     def add_properties(self, properties: list[FGPropertyNode], target: tk.Widget):
-        ncol = self.properties_values.shape[1]
-        rows = np.full((len(properties), max(ncol, 1)), np.nan)
+        nrows, ncol = self.properties_values.shape
+        nprops = len(properties)
+        rows = np.full((nprops, max(ncol, 1)), np.nan)
         for idx, prop in enumerate(properties):
             if prop not in self.properties:
                 self.properties.append(prop)
                 rows[idx, -1] = prop.get_double_value()
+                self.plots.append(nrows + idx)
 
         if ncol > 0:
             self.properties_values = np.vstack((self.properties_values, rows))
         else:
             self.run_ic()
 
+        if self.helper_message:
+            self.helper_message.destroy()
+            self.helper_message = None
+
+        if self.canvas:
+            self.canvas.get_tk_widget().grid_forget()
+            self.canvas = None
+
+        dt = self.master.master.controller.dt
+        t = np.arange(0.0, len(self.properties_values[0, :]) * dt, dt)
+        w = self.winfo_width()
+        h = self.winfo_height()
+        fig = Figure(figsize=(w / self.dpi, h / self.dpi), dpi=self.dpi)
+        for row, idx in enumerate(self.plots):
+            ax = fig.add_subplot(nprops + nrows, 1, row + 1)
+            ax.plot(t, self.properties_values[idx, :])
+            ax.set_ylabel(self.properties[idx].get_name())
+            ax.grid(True)
+            ax.autoscale(enable=True, axis="y", tight=False)
+            if len(t) > 1:
+                ax.set_xlim(t[0], t[-1])
+            else:
+                ax.set_xlim(0, dt)
+            # Hide the x-axis tick labels of all but the bottom subplot
+            if row < nprops + nrows - 1:
+                ax.tick_params(labelbottom=False)
+            else:
+                ax.set_xlabel("Time (s)")
+        self.canvas = FigureCanvasTkAgg(fig, master=self)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().grid(column=0, row=0, sticky=NSEW)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
     def run_ic(self):
         self.properties_values = np.array(
@@ -141,6 +186,18 @@ class PlotsView(tk.Frame):
     def update_values(self):
         col = np.array([[prop.get_double_value() for prop in self.properties]]).T
         self.properties_values = np.hstack((self.properties_values, col))
+        figure = self.canvas.figure
+        t = figure.axes[0].lines[0].get_xdata()
+        t = np.append(t, t[-1] + self.master.master.controller.dt)
+        # Iterate over the plots and update the data
+        for idx, plot in enumerate(self.plots):
+            axe = figure.axes[idx]
+            axe.lines[0].set_xdata(t)
+            axe.lines[0].set_ydata(self.properties_values[plot, :])
+            axe.set_xlim(t[0], t[-1])
+            axe.relim()
+            axe.autoscale_view()
+        self.canvas.draw()
 
 
 class Run(tk.Frame):
@@ -156,11 +213,11 @@ class Run(tk.Frame):
         controls_frame = tk.Frame(self)
         button = ttk.Button(controls_frame, text="Initialize", command=self.run_ic)
         button.grid(column=0, row=0, columnspan=3, sticky=EW, padx=5, pady=5)
-        button = ttk.Button(controls_frame, text="Run")
+        button = ttk.Button(controls_frame, text="Step", command=self.step)
         button.grid(column=0, row=1, sticky=EW, padx=5, pady=5)
         button_pos = button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
-        button = ttk.Button(controls_frame, text="Step", command=self.step)
+        button = ttk.Button(controls_frame, text="Run")
         button.grid(column=1, row=1, sticky=EW, padx=5, pady=5)
         button_pos = button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)

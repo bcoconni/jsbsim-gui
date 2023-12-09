@@ -33,6 +33,7 @@ class Controller:
 
     def __init__(self, root_dir: str, widget):
         self.widget = widget
+        self.dt = 1.0 / 120.0
         with widget.stdout_to_console():
             self.fdm = jsbsim.FGFDMExec(root_dir)
 
@@ -50,7 +51,9 @@ class Controller:
 
     def run_ic(self):
         with self.widget.stdout_to_console():
-            return self.fdm.run_ic()
+            ret = self.fdm.run_ic()
+            self.dt = self.fdm.get_delta_t()
+            return ret
 
     def run(self):
         with self.widget.stdout_to_console():
@@ -115,7 +118,7 @@ class Controller:
             elif os.path.exists(os.path.join(systems_path, filename)):
                 input_files += relpath_filename(os.path.join(systems_path, filename))
 
-        if platform.system() == 'Windows':
+        if platform.system() == "Windows":
             return [name.replace("\\", "/") for name in input_files]
 
         return input_files
