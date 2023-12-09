@@ -27,69 +27,78 @@ from .source_editor import LabeledWidget
 
 
 class DragNDropManager(ABC):
-    def __init__(self, widget: tk.Widget):
-        widget.bind("<ButtonPress-1>", self.select)
-        widget.bind("<B1-Motion>", self.drag)
-        widget.bind("<ButtonRelease-1>", self.drop)
-        self.root = widget.winfo_toplevel()
+    def __init__(self, source: tk.Widget, target: tk.Widget):
+        source.bind("<ButtonPress-1>", self.select)
+        source.bind("<B1-Motion>", self.drag)
+        source.bind("<ButtonRelease-1>", self.drop)
         self.offset_x = 0
         self.offset_y = 0
-        self.source_widget: tk.Widget | None = None
-        self.target: tk.Widget | None = None
+        self.dragged_widget_preview: tk.Widget | None = None
+        self.target = target
 
     def select(self, event: tk.Event):
-        root = self.root
+        root = event.widget.winfo_toplevel()
         self.offset_x = root.winfo_rootx()
         self.offset_y = root.winfo_rooty()
-        self.target = None
 
     @abstractmethod
     def create_source_widget(self, master: tk.Widget) -> tk.Widget:
         pass
 
     def drag(self, event: tk.Event):
-        if not self.source_widget:
-            self.source_widget = self.create_source_widget(self.root)
+        if not self.dragged_widget_preview:
+            root = event.widget.winfo_toplevel()
+            self.dragged_widget_preview = self.create_source_widget(root)
 
-        if self.source_widget:
+        if self.dragged_widget_preview:
             x, y = event.widget.winfo_pointerxy()
-            self.source_widget.place(x=x - self.offset_x, y=y - self.offset_y)
+            self.dragged_widget_preview.place(x=x - self.offset_x, y=y - self.offset_y)
+
+    @abstractmethod
+    def drop_on_target(self, target: tk.Widget):
+        pass
 
     def drop(self, event: tk.Event):
-        if self.source_widget:
+        if self.dragged_widget_preview:
+            self.dragged_widget_preview.destroy()
+            self.dragged_widget_preview = None
+
             x, y = event.widget.winfo_pointerxy()
-            self.target = event.widget.winfo_containing(x, y)
-            print(self.target)
-            self.source_widget.destroy()
-            self.source_widget = None
+            target_widget = event.widget.winfo_containing(x, y)
+            # If target_widget is a child of self.target, process the dragged widget
+            if str(target_widget).startswith(str(self.target)):
+                self.drop_on_target(target_widget)
 
 
 class DnDProperties(DragNDropManager):
-    def __init__(self, widget: PropertyTree):
-        super().__init__(widget.proptree.tree)
-        self.property_tree = widget
+    def __init__(self, source: PropertyTree, target: tk.Widget):
+        super().__init__(source.proptree.tree, target)
+        self.property_tree = source
         self.property_list: list[FGPropertyNode] = []
 
     def create_source_widget(self, master: tk.Widget) -> tk.Widget:
         self.property_list = self.property_tree.get_selected_elements()
         if self.property_list:
-            source_widget = tk.Frame(
+            widget_preview = tk.Frame(
                 master, padx=5, pady=5, borderwidth=1, relief=RAISED
             )
             for idx, prop in enumerate(self.property_list):
                 if idx < 3:
                     propname = ttk.Label(
-                        source_widget,
+                        widget_preview,
                         text=prop.get_relative_name(),
                         justify=tk.LEFT,
                     )
                     propname.pack(anchor=tk.W)
                 else:
-                    propname = ttk.Label(source_widget, text="...", justify=tk.LEFT)
+                    propname = ttk.Label(widget_preview, text="...", justify=tk.LEFT)
                     propname.pack(anchor=tk.W)
                     break
-            return source_widget
+            return widget_preview
         return None
+
+    def drop_on_target(self, target: tk.Widget):
+        print(f"Dropped on {target}")
 
 
 class Run(tk.Frame):
@@ -131,7 +140,7 @@ class Run(tk.Frame):
         )
         helper_message.grid(column=0, row=0, sticky=EW)
 
-        DnDProperties(self.property_view.widget)
+        DnDProperties(self.property_view.widget, plots_view)
 
         # Window Layout
         plots_view.grid_columnconfigure(0, weight=1)
