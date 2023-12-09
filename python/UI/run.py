@@ -126,8 +126,91 @@ class PlotsView(tk.Frame):
         width = root.winfo_screenmmwidth()
         self.dpi = 25.4 * pixels / width
         self.canvas: FigureCanvasTkAgg | None = None
-
         self.plots = []
+        self.bbox = None
+
+    def on_enter_figure(self, event):
+        canvas = event.canvas
+        self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
+
+    def on_leave_figure(self, _):
+        self.bbox = None
+
+    def on_move(self, event):
+        canvas = event.canvas
+        figure = canvas.figure
+
+        if event.inaxes:
+            dt = self.master.master.controller.dt
+            idx = int(event.xdata / dt)
+            x0 = idx * dt
+            if event.xdata - x0 > dt / 2:
+                idx += 1
+                x0 += dt
+            ax = figure.axes[0]
+            text = ax.texts[1]
+            text.set_text(f"t={x0:.3f}s")
+            text.set_visible(True)
+            bbox = text.get_window_extent()
+            m = ax.transData.inverted()
+            pos0 = m.transform((bbox.x0, bbox.y0))
+            pos1 = m.transform((bbox.x1, bbox.y1))
+            w = (pos1 - pos0)[0]
+            ymin, ymax = ax.get_ybound()
+            text.set_position((x0 - w / 2, ymax + 0.05 * (ymax - ymin)))
+
+            for ax in figure.axes:
+                vline = ax.lines[0]
+                vline.set_visible(True)
+                xmax = ax.get_xbound()[1]
+                ymin, ymax = ax.get_ybound()
+                vline.set_xdata([event.xdata, event.xdata])
+                vline.set_ydata([ymin, ymax])
+
+                ydata = ax.lines[1].get_ydata()
+                if len(ydata) > 1:
+                    offset = np.array([0, 1])
+                    y0 = ydata[idx]
+                    if np.isnan(y0):
+                        continue
+                    text = ax.texts[0]
+                    text.set_text(f" {y0:.5f} ")
+                    text.set_visible(True)
+                    text.set_position((x0, y0))
+                    bbox = text.get_window_extent()
+                    m = ax.transData.inverted()
+                    pos0 = m.transform((bbox.x0, bbox.y0))
+                    pos1 = m.transform((bbox.x1, bbox.y1))
+                    w, h = tuple(pos1 - pos0)
+                    pos0 = ax.transData.transform((x0, y0))
+                    pos1 = ax.transData.transform((x0 + w, y0 + h))
+                    pos0 = m.transform(pos0 - offset)
+                    pos1 = m.transform(pos1 + offset)
+                    x0, y0 = tuple(pos0)
+                    w, h = tuple(pos1 - pos0)
+                    if pos1[0] > xmax:
+                        x0 -= w
+                    if pos1[1] > ymax:
+                        y0 -= h
+                    text.set_position((x0, y0))
+        else:
+            figure.axes[0].texts[1].set_visible(False)
+            for ax in figure.axes:
+                ax.lines[0].set_visible(False)
+                ax.texts[0].set_visible(False)
+
+        if self.bbox:
+            canvas.restore_region(self.bbox)
+            ax0 = figure.axes[0]
+            ax0.draw_artist(ax0.texts[1])
+            for ax in figure.axes:
+                ax.draw_artist(ax.texts[0])
+                for line in ax.lines:
+                    ax.draw_artist(line)
+            canvas.blit(canvas.figure.bbox)
+        else:
+            canvas.draw()
+            self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
 
     def add_properties(self, properties: list[FGPropertyNode], target: tk.Widget):
         nrows, ncol = self.properties_values.shape
@@ -159,7 +242,14 @@ class PlotsView(tk.Frame):
         fig = Figure(figsize=(w / self.dpi, h / self.dpi), dpi=self.dpi)
         for row, idx in enumerate(self.plots):
             ax = fig.add_subplot(nprops + nrows, 1, row + 1)
-            ax.plot(t, self.properties_values[idx, :])
+            # Cross hair
+            v0 = self.properties_values[idx, 0]
+            ax.plot([0.0, 0.0], [v0, v0], color="red", visible=False)
+            ax.text(0.0, v0, f"{v0:.2f}", color="red", visible=False, fontweight="bold")
+            if idx == 0:
+                ax.text(0.0, v0, "0.0", color="red", visible=False, fontweight="bold")
+            # Plot the data
+            ax.plot(t, self.properties_values[idx, :], color="C0")
             ax.set_ylabel(self.properties[idx].get_name())
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
@@ -173,6 +263,9 @@ class PlotsView(tk.Frame):
             else:
                 ax.set_xlabel("Time (s)")
         self.canvas = FigureCanvasTkAgg(fig, master=self)
+        self.canvas.mpl_connect("figure_enter_event", self.on_enter_figure)
+        self.canvas.mpl_connect("figure_leave_event", self.on_leave_figure)
+        self.canvas.mpl_connect("motion_notify_event", self.on_move)
         self.canvas.draw()
         self.canvas.get_tk_widget().grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
@@ -187,13 +280,13 @@ class PlotsView(tk.Frame):
         col = np.array([[prop.get_double_value() for prop in self.properties]]).T
         self.properties_values = np.hstack((self.properties_values, col))
         figure = self.canvas.figure
-        t = figure.axes[0].lines[0].get_xdata()
+        t = figure.axes[0].lines[1].get_xdata()
         t = np.append(t, t[-1] + self.master.master.controller.dt)
         # Iterate over the plots and update the data
         for idx, plot in enumerate(self.plots):
             axe = figure.axes[idx]
-            axe.lines[0].set_xdata(t)
-            axe.lines[0].set_ydata(self.properties_values[plot, :])
+            axe.lines[1].set_xdata(t)
+            axe.lines[1].set_ydata(self.properties_values[plot, :])
             axe.set_xlim(t[0], t[-1])
             axe.relim()
             axe.autoscale_view()
