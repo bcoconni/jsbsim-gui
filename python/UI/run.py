@@ -128,6 +128,7 @@ class PlotsView(tk.Frame):
         self.canvas: FigureCanvasTkAgg | None = None
         self.plots = []
         self.bbox = None
+        self.picked_line = (-1, -1)
 
     def on_enter_figure(self, event):
         canvas = event.canvas
@@ -135,6 +136,40 @@ class PlotsView(tk.Frame):
 
     def on_leave_figure(self, _):
         self.bbox = None
+
+    def on_pick(self, event):
+        figure = self.canvas.figure
+        ax_id = -1
+        for idx, ax in enumerate(figure.axes):
+            if ax == event.inaxes:
+                ax_id = idx
+                break
+
+        for line_id, line in enumerate(event.inaxes.lines[1:]):
+            if line.contains(event)[0]:
+                a, l = self.picked_line
+                if a >= 0 and l >= 0:
+                    figure.axes[a].lines[l+1].set_linewidth(1)
+                line.set_linewidth(4)
+                self.picked_line = (ax_id, line_id)
+                self.canvas.draw()
+                return
+
+        ax_id, line_id = self.picked_line
+        if ax_id >= 0 and line_id >= 0:
+            figure.axes[ax_id].lines[line_id+1].set_linewidth(1)
+        self.picked_line = (-1,-1)
+        self.canvas.draw()
+
+    def on_key_press(self, event):
+        if event.key == "delete":
+            ax_id, line_id = self.picked_line
+            if ax_id >= 0 and line_id >= 0:
+                self.plots[ax_id].pop(line_id)
+                if not self.plots[ax_id]:
+                    self.plots.pop(ax_id)
+                self.picked_line = (-1, -1)
+                self.initialize_canvas()
 
     def on_move(self, event):
         canvas = event.canvas
@@ -171,9 +206,10 @@ class PlotsView(tk.Frame):
                 if len(ydata) > 1:
                     offset = np.array([0, 1])
                     y0 = ydata[idx]
-                    if np.isnan(y0):
-                        continue
                     text = ax.texts[0]
+                    if np.isnan(y0):
+                        text.set_visible(False)
+                        continue
                     text.set_text(f" {y0:.5f} ")
                     text.set_visible(True)
                     text.set_position((x0, y0))
@@ -220,13 +256,16 @@ class PlotsView(tk.Frame):
             if prop not in self.properties:
                 self.properties.append(prop)
                 rows[idx, -1] = prop.get_double_value()
-                self.plots.append(nrows + idx)
+                self.plots.append([nrows + idx])
 
         if ncol > 0:
             self.properties_values = np.vstack((self.properties_values, rows))
         else:
             self.run_ic()
 
+        self.initialize_canvas()
+
+    def initialize_canvas(self):
         if self.helper_message:
             self.helper_message.destroy()
             self.helper_message = None
@@ -235,22 +274,24 @@ class PlotsView(tk.Frame):
             self.canvas.get_tk_widget().grid_forget()
             self.canvas = None
 
+        nplots = len(self.plots)
         dt = self.master.master.controller.dt
         t = np.arange(0.0, len(self.properties_values[0, :]) * dt, dt)
         w = self.winfo_width()
         h = self.winfo_height()
         fig = Figure(figsize=(w / self.dpi, h / self.dpi), dpi=self.dpi)
-        for row, idx in enumerate(self.plots):
-            ax = fig.add_subplot(nprops + nrows, 1, row + 1)
+        for row, plots in enumerate(self.plots):
+            ax = fig.add_subplot(nplots, 1, row + 1)
             # Cross hair
-            v0 = self.properties_values[idx, 0]
+            v0 = self.properties_values[plots[0], 0]
             ax.plot([0.0, 0.0], [v0, v0], color="red", visible=False)
             ax.text(0.0, v0, f"{v0:.2f}", color="red", visible=False, fontweight="bold")
-            if idx == 0:
+            if row == 0:
                 ax.text(0.0, v0, "0.0", color="red", visible=False, fontweight="bold")
             # Plot the data
-            ax.plot(t, self.properties_values[idx, :], color="C0")
-            ax.set_ylabel(self.properties[idx].get_name())
+            for idx in plots:
+                ax.plot(t, self.properties_values[idx, :], color="C0")
+            ax.set_ylabel(self.properties[plots[0]].get_name())
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
             if len(t) > 1:
@@ -258,7 +299,7 @@ class PlotsView(tk.Frame):
             else:
                 ax.set_xlim(0, dt)
             # Hide the x-axis tick labels of all but the bottom subplot
-            if row < nprops + nrows - 1:
+            if row < nplots - 1:
                 ax.tick_params(labelbottom=False)
             else:
                 ax.set_xlabel("Time (s)")
@@ -266,6 +307,8 @@ class PlotsView(tk.Frame):
         self.canvas.mpl_connect("figure_enter_event", self.on_enter_figure)
         self.canvas.mpl_connect("figure_leave_event", self.on_leave_figure)
         self.canvas.mpl_connect("motion_notify_event", self.on_move)
+        self.canvas.mpl_connect("button_press_event", self.on_pick)
+        self.canvas.mpl_connect("key_press_event", self.on_key_press)
         self.canvas.draw()
         self.canvas.get_tk_widget().grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
@@ -276,17 +319,18 @@ class PlotsView(tk.Frame):
             [[prop.get_double_value() for prop in self.properties]]
         ).T
 
-    def update_values(self):
+    def update_plots(self):
         col = np.array([[prop.get_double_value() for prop in self.properties]]).T
         self.properties_values = np.hstack((self.properties_values, col))
         figure = self.canvas.figure
         t = figure.axes[0].lines[1].get_xdata()
         t = np.append(t, t[-1] + self.master.master.controller.dt)
         # Iterate over the plots and update the data
-        for idx, plot in enumerate(self.plots):
-            axe = figure.axes[idx]
-            axe.lines[1].set_xdata(t)
-            axe.lines[1].set_ydata(self.properties_values[plot, :])
+        for row, plots in enumerate(self.plots):
+            axe = figure.axes[row]
+            for line, plot in zip(axe.lines[1:], plots):
+                line.set_xdata(t)
+                line.set_ydata(self.properties_values[plot, :])
             axe.set_xlim(t[0], t[-1])
             axe.relim()
             axe.autoscale_view()
@@ -338,4 +382,4 @@ class Run(tk.Frame):
     def step(self):
         self.master.controller.run()
         self.property_view.widget.update_values()
-        self.plots_view.update_values()
+        self.plots_view.update_plots()
