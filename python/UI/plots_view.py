@@ -86,7 +86,13 @@ class PlotsView(tk.Frame):
 
     def on_enter_figure(self, event: LocationEvent):
         canvas = event.canvas
+        params = self.selected_line.get_params()
+        if params:
+            self.selected_line.deselect()
+            canvas.draw()
         self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
+        if params:
+            self.selected_line.select(*params)
 
     def on_leave_figure(self, event: LocationEvent):
         canvas = event.canvas
@@ -130,6 +136,15 @@ class PlotsView(tk.Frame):
         canvas = event.canvas
         axes = canvas.figure.axes
 
+        def text_bbox_size(
+            text: mpl.text.Text, axe: mpl.axes.Axes
+        ) -> tuple[float, float]:
+            bbox = text.get_window_extent()
+            m = axe.transData.inverted()
+            pos0 = m.transform((bbox.x0, bbox.y0))
+            pos1 = m.transform((bbox.x1, bbox.y1))
+            return pos1 - pos0
+
         if event.inaxes:
             dt = self.master.master.controller.dt
             idx = int(event.xdata / dt)
@@ -141,11 +156,7 @@ class PlotsView(tk.Frame):
             text = ax0.texts[1]
             text.set_text(f"t={x0:.3f}s")
             text.set_visible(True)
-            bbox = text.get_window_extent()
-            m = ax0.transData.inverted()
-            pos0 = m.transform((bbox.x0, bbox.y0))
-            pos1 = m.transform((bbox.x1, bbox.y1))
-            w = (pos1 - pos0)[0]
+            w = text_bbox_size(text, ax0)[0]
             ymin, ymax = ax0.get_ybound()
             text.set_position((x0 - w / 2, ymax + 0.05 * (ymax - ymin)))
 
@@ -167,14 +178,11 @@ class PlotsView(tk.Frame):
                         continue
                     text.set_text(f" {y0:.5f} ")
                     text.set_visible(True)
-                    text.set_position((x0, y0))
-                    bbox = text.get_window_extent()
-                    m = ax.transData.inverted()
-                    pos0 = m.transform((bbox.x0, bbox.y0))
-                    pos1 = m.transform((bbox.x1, bbox.y1))
-                    w, h = tuple(pos1 - pos0)
+                    # text.set_position((x0, y0))
+                    w, h = tuple(text_bbox_size(text, ax))
                     pos0 = ax.transData.transform((x0, y0))
                     pos1 = ax.transData.transform((x0 + w, y0 + h))
+                    m = ax.transData.inverted()
                     pos0 = m.transform(pos0 - offset)
                     pos1 = m.transform(pos1 + offset)
                     x0, y0 = tuple(pos0)
@@ -211,15 +219,23 @@ class PlotsView(tk.Frame):
     def add_properties(self, properties: list[FGPropertyNode], _: tk.Widget):
         nrows, ncol = self.properties_values.shape
         nprops = len(properties)
-        rows = np.full((nprops, max(ncol, 1)), np.nan)
-        for idx, prop in enumerate(properties):
+        new_prop_values = np.full((nprops, max(ncol, 1)), np.nan)
+        new_values = 0
+        for prop in properties:
             if prop not in self.properties:
                 self.properties.append(prop)
-                rows[idx, -1] = prop.get_double_value()
-                self.plots.append([nrows + idx])
+                new_prop_values[new_values, -1] = prop.get_double_value()
+                self.plots.append([nrows + new_values])
+                new_values += 1
+            else:
+                prop_id = self.properties.index(prop)
+                self.plots.append([prop_id])
 
         if ncol > 0:
-            self.properties_values = np.vstack((self.properties_values, rows))
+            if new_values > 0:
+                self.properties_values = np.vstack(
+                    (self.properties_values, new_prop_values[:new_values, :])
+                )
         else:
             self.run_ic()
 
@@ -241,17 +257,17 @@ class PlotsView(tk.Frame):
         w = self.winfo_width()
         h = self.winfo_height()
         fig = Figure(figsize=(w / self.dpi, h / self.dpi), dpi=self.dpi)
-        for row, plots in enumerate(self.plots):
-            ax = fig.add_subplot(nplots, 1, row + 1)
+        for plot_id, plots in enumerate(self.plots):
+            ax = fig.add_subplot(nplots, 1, plot_id + 1)
             # Cross hair
             v0 = self.properties_values[plots[0], 0]
             ax.plot([0.0, 0.0], [v0, v0], color="red", visible=False)
             ax.text(0.0, v0, f"{v0:.2f}", color="red", visible=False, fontweight="bold")
-            if row == 0:
+            if plot_id == 0:
                 ax.text(0.0, v0, "0.0", color="red", visible=False, fontweight="bold")
             # Plot the property history
-            for row, prop_id in enumerate(plots):
-                ax.plot(t, self.properties_values[prop_id, :], color=f"C{row%10}")
+            for idx, prop_id in enumerate(plots):
+                ax.plot(t, self.properties_values[prop_id, :], color=f"C{idx%10}")
             ax.set_ylabel(self.properties[plots[0]].get_name())
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
@@ -260,7 +276,7 @@ class PlotsView(tk.Frame):
             else:
                 ax.set_xlim(0, dt)
             # Hide the x-axis tick labels of all but the bottom subplot
-            if row < nplots - 1:
+            if plot_id < nplots - 1:
                 ax.tick_params(labelbottom=False)
             else:
                 ax.set_xlabel("Time (s)")
@@ -293,8 +309,7 @@ class PlotsView(tk.Frame):
         t = axes[0].lines[1].get_xdata()
         t = np.append(t, t[-1] + self.master.master.controller.dt)
         # Iterate over the plots and update the data
-        for row, plots in enumerate(self.plots):
-            axe = axes[row]
+        for axe, plots in zip(axes, self.plots):
             for line, prop_id in zip(axe.lines[1:], plots):
                 line.set_xdata(t)
                 line.set_ydata(self.properties_values[prop_id, :])
