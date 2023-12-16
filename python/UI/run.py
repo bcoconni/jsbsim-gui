@@ -19,11 +19,15 @@ import tkinter as tk
 from abc import ABC, abstractmethod
 from tkinter import font, ttk
 from tkinter.constants import EW, NS, NSEW, RAISED
+from typing import Any
 
+import matplotlib as mpl
 import numpy as np
-from jsbsim import FGPropertyNode
+from matplotlib.backend_bases import KeyEvent, LocationEvent, MouseEvent
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+
+from jsbsim import FGPropertyNode
 
 from .hierarchical_tree import PropertyTree
 from .source_editor import LabeledWidget
@@ -104,6 +108,35 @@ class DnDProperties(DragNDropManager):
         self.target.add_properties(self.property_list, target)
 
 
+class SelectedLine:
+    def __init__(self, axes: list[mpl.axes.Axes], **props):
+        self.ax_id = -1
+        self.line_id = -1
+        self.axes = axes
+        self.pick_props = props
+        self.orig_props: dict[str, Any] = {}
+
+    def select(self, ax_id: int, line_id: int) -> None:
+        self.deselect()
+        self.ax_id = ax_id
+        self.line_id = line_id
+        line = self.axes[ax_id].lines[line_id]
+        for prop in self.pick_props:
+            self.orig_props[prop] = mpl.artist.get(line, prop)
+        line.set(**self.pick_props)
+
+    def deselect(self) -> None:
+        if self.ax_id >= 0 and self.line_id >= 0:
+            self.axes[self.ax_id].lines[self.line_id].set(**self.orig_props)
+        self.ax_id = -1
+        self.line_id = -1
+
+    def get_params(self) -> tuple[int, int] | None:
+        if self.ax_id >= 0 and self.line_id >= 0:
+            return self.ax_id, self.line_id
+        return None
+
+
 class PlotsView(tk.Frame):
     def __init__(self, master: tk.Widget, **kw):
         super().__init__(master, **kw)
@@ -126,54 +159,55 @@ class PlotsView(tk.Frame):
         width = root.winfo_screenmmwidth()
         self.dpi = 25.4 * pixels / width
         self.canvas: FigureCanvasTkAgg | None = None
-        self.plots = []
+        self.plots: list[int] = []
         self.bbox = None
-        self.picked_line = (-1, -1)
+        self.selected_line: SelectedLine | None = None
 
-    def on_enter_figure(self, event):
+    def on_enter_figure(self, event: LocationEvent):
         canvas = event.canvas
         self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
 
-    def on_leave_figure(self, _):
+    def on_leave_figure(self, event: LocationEvent):
+        canvas = event.canvas
+        axes = canvas.figure.axes
+
+        axes[0].texts[1].set_visible(False)
+        for ax in axes:
+            ax.lines[0].set_visible(False)
+            ax.texts[0].set_visible(False)
+
+        canvas.draw()
         self.bbox = None
 
-    def on_pick(self, event):
-        figure = self.canvas.figure
-        ax_id = -1
-        for idx, ax in enumerate(figure.axes):
-            if ax == event.inaxes:
-                ax_id = idx
-                break
+    def on_click(self, event: MouseEvent):
+        axes = self.canvas.figure.axes
 
-        for line_id, line in enumerate(event.inaxes.lines[1:]):
-            if line.contains(event)[0]:
-                a, l = self.picked_line
-                if a >= 0 and l >= 0:
-                    figure.axes[a].lines[l+1].set_linewidth(1)
-                line.set_linewidth(4)
-                self.picked_line = (ax_id, line_id)
-                self.canvas.draw()
-                return
+        if event.inaxes:
+            for ax_id, ax in enumerate(axes):
+                if ax == event.inaxes:
+                    for line_id, line in enumerate(ax.lines[1:]):
+                        if line.contains(event)[0]:
+                            self.selected_line.select(ax_id, line_id + 1)
+                            self.canvas_blit()
+                            return
 
-        ax_id, line_id = self.picked_line
-        if ax_id >= 0 and line_id >= 0:
-            figure.axes[ax_id].lines[line_id+1].set_linewidth(1)
-        self.picked_line = (-1,-1)
-        self.canvas.draw()
+        self.selected_line.deselect()
+        self.canvas_blit()
 
-    def on_key_press(self, event):
+    def on_key_press(self, event: KeyEvent):
         if event.key == "delete":
-            ax_id, line_id = self.picked_line
-            if ax_id >= 0 and line_id >= 0:
-                self.plots[ax_id].pop(line_id)
+            params = self.selected_line.get_params()
+            if params:
+                ax_id, line_id = params
+                self.plots[ax_id].pop(line_id - 1)
                 if not self.plots[ax_id]:
                     self.plots.pop(ax_id)
-                self.picked_line = (-1, -1)
+                self.selected_line.deselect()
                 self.initialize_canvas()
 
-    def on_move(self, event):
+    def on_move(self, event: MouseEvent):
         canvas = event.canvas
-        figure = canvas.figure
+        axes = canvas.figure.axes
 
         if event.inaxes:
             dt = self.master.master.controller.dt
@@ -182,19 +216,19 @@ class PlotsView(tk.Frame):
             if event.xdata - x0 > dt / 2:
                 idx += 1
                 x0 += dt
-            ax = figure.axes[0]
-            text = ax.texts[1]
+            ax0 = axes[0]
+            text = ax0.texts[1]
             text.set_text(f"t={x0:.3f}s")
             text.set_visible(True)
             bbox = text.get_window_extent()
-            m = ax.transData.inverted()
+            m = ax0.transData.inverted()
             pos0 = m.transform((bbox.x0, bbox.y0))
             pos1 = m.transform((bbox.x1, bbox.y1))
             w = (pos1 - pos0)[0]
-            ymin, ymax = ax.get_ybound()
+            ymin, ymax = ax0.get_ybound()
             text.set_position((x0 - w / 2, ymax + 0.05 * (ymax - ymin)))
 
-            for ax in figure.axes:
+            for ax in axes:
                 vline = ax.lines[0]
                 vline.set_visible(True)
                 xmax = ax.get_xbound()[1]
@@ -230,16 +264,21 @@ class PlotsView(tk.Frame):
                         y0 -= h
                     text.set_position((x0, y0))
         else:
-            figure.axes[0].texts[1].set_visible(False)
-            for ax in figure.axes:
+            axes[0].texts[1].set_visible(False)
+            for ax in axes:
                 ax.lines[0].set_visible(False)
                 ax.texts[0].set_visible(False)
 
+        self.canvas_blit()
+
+    def canvas_blit(self):
+        canvas = self.canvas
+        axes = canvas.figure.axes
         if self.bbox:
             canvas.restore_region(self.bbox)
-            ax0 = figure.axes[0]
+            ax0 = axes[0]
             ax0.draw_artist(ax0.texts[1])
-            for ax in figure.axes:
+            for ax in axes:
                 ax.draw_artist(ax.texts[0])
                 for line in ax.lines:
                     ax.draw_artist(line)
@@ -248,7 +287,7 @@ class PlotsView(tk.Frame):
             canvas.draw()
             self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
 
-    def add_properties(self, properties: list[FGPropertyNode], target: tk.Widget):
+    def add_properties(self, properties: list[FGPropertyNode], _: tk.Widget):
         nrows, ncol = self.properties_values.shape
         nprops = len(properties)
         rows = np.full((nprops, max(ncol, 1)), np.nan)
@@ -271,6 +310,7 @@ class PlotsView(tk.Frame):
             self.helper_message = None
 
         if self.canvas:
+            self.selected_line.deselect()
             self.canvas.get_tk_widget().grid_forget()
             self.canvas = None
 
@@ -288,9 +328,9 @@ class PlotsView(tk.Frame):
             ax.text(0.0, v0, f"{v0:.2f}", color="red", visible=False, fontweight="bold")
             if row == 0:
                 ax.text(0.0, v0, "0.0", color="red", visible=False, fontweight="bold")
-            # Plot the data
-            for idx in plots:
-                ax.plot(t, self.properties_values[idx, :], color="C0")
+            # Plot the property history
+            for row, prop_id in enumerate(plots):
+                ax.plot(t, self.properties_values[prop_id, :], color=f"C{row%10}")
             ax.set_ylabel(self.properties[plots[0]].get_name())
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
@@ -307,12 +347,17 @@ class PlotsView(tk.Frame):
         self.canvas.mpl_connect("figure_enter_event", self.on_enter_figure)
         self.canvas.mpl_connect("figure_leave_event", self.on_leave_figure)
         self.canvas.mpl_connect("motion_notify_event", self.on_move)
-        self.canvas.mpl_connect("button_press_event", self.on_pick)
+        self.canvas.mpl_connect("button_press_event", self.on_click)
         self.canvas.mpl_connect("key_press_event", self.on_key_press)
-        self.canvas.draw()
+        self.selected_line = SelectedLine(fig.axes, linewidth=4, color="red")
+        self.reset_and_redraw()
         self.canvas.get_tk_widget().grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+
+    def reset_and_redraw(self):
+        self.canvas.draw()
+        self.bbox = None
 
     def run_ic(self):
         self.properties_values = np.array(
@@ -322,19 +367,20 @@ class PlotsView(tk.Frame):
     def update_plots(self):
         col = np.array([[prop.get_double_value() for prop in self.properties]]).T
         self.properties_values = np.hstack((self.properties_values, col))
-        figure = self.canvas.figure
-        t = figure.axes[0].lines[1].get_xdata()
+
+        axes = self.canvas.figure.axes
+        t = axes[0].lines[1].get_xdata()
         t = np.append(t, t[-1] + self.master.master.controller.dt)
         # Iterate over the plots and update the data
         for row, plots in enumerate(self.plots):
-            axe = figure.axes[row]
-            for line, plot in zip(axe.lines[1:], plots):
+            axe = axes[row]
+            for line, prop_id in zip(axe.lines[1:], plots):
                 line.set_xdata(t)
-                line.set_ydata(self.properties_values[plot, :])
+                line.set_ydata(self.properties_values[prop_id, :])
             axe.set_xlim(t[0], t[-1])
             axe.relim()
             axe.autoscale_view()
-        self.canvas.draw()
+        self.reset_and_redraw()
 
 
 class Run(tk.Frame):
