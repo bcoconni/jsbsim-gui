@@ -15,13 +15,9 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import io
 import os
-import sys
-import tempfile
 import tkinter as tk
 import xml.etree.ElementTree as et
-from contextlib import contextmanager
 from tkinter import filedialog as fd
 from tkinter import ttk
 from tkinter.constants import EW, NSEW
@@ -33,7 +29,7 @@ from PIL import Image, ImageTk
 from .controller import Controller
 from .run import Run
 from .source_editor import SourceEditor
-from .textview import Console
+from .textview import ConsoleStdoutRedirect
 
 
 class MenuBar(tk.Menu):
@@ -100,9 +96,8 @@ class App(tk.Tk):
                 showerror("Error", message=e)
                 self.destroy()
 
-        self.console: Console | None = None
+        self._console: ConsoleStdoutRedirect | None = None
         self._controller: Controller | None = None
-        self.filename: str | None = None
 
     def run(self) -> None:
         w = self.main.winfo_width()
@@ -137,38 +132,10 @@ class App(tk.Tk):
         # Remove the logo
         self.title(f"JSBSim {Controller.get_version()} - {aircraft_name}")
 
-        if not self.console:
-            self.console = Console(self, height=10)
-            self.console.grid(column=0, row=1, sticky=EW)
+        if not self._console:
+            self._console = ConsoleStdoutRedirect(self, height=10)
+            self._console.grid(column=0, row=1, sticky=EW)
 
-        self._controller = Controller(self.root_dir, self)
+        self._controller = Controller(self.root_dir, self._console)
         load_file(self._controller, filename)
         self.edit()
-
-    @contextmanager
-    def stdout_to_console(self):
-        """Redirect stdout to the console"""
-        original_stdout_fd = sys.stdout.fileno()
-
-        def _redirect_stdout(to_fd):
-            # Flush and close sys.stdout - also closes the file descriptor (fd)
-            sys.stdout.close()
-            # Make original_stdout_fd point to the same file as to_fd
-            os.dup2(to_fd, original_stdout_fd)
-            # Create a new sys.stdout that points to the redirected fd
-            sys.stdout = io.TextIOWrapper(os.fdopen(original_stdout_fd, "wb"))
-
-        saved_stdout_fd = os.dup(original_stdout_fd)
-        try:
-            # Create a temporary file and redirect stdout to it
-            tfile = tempfile.TemporaryFile(mode="w+b")
-            _redirect_stdout(tfile.fileno())
-            # Yield to caller, then redirect stdout back to the saved fd
-            yield
-            _redirect_stdout(saved_stdout_fd)
-            # Copy contents of temporary file to the given stream
-            tfile.flush()
-            tfile.seek(0, io.SEEK_SET)
-            self.console.write(tfile.read())
-        finally:
-            os.close(saved_stdout_fd)

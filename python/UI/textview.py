@@ -15,7 +15,12 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import io
+import os
+import sys
+import tempfile
 import tkinter as tk
+from contextlib import contextmanager
 from tkinter import ttk
 from tkinter.constants import (
     DISABLED,
@@ -228,3 +233,34 @@ class Console(TextView):
         self.text.insert(END, contents)
         self.text.see(END)
         self.text.configure(state=DISABLED)
+
+
+# A class inheriting from console and redirecting stdout and stderr to the console
+class ConsoleStdoutRedirect(Console):
+    @contextmanager
+    def redirect_stdout(self):
+        """Redirect stdout to the console"""
+        original_stdout_fd = sys.stdout.fileno()
+
+        def _redirect_stdout(to_fd):
+            # Flush and close sys.stdout - also closes the file descriptor (fd)
+            sys.stdout.close()
+            # Make original_stdout_fd point to the same file as to_fd
+            os.dup2(to_fd, original_stdout_fd)
+            # Create a new sys.stdout that points to the redirected fd
+            sys.stdout = io.TextIOWrapper(os.fdopen(original_stdout_fd, "wb"))
+
+        saved_stdout_fd = os.dup(original_stdout_fd)
+        try:
+            # Create a temporary file and redirect stdout to it
+            tfile = tempfile.TemporaryFile(mode="w+b")
+            _redirect_stdout(tfile.fileno())
+            # Yield to caller, then redirect stdout back to the saved fd
+            yield
+            _redirect_stdout(saved_stdout_fd)
+            # Copy contents of temporary file to the given stream
+            tfile.flush()
+            tfile.seek(0, io.SEEK_SET)
+            self.write(tfile.read())
+        finally:
+            os.close(saved_stdout_fd)
