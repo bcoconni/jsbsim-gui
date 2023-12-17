@@ -19,7 +19,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NS, NSEW, VERTICAL
 from tkinter.messagebox import showerror
-from typing import Callable
+from typing import Callable, List, Optional
 
 from jsbsim import Attribute, FGPropertyNode
 
@@ -28,8 +28,8 @@ class HierarchicalTree(ttk.Frame):
     def __init__(
         self,
         master: tk.Widget,
-        elements: list[str],
-        columns_id: list[str],
+        elements: List[str],
+        columns_id: List[str],
         is_open: bool = True,
     ):
         super().__init__(master)
@@ -62,7 +62,7 @@ class HierarchicalTree(ttk.Frame):
         self.grid_columnconfigure(tree_pos["column"], weight=1)
         self.grid_rowconfigure(tree_pos["row"], weight=1)
 
-    def get_selected_elements(self) -> list[str]:
+    def get_selected_elements(self) -> List[str]:
         selected_prop = []
         for selected_item in self.tree.selection():
             name = self.tree.item(selected_item, "text")
@@ -118,7 +118,7 @@ class PropertyTree(ttk.Frame):
     def __init__(
         self,
         master: tk.Widget,
-        properties: list[FGPropertyNode],
+        properties: List[FGPropertyNode],
     ):
         super().__init__(master)
         self.hidden_items: list[tuple[str, str, int]] = []
@@ -155,7 +155,7 @@ class PropertyTree(ttk.Frame):
         self.search_box.bind("<KeyRelease>", self.search)
         self.proptree.tree.bind("<Double-1>", self.edit_property_value)
 
-    def initialize_values(self, properties: list[FGPropertyNode]) -> None:
+    def initialize_values(self, properties: List[FGPropertyNode]) -> None:
         tree = self.proptree.tree
         for node in properties:
             parent_id = ""
@@ -243,7 +243,7 @@ class PropertyTree(ttk.Frame):
             node = self.properties[parent_id]
             tree.set(parent_id, "value", node.get_double_value())
 
-    def get_selected_elements(self) -> list[FGPropertyNode]:
+    def get_selected_elements(self) -> List[FGPropertyNode]:
         selected_prop = []
         tree = self.proptree.tree
 
@@ -262,12 +262,12 @@ class PropertyTree(ttk.Frame):
 
 
 class FileTree(HierarchicalTree):
-    def __init__(self, master: tk.Widget, elements: list[str]):
+    def __init__(self, master: tk.Widget, elements: List[str]):
         super().__init__(master, elements, [])
         self.tree.configure(show="tree", selectmode=BROWSE)
 
     def bind_selection(
-        self, func: Callable[[str], None], add: bool | None = None
+        self, func: Callable[[str], None], add: Optional[bool] = None
     ) -> None:
         def bind_func(_):
             selection = self.get_selected_elements()

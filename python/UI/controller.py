@@ -15,8 +15,9 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import os
-import xml.etree.ElementTree as et
 import platform
+import xml.etree.ElementTree as et
+from typing import List
 
 import jsbsim
 from jsbsim._jsbsim import _append_xml as append_xml
@@ -59,7 +60,7 @@ class Controller:
         with self.widget.stdout_to_console():
             return self.fdm.run()
 
-    def get_input_files(self, filename) -> list[str]:
+    def get_input_files(self, filename) -> List[str]:
         root_dir = self.fdm.get_root_dir()
 
         def relpath_filename(filename):
@@ -123,7 +124,7 @@ class Controller:
 
         return input_files
 
-    def get_property_list(self) -> list[jsbsim.FGPropertyNode]:
+    def get_property_list(self) -> List[jsbsim.FGPropertyNode]:
         pm = self.fdm.get_property_manager()
         names = [
             p.split(" ")[0]

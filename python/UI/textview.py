@@ -31,7 +31,7 @@ from tkinter.constants import (
     SUNKEN,
     VERTICAL,
 )
-from typing import Optional
+from typing import Dict, Optional, Tuple
 from xml.parsers import expat
 
 
@@ -74,7 +74,7 @@ class TextView(ttk.Frame):
 class SourceCodeView(TextView):
     """Display text with line numbers"""
 
-    def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
+    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
         super().__init__(master, contents, **kw)
         source_frame = ttk.Frame(self, borderwidth=1, relief=SUNKEN)
         source_frame.grid(column=0, row=0, sticky=NSEW)
@@ -114,7 +114,7 @@ class SourceCodeView(TextView):
         self.yscrollbar.set(first, last)
         self.line_numbers.yview(MOVETO, first)
 
-    def yview(self, *args) -> tuple[float, float]:
+    def yview(self, *args) -> Tuple[float, float]:
         self.text.yview(*args)
         return self.line_numbers.yview(*args)
 
@@ -145,7 +145,7 @@ class SourceCodeView(TextView):
 
 
 class XMLSourceCodeView(SourceCodeView):
-    def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
+    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
         super().__init__(master, contents, **kw)
 
         self.text.tag_configure("XML_tag", foreground="#ff00ff")
@@ -165,7 +165,7 @@ class XMLSourceCodeView(SourceCodeView):
         parser.XmlDeclHandler = self.xmldecl
         return parser
 
-    def start_element(self, name: str, attrs: dict[str, str]) -> None:
+    def start_element(self, name: str, attrs: Dict[str, str]) -> None:
         line = self.parser.CurrentLineNumber
         start = self.parser.CurrentColumnNumber + 1
         end = start + len(name)
@@ -205,7 +205,7 @@ class XMLSourceCodeView(SourceCodeView):
             end = start + len(data_lines[-1]) + 7  # len("<!--") + len("-->") == 7
         self.text.tag_add("XML_comment", f"{line1}.{start}", f"{line2}.{end}")
 
-    def xmldecl(self, version: str, encoding: str | None, standalone: int) -> None:
+    def xmldecl(self, version: str, encoding: Optional[str], standalone: int) -> None:
         attrs = {"version": version}
         if encoding:
             attrs["encoding"] = encoding

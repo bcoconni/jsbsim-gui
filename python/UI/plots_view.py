@@ -18,19 +18,18 @@
 import tkinter as tk
 from tkinter import font, ttk
 from tkinter.constants import EW, NSEW
-from typing import Any
+from typing import Any, List, Optional, Tuple
 
 import matplotlib as mpl
 import numpy as np
+from jsbsim import FGPropertyNode
 from matplotlib.backend_bases import KeyEvent, LocationEvent, MouseEvent
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-from jsbsim import FGPropertyNode
-
 
 class SelectedLine:
-    def __init__(self, axes: list[mpl.axes.Axes], **props):
+    def __init__(self, axes: List[mpl.axes.Axes], **props):
         self.ax_id = -1
         self.line_id = -1
         self.axes = axes
@@ -52,7 +51,7 @@ class SelectedLine:
         self.ax_id = -1
         self.line_id = -1
 
-    def get_params(self) -> tuple[int, int] | None:
+    def get_params(self) -> Optional[Tuple[int, int]]:
         if self.ax_id >= 0 and self.line_id >= 0:
             return self.ax_id, self.line_id
         return None
@@ -138,7 +137,7 @@ class PlotsView(tk.Frame):
 
         def text_bbox_size(
             text: mpl.text.Text, axe: mpl.axes.Axes
-        ) -> tuple[float, float]:
+        ) -> Tuple[float, float]:
             bbox = text.get_window_extent()
             m = axe.transData.inverted()
             pos0 = m.transform((bbox.x0, bbox.y0))
@@ -216,7 +215,7 @@ class PlotsView(tk.Frame):
             canvas.draw()
             self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
 
-    def add_properties(self, properties: list[FGPropertyNode], _: tk.Widget):
+    def add_properties(self, properties: List[FGPropertyNode], _: tk.Widget):
         nrows, ncol = self.properties_values.shape
         nprops = len(properties)
         new_prop_values = np.full((nprops, max(ncol, 1)), np.nan)
