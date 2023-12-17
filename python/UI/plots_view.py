@@ -28,10 +28,10 @@ from matplotlib.figure import Figure
 
 
 class SelectedLine:
-    def __init__(self, axes: List[mpl.axes.Axes], **props):
+    def __init__(self, figure: Figure, **props):
         self.ax_id = -1
         self.line_id = -1
-        self.axes = axes
+        self.figure = figure
         self.pick_props = props
         self.orig_props: dict[str, Any] = {}
 
@@ -39,14 +39,14 @@ class SelectedLine:
         self.deselect()
         self.ax_id = ax_id
         self.line_id = line_id
-        line = self.axes[ax_id].lines[line_id]
+        line = self.figure.axes[ax_id].lines[line_id]
         for prop in self.pick_props:
             self.orig_props[prop] = mpl.artist.get(line, prop)
         line.set(**self.pick_props)
 
     def deselect(self) -> None:
         if self.ax_id >= 0 and self.line_id >= 0:
-            self.axes[self.ax_id].lines[self.line_id].set(**self.orig_props)
+            self.figure.axes[self.ax_id].lines[self.line_id].set(**self.orig_props)
         self.ax_id = -1
         self.line_id = -1
 
@@ -244,16 +244,25 @@ class PlotsView(ttk.Frame):
 
         if self.canvas:
             self.selected_line.deselect()
-            self.canvas.get_tk_widget().pack_forget()
-            self.canvas = None
+            self.canvas.figure.clear()
+        else:
+            self.canvas = FigureCanvasTkAgg(Figure(dpi=self.dpi), master=self)
+            self.canvas.mpl_connect("figure_enter_event", self.on_enter_figure)
+            self.canvas.mpl_connect("figure_leave_event", self.on_leave_figure)
+            self.canvas.mpl_connect("motion_notify_event", self.on_move)
+            self.canvas.mpl_connect("button_press_event", self.on_click)
+            self.canvas.mpl_connect("key_press_event", self.on_key_press)
+            self.selected_line = SelectedLine(self.canvas.figure, linewidth=4, color="red")
+            self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         nplots = len(self.plots)
         t = np.arange(0.0, len(self.properties_values[0, :]) * self.dt, self.dt)
         w = self.winfo_width()
         h = self.winfo_height()
-        fig = Figure(figsize=(w / self.dpi, h / self.dpi), dpi=self.dpi)
+        figure = self.canvas.figure
+        figure.set_size_inches(w / self.dpi, h / self.dpi)
         for plot_id, plots in enumerate(self.plots):
-            ax = fig.add_subplot(nplots, 1, plot_id + 1)
+            ax = figure.add_subplot(nplots, 1, plot_id + 1)
             # Cross hair
             v0 = self.properties_values[plots[0], 0]
             ax.plot([0.0, 0.0], [v0, v0], color="red", visible=False)
@@ -275,15 +284,7 @@ class PlotsView(ttk.Frame):
                 ax.tick_params(labelbottom=False)
             else:
                 ax.set_xlabel("Time (s)")
-        self.canvas = FigureCanvasTkAgg(fig, master=self)
-        self.canvas.mpl_connect("figure_enter_event", self.on_enter_figure)
-        self.canvas.mpl_connect("figure_leave_event", self.on_leave_figure)
-        self.canvas.mpl_connect("motion_notify_event", self.on_move)
-        self.canvas.mpl_connect("button_press_event", self.on_click)
-        self.canvas.mpl_connect("key_press_event", self.on_key_press)
-        self.selected_line = SelectedLine(fig.axes, linewidth=4, color="red")
         self.reset_and_redraw()
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def reset_and_redraw(self):
         self.canvas.draw()
