@@ -16,6 +16,7 @@
 
 import os
 import platform
+import tkinter as tk
 import xml.etree.ElementTree as et
 from typing import List
 
@@ -25,50 +26,53 @@ from jsbsim._jsbsim import _append_xml as append_xml
 
 class Controller:
     @staticmethod
-    def get_version():
+    def get_version() -> str:
         return jsbsim.__version__
 
     @staticmethod
-    def get_default_root_dir():
+    def get_default_root_dir() -> str:
         return jsbsim.get_default_root_dir()
 
-    def __init__(self, root_dir: str, widget):
+    def __init__(self, root_dir: str, widget: tk.Widget):
         self.widget = widget
         self.dt = 1.0 / 120.0
+        self.filename = ""
         with widget.stdout_to_console():
             self.fdm = jsbsim.FGFDMExec(root_dir)
 
     def load_script(self, filename: str) -> None:
         # TODO Validate the script before loading
+        self.filename = filename
         script_name = os.path.relpath(filename, self.fdm.get_root_dir())
         with self.widget.stdout_to_console():
             self.fdm.load_script(script_name)
 
     def load_aircraft(self, filename: str) -> None:
         # TODO Validate the aircraft definition before loading
+        self.filename = filename
         aircraft_name = os.path.splitext(os.path.basename(filename))[0]
         with self.widget.stdout_to_console():
             self.fdm.load_model(aircraft_name, True)
 
-    def run_ic(self):
+    def run_ic(self) -> bool:
         with self.widget.stdout_to_console():
             ret = self.fdm.run_ic()
             self.dt = self.fdm.get_delta_t()
             return ret
 
-    def run(self):
+    def run(self) -> bool:
         with self.widget.stdout_to_console():
             return self.fdm.run()
 
-    def get_input_files(self, filename) -> List[str]:
+    def get_input_files(self) -> List[str]:
         root_dir = self.fdm.get_root_dir()
 
         def relpath_filename(filename):
             return [os.path.relpath(filename, root_dir)]
 
         aircraft_path = self.fdm.get_aircraft_path()
-        input_files = relpath_filename(filename)
-        root = et.parse(os.path.join(root_dir, filename)).getroot()
+        input_files = relpath_filename(self.filename)
+        root = et.parse(os.path.join(root_dir, self.filename)).getroot()
 
         if root.tag == "runscript":
             use_el = root.find("use")

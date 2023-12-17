@@ -120,7 +120,7 @@ class App(tk.Tk):
         self.main.destroy()
 
         # Open the file in a text widget
-        self.main = SourceEditor(self, self._controller, self.filename, self.root_dir)
+        self.main = SourceEditor(self, self._controller, self.root_dir)
 
         # Window layout
         self.main.grid(column=0, row=0, sticky=NSEW)
@@ -143,7 +143,6 @@ class App(tk.Tk):
 
         self._controller = Controller(self.root_dir, self)
         load_file(self._controller, filename)
-        self.filename = filename
         self.edit()
 
     @contextmanager

@@ -47,7 +47,6 @@ class SourceEditor(ttk.Frame):
         self,
         master: tk.Widget,
         controller: Controller,
-        filename: str,
         root_dir: str,
     ):
         super().__init__(master)
@@ -56,10 +55,10 @@ class SourceEditor(ttk.Frame):
         left_frame = ttk.Frame(main_frame)
 
         fileview = LabeledWidget(left_frame, "Project Files")
-        fileview.set_widget(FileTree(fileview, controller.get_input_files(filename)))
+        fileview.set_widget(FileTree(fileview, controller.get_input_files()))
 
-        with open(filename, "r") as f:
-            file_relpath = os.path.relpath(filename, self.root_dir)
+        with open(controller.filename, "r") as f:
+            file_relpath = os.path.relpath(controller.filename, self.root_dir)
             self.codeview = LabeledWidget(main_frame, file_relpath)
             self.codeview.set_widget(
                 XMLSourceCodeView(
