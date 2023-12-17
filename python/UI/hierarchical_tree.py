@@ -35,6 +35,7 @@ class HierarchicalTree(ttk.Frame):
         super().__init__(master)
         self.tree = ttk.Treeview(self, columns=columns_id)
         self.tree.grid(column=0, row=0, sticky=NSEW)
+        self._hidden_items: list[tuple[str, str, int]] = []
 
         for elm in sorted(elements):
             parent_id = ""
@@ -75,6 +76,48 @@ class HierarchicalTree(ttk.Frame):
                 selected_prop.append(name)
 
         return selected_prop
+
+    def filter(self, pattern: str, parent_id: str = "") -> bool:
+        """
+        Filters the hierarchical tree based on the given pattern.
+
+        Args:
+            pattern (str): The pattern to filter the tree with.
+            parent_id (str, optional): The ID of the parent item. Defaults to "".
+
+        Returns:
+            bool: True if any item in the tree matches the pattern, False otherwise.
+        """
+        tree = self.tree
+        success = False
+
+        for child_id in tree.get_children(parent_id):
+            if pattern in tree.item(child_id, "text"):
+                tree.see(child_id)
+                success = True
+                continue
+
+            if self.filter(pattern, child_id):
+                success = True
+            else:
+                self._hidden_items.append((child_id, parent_id, tree.index(child_id)))
+                tree.detach(child_id)
+        return success
+
+    def unfilter(self) -> bool:
+        """
+        Unfilters the hidden items in the hierarchical tree.
+
+        Returns:
+            bool: True if there were hidden items to unfilter, False otherwise.
+        """
+        if self._hidden_items:
+            for child_params in reversed(self._hidden_items):
+                self.tree.reattach(*child_params)
+
+            self._hidden_items = []
+            return True
+        return False
 
     def collapse(self, parent_id: str = ""):
         tree = self.tree
@@ -121,7 +164,6 @@ class PropertyTree(ttk.Frame):
         properties: List[FGPropertyNode],
     ):
         super().__init__(master)
-        self.hidden_items: list[tuple[str, str, int]] = []
         self.properties: dict[str, FGPropertyNode] = {}
 
         search_frame = ttk.Frame(self, padding=(0, 2))
@@ -171,35 +213,12 @@ class PropertyTree(ttk.Frame):
             self.properties[parent_id] = node
 
     def search(self, _) -> None:
-        tree = self.proptree.tree
-
-        if self.hidden_items:
-            for child_id, parent_id, idx in reversed(self.hidden_items):
-                tree.reattach(child_id, parent_id, idx)
-
+        if self.proptree.unfilter():
             self.update_values()
-            self.hidden_items = []
 
         pattern = self.search_box.get()
         if pattern:
-            self.filter(pattern)
-
-    def filter(self, pattern: str, parent_id: str = "") -> bool:
-        tree = self.proptree.tree
-        success = False
-
-        for child_id in tree.get_children(parent_id):
-            if pattern in tree.item(child_id, "text"):
-                tree.see(child_id)
-                success = True
-                continue
-            if not self.filter(pattern, child_id):
-                idx = tree.index(child_id)
-                self.hidden_items.append((child_id, parent_id, idx))
-                tree.detach(child_id)
-            else:
-                success = True
-        return success
+            self.proptree.filter(pattern)
 
     def edit_property_value(self, event: tk.Event) -> None:
         tree = self.proptree.tree
