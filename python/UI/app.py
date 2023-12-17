@@ -42,6 +42,12 @@ class MenuBar(tk.Menu):
         file_menu.add_command(label="Exit", command=master.destroy)
         self.add_cascade(label="File", menu=file_menu)
 
+        view_menu = tk.Menu(self, tearoff=False)
+        view_menu.add_command(label="Edit", command=self.master.edit)
+        view_menu.add_command(label="Run", command=self.master.run)
+        self.add_cascade(label="View", menu=view_menu)
+        self.entryconfig("View", state=tk.DISABLED)
+
     def select_script_file(self) -> None:
         filename = fd.askopenfilename(
             title="Open a script / aircraft",
@@ -64,11 +70,7 @@ class MenuBar(tk.Menu):
                     message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
                 )
                 return
-
-        view_menu = tk.Menu(self, tearoff=False)
-        view_menu.add_command(label="Edit", command=self.master.edit)
-        view_menu.add_command(label="Run", command=self.master.run)
-        self.add_cascade(label="View", menu=view_menu)
+        self.entryconfig("View", state=tk.NORMAL)
 
 
 class App(tk.Tk):

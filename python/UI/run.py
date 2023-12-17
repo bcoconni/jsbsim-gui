@@ -117,15 +117,17 @@ class Run(tk.Frame):
         controls_frame = tk.Frame(self)
         button = ttk.Button(controls_frame, text="Initialize", command=self.run_ic)
         button.grid(column=0, row=0, columnspan=3, sticky=EW, padx=5, pady=5)
-        button = ttk.Button(controls_frame, text="Step", command=self.step)
-        button.grid(column=0, row=1, sticky=EW, padx=5, pady=5)
-        button_pos = button.grid_info()
+        self.step_button = ttk.Button(
+            controls_frame, text="Step", command=self.step, state=tk.DISABLED
+        )
+        self.step_button.grid(column=0, row=1, sticky=EW, padx=5, pady=5)
+        button_pos = self.step_button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
-        button = ttk.Button(controls_frame, text="Run")
+        button = ttk.Button(controls_frame, text="Run", state=tk.DISABLED)
         button.grid(column=1, row=1, sticky=EW, padx=5, pady=5)
         button_pos = button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
-        button = ttk.Button(controls_frame, text="Pause")
+        button = ttk.Button(controls_frame, text="Pause", state=tk.DISABLED)
         button.grid(column=2, row=1, sticky=EW, padx=5, pady=5)
         button_pos = button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
@@ -145,6 +147,7 @@ class Run(tk.Frame):
         self.controller.run_ic()
         self.property_view.widget.update_values()
         self.plots_view.run_ic()
+        self.step_button.config(state=tk.NORMAL)
 
     def step(self):
         self.controller.run()
