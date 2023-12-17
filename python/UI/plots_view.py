@@ -57,7 +57,7 @@ class SelectedLine:
         return None
 
 
-class PlotsView(tk.Frame):
+class PlotsView(ttk.Frame):
     def __init__(self, master: tk.Widget, dt: float, **kw):
         super().__init__(master, **kw)
         self.dt = dt

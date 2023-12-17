@@ -81,9 +81,7 @@ class DnDProperties(DragNDropManager):
     def create_source_widget(self, master: tk.Widget) -> tk.Widget:
         self.property_list = self.property_tree.get_selected_elements()
         if self.property_list:
-            widget_preview = tk.Frame(
-                master, padx=5, pady=5, borderwidth=1, relief=RAISED
-            )
+            widget_preview = ttk.Frame(master, borderwidth=1)
             for idx, prop in enumerate(self.property_list):
                 if idx < 3:
                     propname = ttk.Label(
@@ -103,7 +101,7 @@ class DnDProperties(DragNDropManager):
         self.target.add_properties(self.property_list, target)
 
 
-class Run(tk.Frame):
+class Run(ttk.Frame):
     def __init__(self, master: tk.Widget, controller: Controller, **kw):
         super().__init__(master, **kw)
         self.property_view = LabeledWidget(self, "Property List")
@@ -114,7 +112,7 @@ class Run(tk.Frame):
         self.property_view.grid(column=0, row=0, sticky=NS)
         self.controller = controller
 
-        controls_frame = tk.Frame(self)
+        controls_frame = ttk.Frame(self)
         button = ttk.Button(controls_frame, text="Initialize", command=self.run_ic)
         button.grid(column=0, row=0, columnspan=3, sticky=EW, padx=5, pady=5)
         self.step_button = ttk.Button(
