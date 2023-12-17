@@ -17,7 +17,6 @@
 
 import tkinter as tk
 from tkinter import font, ttk
-from tkinter.constants import EW, NSEW
 from typing import Any, List, Optional, Tuple
 
 import matplotlib as mpl
@@ -69,9 +68,7 @@ class PlotsView(ttk.Frame):
             foreground="gray",
             font=helper_font,
         )
-        self.helper_message.grid(column=0, row=0, sticky=EW)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.helper_message.pack(fill=tk.BOTH, expand=True)
         self.properties: list[FGPropertyNode] = []
         self.properties_values = np.empty((0, 0))
 
@@ -247,7 +244,7 @@ class PlotsView(ttk.Frame):
 
         if self.canvas:
             self.selected_line.deselect()
-            self.canvas.get_tk_widget().grid_forget()
+            self.canvas.get_tk_widget().pack_forget()
             self.canvas = None
 
         nplots = len(self.plots)
@@ -286,9 +283,7 @@ class PlotsView(ttk.Frame):
         self.canvas.mpl_connect("key_press_event", self.on_key_press)
         self.selected_line = SelectedLine(fig.axes, linewidth=4, color="red")
         self.reset_and_redraw()
-        self.canvas.get_tk_widget().grid(column=0, row=0, sticky=NSEW)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def reset_and_redraw(self):
         self.canvas.draw()
