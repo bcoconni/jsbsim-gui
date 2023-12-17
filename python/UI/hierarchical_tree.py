@@ -197,6 +197,8 @@ class PropertyTree(ttk.Frame):
                 idx = tree.index(child_id)
                 self.hidden_items.append((child_id, parent_id, idx))
                 tree.detach(child_id)
+            else:
+                success = True
         return success
 
     def edit_property_value(self, event: tk.Event) -> None:
