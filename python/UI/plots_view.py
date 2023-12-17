@@ -58,8 +58,9 @@ class SelectedLine:
 
 
 class PlotsView(tk.Frame):
-    def __init__(self, master: tk.Widget, **kw):
+    def __init__(self, master: tk.Widget, dt: float, **kw):
         super().__init__(master, **kw)
+        self.dt = dt
         helper_font = font.Font(slant="italic")
         self.helper_message = ttk.Label(
             self,
@@ -145,12 +146,11 @@ class PlotsView(tk.Frame):
             return pos1 - pos0
 
         if event.inaxes:
-            dt = self.master.master.controller.dt
-            idx = int(event.xdata / dt)
-            x0 = idx * dt
-            if event.xdata - x0 > dt / 2:
+            idx = int(event.xdata / self.dt)
+            x0 = idx * self.dt
+            if event.xdata - x0 > self.dt / 2:
                 idx += 1
-                x0 += dt
+                x0 += self.dt
             ax0 = axes[0]
             text = ax0.texts[1]
             text.set_text(f"t={x0:.3f}s")
@@ -251,8 +251,7 @@ class PlotsView(tk.Frame):
             self.canvas = None
 
         nplots = len(self.plots)
-        dt = self.master.master.controller.dt
-        t = np.arange(0.0, len(self.properties_values[0, :]) * dt, dt)
+        t = np.arange(0.0, len(self.properties_values[0, :]) * self.dt, self.dt)
         w = self.winfo_width()
         h = self.winfo_height()
         fig = Figure(figsize=(w / self.dpi, h / self.dpi), dpi=self.dpi)
@@ -273,7 +272,7 @@ class PlotsView(tk.Frame):
             if len(t) > 1:
                 ax.set_xlim(t[0], t[-1])
             else:
-                ax.set_xlim(0, dt)
+                ax.set_xlim(0, self.dt)
             # Hide the x-axis tick labels of all but the bottom subplot
             if plot_id < nplots - 1:
                 ax.tick_params(labelbottom=False)
@@ -306,7 +305,7 @@ class PlotsView(tk.Frame):
 
         axes = self.canvas.figure.axes
         t = axes[0].lines[1].get_xdata()
-        t = np.append(t, t[-1] + self.master.master.controller.dt)
+        t = np.append(t, t[-1] + self.dt)
         # Iterate over the plots and update the data
         for axe, plots in zip(axes, self.plots):
             for line, prop_id in zip(axe.lines[1:], plots):

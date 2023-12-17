@@ -22,6 +22,7 @@ from tkinter.constants import EW, NS, NSEW, RAISED
 
 from jsbsim import FGPropertyNode
 
+from .controller import Controller
 from .hierarchical_tree import PropertyTree
 from .plots_view import PlotsView
 from .source_editor import LabeledWidget
@@ -103,14 +104,15 @@ class DnDProperties(DragNDropManager):
 
 
 class Run(tk.Frame):
-    def __init__(self, master: tk.Widget, **kw):
+    def __init__(self, master: tk.Widget, controller: Controller, **kw):
         super().__init__(master, **kw)
         self.property_view = LabeledWidget(self, "Property List")
         self.property_view.set_widget(
-            PropertyTree(self.property_view, master.controller.get_property_list())
+            PropertyTree(self.property_view, controller.get_property_list())
         )
         self.property_view.widget.grid(sticky=NS)
         self.property_view.grid(column=0, row=0, sticky=NS)
+        self.controller = controller
 
         controls_frame = tk.Frame(self)
         button = ttk.Button(controls_frame, text="Initialize", command=self.run_ic)
@@ -129,7 +131,7 @@ class Run(tk.Frame):
         controls_frame.columnconfigure(button_pos["column"], weight=1)
         controls_frame.grid(column=0, row=1, sticky=EW)
 
-        self.plots_view = PlotsView(self)
+        self.plots_view = PlotsView(self, controller.dt)
         self.plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
 
         DnDProperties(self.property_view.widget, self.plots_view)
@@ -140,11 +142,11 @@ class Run(tk.Frame):
         self.grid_rowconfigure(plotsview_pos["row"], weight=1)
 
     def run_ic(self):
-        self.master.controller.run_ic()
+        self.controller.run_ic()
         self.property_view.widget.update_values()
         self.plots_view.run_ic()
 
     def step(self):
-        self.master.controller.run()
+        self.controller.run()
         self.property_view.widget.update_values()
         self.plots_view.update_plots()

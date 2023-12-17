@@ -101,14 +101,14 @@ class App(tk.Tk):
                 self.destroy()
 
         self.console: Console | None = None
-        self.controller: Controller | None = None
+        self._controller: Controller | None = None
         self.filename: str | None = None
 
     def run(self) -> None:
         w = self.main.winfo_width()
         h = self.main.winfo_height()
         self.main.destroy()
-        self.main = Run(self, width=w, height=h)
+        self.main = Run(self, self._controller, width=w, height=h)
         self.main.grid_propagate(0)
 
         # Window layout
@@ -120,7 +120,7 @@ class App(tk.Tk):
         self.main.destroy()
 
         # Open the file in a text widget
-        self.main = SourceEditor(self, self.filename, self.root_dir)
+        self.main = SourceEditor(self, self._controller, self.filename, self.root_dir)
 
         # Window layout
         self.main.grid(column=0, row=0, sticky=NSEW)
@@ -141,8 +141,8 @@ class App(tk.Tk):
             self.console = Console(self, height=10)
             self.console.grid(column=0, row=1, sticky=EW)
 
-        self.controller = Controller(self.root_dir, self)
-        load_file(self.controller, filename)
+        self._controller = Controller(self.root_dir, self)
+        load_file(self._controller, filename)
         self.filename = filename
         self.edit()
 
