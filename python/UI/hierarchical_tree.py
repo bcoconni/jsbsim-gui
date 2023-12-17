@@ -17,7 +17,7 @@
 
 import tkinter as tk
 from tkinter import ttk
-from tkinter.constants import BROWSE, EW, NS, NSEW, VERTICAL
+from tkinter.constants import BROWSE, EW, NS, VERTICAL
 from tkinter.messagebox import showerror
 from typing import Callable, List, Optional
 
@@ -34,7 +34,7 @@ class HierarchicalTree(ttk.Frame):
     ):
         super().__init__(master)
         self.tree = ttk.Treeview(self, columns=columns_id)
-        self.tree.grid(column=0, row=0, sticky=NSEW)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._hidden_items: list[tuple[str, str, int]] = []
 
         for elm in sorted(elements):
@@ -55,13 +55,8 @@ class HierarchicalTree(ttk.Frame):
 
         # Vertical scrollbar
         ys = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
-        ys.grid(column=1, row=0, sticky=NS)
+        ys.pack(side=tk.LEFT, fill=tk.Y)
         self.tree["yscrollcommand"] = ys.set
-
-        # Widget layout
-        tree_pos = self.tree.grid_info()
-        self.grid_columnconfigure(tree_pos["column"], weight=1)
-        self.grid_rowconfigure(tree_pos["row"], weight=1)
 
     def get_selected_elements(self) -> List[str]:
         selected_prop = []
@@ -176,7 +171,7 @@ class PropertyTree(ttk.Frame):
         self.proptree = HierarchicalTree(
             self, [p.get_relative_name() for p in properties], ["value"], False
         )
-        self.proptree.grid(column=0, row=1, sticky=NS)
+        self.proptree.grid(column=0, row=1, columnspan=3, sticky=NS)
         tree = self.proptree.tree
         tree.configure(displaycolumns=("value",))  # Hide the node columns
         tree.heading("#0", text="Property")
