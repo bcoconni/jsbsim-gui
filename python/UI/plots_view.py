@@ -212,20 +212,42 @@ class PlotsView(ttk.Frame):
             canvas.draw()
             self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
 
-    def add_properties(self, properties: List[FGPropertyNode], _: tk.Widget):
+    def add_properties(self, properties: List[FGPropertyNode], event: tk.Event):
         nrows, ncol = self.properties_values.shape
         nprops = len(properties)
         new_prop_values = np.full((nprops, max(ncol, 1)), np.nan)
         new_values = 0
+
+        # Check if the properties are dropped on a subplot
+        canvas = self.canvas
+        target_ax_id: int | None = None
+        if canvas:
+            x, y = event.widget.winfo_pointerxy()
+            tk_canvas = canvas.get_tk_widget()
+            x -= tk_canvas.winfo_rootx()
+            # Matplotlib y-axis is inverted: (0,0) is the bottom left corner while in
+            # tkinter (0,0) is the top left corner
+            y = tk_canvas.winfo_height() - (y - tk_canvas.winfo_rooty())
+            target_ax = canvas.inaxes((x, y))
+            if target_ax:
+                for ax_id, ax in enumerate(canvas.figure.axes):
+                    if ax == target_ax:
+                        target_ax_id = ax_id
+                        break
+
         for prop in properties:
             if prop not in self.properties:
                 self.properties.append(prop)
                 new_prop_values[new_values, -1] = prop.get_double_value()
-                self.plots.append([nrows + new_values])
+                prop_id = nrows + new_values
                 new_values += 1
             else:
                 prop_id = self.properties.index(prop)
+
+            if target_ax_id is None:
                 self.plots.append([prop_id])
+            else:
+                self.plots[target_ax_id].append(prop_id)
 
         if ncol > 0:
             if new_values > 0:
@@ -252,7 +274,9 @@ class PlotsView(ttk.Frame):
             self.canvas.mpl_connect("motion_notify_event", self.on_move)
             self.canvas.mpl_connect("button_press_event", self.on_click)
             self.canvas.mpl_connect("key_press_event", self.on_key_press)
-            self.selected_line = SelectedLine(self.canvas.figure, linewidth=4, color="red")
+            self.selected_line = SelectedLine(
+                self.canvas.figure, linewidth=4, color="red"
+            )
             self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         nplots = len(self.plots)

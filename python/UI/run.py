@@ -57,7 +57,7 @@ class DragNDropManager(ABC):
             self.dragged_widget_preview.place(x=x - self.offset_x, y=y - self.offset_y)
 
     @abstractmethod
-    def drop_on_target(self, target: tk.Widget):
+    def drop_on_target(self, event: tk.Event):
         pass
 
     def drop(self, event: tk.Event):
@@ -69,7 +69,7 @@ class DragNDropManager(ABC):
             target_widget = event.widget.winfo_containing(x, y)
             # If target_widget is a child of self.target, process the dragged widget
             if str(target_widget).startswith(str(self.target)):
-                self.drop_on_target(target_widget)
+                self.drop_on_target(event)
 
 
 class DnDProperties(DragNDropManager):
@@ -97,8 +97,8 @@ class DnDProperties(DragNDropManager):
             return widget_preview
         return None
 
-    def drop_on_target(self, target: tk.Widget):
-        self.target.add_properties(self.property_list, target)
+    def drop_on_target(self, event: tk.Event):
+        self.target.add_properties(self.property_list, event)
 
 
 class Run(ttk.Frame):
