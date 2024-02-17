@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023 Bertrand Coconnier
+# Copyright (c) 2023-2024 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -29,8 +29,8 @@ from matplotlib.figure import Figure
 
 class SelectedLine:
     def __init__(self, figure: Figure, **props):
-        self.ax_id = -1
-        self.line_id = -1
+        self.ax_id: int | None = None
+        self.line_id: int | None = None
         self.figure = figure
         self.pick_props = props
         self.orig_props: dict[str, Any] = {}
@@ -45,13 +45,13 @@ class SelectedLine:
         line.set(**self.pick_props)
 
     def deselect(self) -> None:
-        if self.ax_id >= 0 and self.line_id >= 0:
+        if self.ax_id is not None and self.line_id is not None:
             self.figure.axes[self.ax_id].lines[self.line_id].set(**self.orig_props)
-        self.ax_id = -1
-        self.line_id = -1
+        self.ax_id = None
+        self.line_id = None
 
     def get_params(self) -> Optional[Tuple[int, int]]:
-        if self.ax_id >= 0 and self.line_id >= 0:
+        if self.ax_id is not None and self.line_id is not None:
             return self.ax_id, self.line_id
         return None
 
@@ -328,19 +328,23 @@ class PlotsView(ttk.Frame):
             [[prop.get_double_value() for prop in self.properties]]
         ).T
 
-    def update_plots(self):
+    def update_properties(self):
         col = np.array([[prop.get_double_value() for prop in self.properties]]).T
         self.properties_values = np.hstack((self.properties_values, col))
 
+    def update_plots(self):
+        ncol = self.properties_values.shape[1]
         axes = self.canvas.figure.axes
         t = axes[0].lines[0].get_xdata()
-        t = np.append(t, t[-1] + self.dt)
-        # Iterate over the plots and update the data
-        for axe, plots in zip(axes, self.plots):
-            for line, prop_id in zip(axe.lines[:-1], plots):
-                line.set_xdata(t)
-                line.set_ydata(self.properties_values[prop_id, :])
-            axe.set_xlim(t[0], t[-1])
-            axe.relim()
-            axe.autoscale_view()
-        self.reset_and_redraw()
+        nsteps = ncol - len(t)
+        if nsteps > 0:
+            t = np.append(t, t[-1] + self.dt * np.arange(1, nsteps + 1))
+            # Iterate over the plots and update the data
+            for axe, plots in zip(axes, self.plots):
+                for line, prop_id in zip(axe.lines[:-1], plots):
+                    line.set_xdata(t)
+                    line.set_ydata(self.properties_values[prop_id, :])
+                axe.set_xlim(t[0], t[-1])
+                axe.relim()
+                axe.autoscale_view()
+            self.reset_and_redraw()

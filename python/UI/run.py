@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023 Bertrand Coconnier
+# Copyright (c) 2023-2024 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -18,7 +18,7 @@
 import tkinter as tk
 from abc import ABC, abstractmethod
 from tkinter import ttk
-from tkinter.constants import EW, NS, NSEW, RAISED
+from tkinter.constants import EW, NS, NSEW
 
 from jsbsim import FGPropertyNode
 
@@ -111,23 +111,34 @@ class Run(ttk.Frame):
         self.property_view.widget.grid(sticky=NS)
         self.property_view.grid(column=0, row=0, sticky=NS)
         self.controller = controller
+        self.update_id = None
 
         controls_frame = ttk.Frame(self)
         button = ttk.Button(controls_frame, text="Initialize", command=self.run_ic)
         button.grid(column=0, row=0, columnspan=3, sticky=EW, padx=5, pady=5)
+
+        # Step button
         self.step_button = ttk.Button(
             controls_frame, text="Step", command=self.step, state=tk.DISABLED
         )
         self.step_button.grid(column=0, row=1, sticky=EW, padx=5, pady=5)
         button_pos = self.step_button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
-        button = ttk.Button(controls_frame, text="Run", state=tk.DISABLED)
-        button.grid(column=1, row=1, sticky=EW, padx=5, pady=5)
-        button_pos = button.grid_info()
+
+        # Run button
+        self.run_button = ttk.Button(
+            controls_frame, text="Run", command=self.run, state=tk.DISABLED
+        )
+        self.run_button.grid(column=1, row=1, sticky=EW, padx=5, pady=5)
+        button_pos = self.run_button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
-        button = ttk.Button(controls_frame, text="Pause", state=tk.DISABLED)
-        button.grid(column=2, row=1, sticky=EW, padx=5, pady=5)
-        button_pos = button.grid_info()
+
+        # Pause button
+        self.pause_button = ttk.Button(
+            controls_frame, text="Pause", command=self.pause, state=tk.DISABLED
+        )
+        self.pause_button.grid(column=2, row=1, sticky=EW, padx=5, pady=5)
+        button_pos = self.pause_button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
         controls_frame.grid(column=0, row=1, sticky=EW)
 
@@ -146,8 +157,31 @@ class Run(ttk.Frame):
         self.property_view.widget.update_values()
         self.plots_view.run_ic()
         self.step_button.config(state=tk.NORMAL)
+        self.run_button.config(state=tk.NORMAL)
 
     def step(self):
         self.controller.run()
         self.property_view.widget.update_values()
+        self.plots_view.update_properties()
         self.plots_view.update_plots()
+
+    def update(self) -> None:
+        for _ in range(100):
+            self.controller.run()
+            self.plots_view.update_properties()
+        self.property_view.widget.update_values()
+        self.plots_view.update_plots()
+        self.update_id = self.after(500, self.update)
+
+    def pause(self) -> None:
+        self.after_cancel(self.update_id)
+        self.update_id = None
+        self.step_button.config(state=tk.NORMAL)
+        self.run_button.config(state=tk.NORMAL)
+        self.pause_button.config(state=tk.DISABLED)
+
+    def run(self) -> None:
+        self.update_id = self.after(500, self.update)
+        self.step_button.config(state=tk.DISABLED)
+        self.run_button.config(state=tk.DISABLED)
+        self.pause_button.config(state=tk.NORMAL)
