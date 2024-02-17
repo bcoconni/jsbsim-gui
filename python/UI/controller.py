@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023 Bertrand Coconnier
+# Copyright (c) 2023-2024 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -20,7 +20,9 @@ import xml.etree.ElementTree as et
 from typing import List
 
 import jsbsim
+import numpy as np
 from jsbsim._jsbsim import _append_xml as append_xml
+from jsbsim import FGPropertyNode
 
 from .textview import ConsoleStdoutRedirect
 
@@ -38,6 +40,8 @@ class Controller:
         self._console = console
         self.dt = 1.0 / 120.0
         self.filename = ""
+        self.properties: list[FGPropertyNode] = []
+        self.properties_values = np.empty((0, 0))
         with console.redirect_stdout():
             self.fdm = jsbsim.FGFDMExec(root_dir)
 
@@ -59,11 +63,15 @@ class Controller:
         with self._console.redirect_stdout():
             ret = self.fdm.run_ic()
             self.dt = self.fdm.get_delta_t()
+            self.log_initial_values()
             return ret
 
     def run(self) -> bool:
         with self._console.redirect_stdout():
-            return self.fdm.run()
+            ret = self.fdm.run()
+            col = np.array([[prop.get_double_value() for prop in self.properties]]).T
+            self.properties_values = np.hstack((self.properties_values, col))
+            return ret
 
     def get_input_files(self) -> List[str]:
         root_dir = self.fdm.get_root_dir()
@@ -140,3 +148,32 @@ class Controller:
 
     def get_property_value(self, property_name: str) -> float:
         return self.fdm[property_name]
+
+    def log_initial_values(self) -> None:
+        self.properties_values = np.array(
+            [[prop.get_double_value() for prop in self.properties]]
+        ).T
+
+    def log_properties(self, properties: List[jsbsim.FGPropertyNode]) -> None:
+        ncol = self.properties_values.shape[1]
+        nprops = len(properties)
+        new_prop_values = np.full((nprops, max(ncol, 1)), np.nan)
+        new_props = 0
+
+        for prop in properties:
+            if prop not in self.properties:
+                self.properties.append(prop)
+                new_prop_values[new_props, -1] = prop.get_double_value()
+                new_props += 1
+
+        if ncol > 0:
+            if new_props > 0:
+                self.properties_values = np.vstack(
+                    (self.properties_values, new_prop_values[:new_props, :])
+                )
+        else:
+            self.log_initial_values()
+
+    def get_property_log(self, node: FGPropertyNode) -> np.ndarray:
+        prop_id = self.properties.index(node)
+        return self.properties_values[prop_id, :]

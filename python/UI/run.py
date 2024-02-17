@@ -142,7 +142,7 @@ class Run(ttk.Frame):
         controls_frame.columnconfigure(button_pos["column"], weight=1)
         controls_frame.grid(column=0, row=1, sticky=EW)
 
-        self.plots_view = PlotsView(self, controller.dt)
+        self.plots_view = PlotsView(self, controller)
         self.plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
 
         DnDProperties(self.property_view.widget, self.plots_view)
@@ -155,20 +155,17 @@ class Run(ttk.Frame):
     def run_ic(self):
         self.controller.run_ic()
         self.property_view.widget.update_values()
-        self.plots_view.run_ic()
         self.step_button.config(state=tk.NORMAL)
         self.run_button.config(state=tk.NORMAL)
 
     def step(self):
         self.controller.run()
         self.property_view.widget.update_values()
-        self.plots_view.update_properties()
         self.plots_view.update_plots()
 
     def update(self) -> None:
         for _ in range(100):
             self.controller.run()
-            self.plots_view.update_properties()
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
         self.update_id = self.after(500, self.update)

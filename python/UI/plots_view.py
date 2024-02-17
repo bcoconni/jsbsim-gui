@@ -26,6 +26,8 @@ from matplotlib.backend_bases import KeyEvent, LocationEvent, MouseEvent
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
+from .controller import Controller
+
 
 class SelectedLine:
     def __init__(self, figure: Figure, **props):
@@ -57,9 +59,9 @@ class SelectedLine:
 
 
 class PlotsView(ttk.Frame):
-    def __init__(self, master: tk.Widget, dt: float, **kw):
+    def __init__(self, master: tk.Widget, controller: Controller, **kw):
         super().__init__(master, **kw)
-        self.dt = dt
+        self.controller = controller
         helper_font = font.Font(slant="italic")
         self.helper_message = ttk.Label(
             self,
@@ -69,15 +71,13 @@ class PlotsView(ttk.Frame):
             font=helper_font,
         )
         self.helper_message.pack(fill=tk.BOTH, expand=True)
-        self.properties: list[FGPropertyNode] = []
-        self.properties_values = np.empty((0, 0))
 
         root = master.winfo_toplevel()
         pixels = root.winfo_screenwidth()
         width = root.winfo_screenmmwidth()
         self.dpi = 25.4 * pixels / width
         self.canvas: FigureCanvasTkAgg | None = None
-        self.plots: list[int] = []
+        self.plots: list[list[FGPropertyNode]] = []
         self.bbox = None
         self.selected_line: SelectedLine | None = None
 
@@ -143,11 +143,12 @@ class PlotsView(ttk.Frame):
             return pos1 - pos0
 
         if event.inaxes:
-            step_id = int(event.xdata / self.dt)
-            x0 = step_id * self.dt
-            if event.xdata - x0 > self.dt / 2:
+            dt = self.controller.dt
+            step_id = int(event.xdata / dt)
+            x0 = step_id * dt
+            if event.xdata - x0 > dt / 2:
                 step_id += 1
-                x0 += self.dt
+                x0 += dt
             ax0 = axes[0]
             text0 = ax0.texts[-1]
             text0.set_text(f"t={x0:.3f}s")
@@ -212,11 +213,6 @@ class PlotsView(ttk.Frame):
             self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
 
     def add_properties(self, properties: List[FGPropertyNode], event: tk.Event):
-        nrows, ncol = self.properties_values.shape
-        nprops = len(properties)
-        new_prop_values = np.full((nprops, max(ncol, 1)), np.nan)
-        new_values = 0
-
         # Check if the properties are dropped on a subplot
         canvas = self.canvas
         target_ax_id: int | None = None
@@ -234,28 +230,12 @@ class PlotsView(ttk.Frame):
                         target_ax_id = ax_id
                         break
 
-        for prop in properties:
-            if prop not in self.properties:
-                self.properties.append(prop)
-                new_prop_values[new_values, -1] = prop.get_double_value()
-                prop_id = nrows + new_values
-                new_values += 1
-            else:
-                prop_id = self.properties.index(prop)
-
-            if target_ax_id is None:
-                self.plots.append([prop_id])
-            else:
-                self.plots[target_ax_id].append(prop_id)
-
-        if ncol > 0:
-            if new_values > 0:
-                self.properties_values = np.vstack(
-                    (self.properties_values, new_prop_values[:new_values, :])
-                )
+        if target_ax_id is None:
+            self.plots.append(properties)
         else:
-            self.run_ic()
+            self.plots[target_ax_id] += properties
 
+        self.controller.log_properties(properties)
         self.initialize_canvas()
 
     def initialize_canvas(self):
@@ -279,7 +259,10 @@ class PlotsView(ttk.Frame):
             self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         nplots = len(self.plots)
-        t = np.arange(0.0, len(self.properties_values[0, :]) * self.dt, self.dt)
+        prop0 = self.plots[0][0]
+        values = self.controller.get_property_log(prop0)
+        dt = self.controller.dt
+        t = np.arange(0.0, len(values) * dt, dt)
         w = self.winfo_width()
         h = self.winfo_height()
         figure = self.canvas.figure
@@ -287,12 +270,12 @@ class PlotsView(ttk.Frame):
         for plot_id, plots in enumerate(self.plots):
             ax = figure.add_subplot(nplots, 1, plot_id + 1)
             # Plot the property history
-            for idx, prop_id in enumerate(plots):
+            for idx, prop in enumerate(plots):
                 color = f"C{idx%10}"
                 ax.plot(
                     t,
-                    self.properties_values[prop_id, :],
-                    label=self.properties[prop_id].get_name(),
+                    self.controller.get_property_log(prop),
+                    label=prop.get_name(),
                     color=color,
                 )
                 ax.text(0.0, 0.0, "0.0", color=color, visible=False, fontweight="bold")
@@ -302,13 +285,13 @@ class PlotsView(ttk.Frame):
             if len(plots) > 1:
                 ax.legend()
             else:
-                ax.set_ylabel(self.properties[plots[0]].get_name())
+                ax.set_ylabel(plots[0].get_name())
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
             if len(t) > 1:
                 ax.set_xlim(t[0], t[-1])
             else:
-                ax.set_xlim(0, self.dt)
+                ax.set_xlim(0, dt)
             # Hide the x-axis tick labels of all but the bottom subplot
             if plot_id < nplots - 1:
                 ax.tick_params(labelbottom=False)
@@ -323,27 +306,20 @@ class PlotsView(ttk.Frame):
         self.canvas.draw()
         self.bbox = None
 
-    def run_ic(self):
-        self.properties_values = np.array(
-            [[prop.get_double_value() for prop in self.properties]]
-        ).T
-
-    def update_properties(self):
-        col = np.array([[prop.get_double_value() for prop in self.properties]]).T
-        self.properties_values = np.hstack((self.properties_values, col))
-
     def update_plots(self):
-        ncol = self.properties_values.shape[1]
+        prop0 = self.plots[0][0]
+        values = self.controller.get_property_log(prop0)
+        ncol = len(values)
         axes = self.canvas.figure.axes
         t = axes[0].lines[0].get_xdata()
         nsteps = ncol - len(t)
         if nsteps > 0:
-            t = np.append(t, t[-1] + self.dt * np.arange(1, nsteps + 1))
+            t = np.append(t, t[-1] + self.controller.dt * np.arange(1, nsteps + 1))
             # Iterate over the plots and update the data
             for axe, plots in zip(axes, self.plots):
-                for line, prop_id in zip(axe.lines[:-1], plots):
+                for line, prop in zip(axe.lines[:-1], plots):
                     line.set_xdata(t)
-                    line.set_ydata(self.properties_values[prop_id, :])
+                    line.set_ydata(self.controller.get_property_log(prop))
                 axe.set_xlim(t[0], t[-1])
                 axe.relim()
                 axe.autoscale_view()
