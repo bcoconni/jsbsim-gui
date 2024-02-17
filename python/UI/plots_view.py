@@ -95,10 +95,10 @@ class PlotsView(ttk.Frame):
         canvas = event.canvas
         axes = canvas.figure.axes
 
-        axes[0].texts[1].set_visible(False)
         for ax in axes:
-            ax.lines[0].set_visible(False)
-            ax.texts[0].set_visible(False)
+            ax.lines[-1].set_visible(False)
+            for text in ax.texts:
+                text.set_visible(False)
 
         canvas.draw()
         self.bbox = None
@@ -109,9 +109,9 @@ class PlotsView(ttk.Frame):
         if event.inaxes:
             for ax_id, ax in enumerate(axes):
                 if ax == event.inaxes:
-                    for line_id, line in enumerate(ax.lines[1:]):
+                    for line_id, line in enumerate(ax.lines[:-1]):
                         if line.contains(event)[0]:
-                            self.selected_line.select(ax_id, line_id + 1)
+                            self.selected_line.select(ax_id, line_id)
                             self.canvas_blit()
                             return
 
@@ -123,7 +123,7 @@ class PlotsView(ttk.Frame):
             params = self.selected_line.get_params()
             if params:
                 ax_id, line_id = params
-                self.plots[ax_id].pop(line_id - 1)
+                self.plots[ax_id].pop(line_id)
                 if not self.plots[ax_id]:
                     self.plots.pop(ax_id)
                 self.selected_line.deselect()
@@ -143,56 +143,56 @@ class PlotsView(ttk.Frame):
             return pos1 - pos0
 
         if event.inaxes:
-            idx = int(event.xdata / self.dt)
-            x0 = idx * self.dt
+            step_id = int(event.xdata / self.dt)
+            x0 = step_id * self.dt
             if event.xdata - x0 > self.dt / 2:
-                idx += 1
+                step_id += 1
                 x0 += self.dt
             ax0 = axes[0]
-            text = ax0.texts[1]
-            text.set_text(f"t={x0:.3f}s")
-            text.set_visible(True)
-            w = text_bbox_size(text, ax0)[0]
+            text0 = ax0.texts[-1]
+            text0.set_text(f"t={x0:.3f}s")
+            text0.set_visible(True)
+            w = text_bbox_size(text0, ax0)[0]
             ymin, ymax = ax0.get_ybound()
-            text.set_position((x0 - w / 2, ymax + 0.05 * (ymax - ymin)))
+            text0.set_position((x0 - w / 2, ymax + 0.05 * (ymax - ymin)))
+            offset = np.array([1, 1])
 
             for ax in axes:
-                vline = ax.lines[0]
+                vline = ax.lines[-1]
                 vline.set_visible(True)
                 xmax = ax.get_xbound()[1]
                 ymin, ymax = ax.get_ybound()
                 vline.set_xdata([event.xdata, event.xdata])
                 vline.set_ydata([ymin, ymax])
 
-                ydata = ax.lines[1].get_ydata()
-                if len(ydata) > 1:
-                    offset = np.array([0, 1])
-                    y0 = ydata[idx]
-                    text = ax.texts[0]
-                    if np.isnan(y0):
-                        text.set_visible(False)
-                        continue
-                    text.set_text(f" {y0:.5f} ")
-                    text.set_visible(True)
-                    # text.set_position((x0, y0))
-                    w, h = tuple(text_bbox_size(text, ax))
-                    pos0 = ax.transData.transform((x0, y0))
-                    pos1 = ax.transData.transform((x0 + w, y0 + h))
-                    m = ax.transData.inverted()
-                    pos0 = m.transform(pos0 - offset)
-                    pos1 = m.transform(pos1 + offset)
-                    x0, y0 = tuple(pos0)
-                    w, h = tuple(pos1 - pos0)
-                    if pos1[0] > xmax:
-                        x0 -= w
-                    if pos1[1] > ymax:
-                        y0 -= h
-                    text.set_position((x0, y0))
+                for line_id, line in enumerate(ax.lines[:-1]):
+                    ydata = line.get_ydata()
+                    if len(ydata) > 1:
+                        text = ax.texts[line_id]
+                        y0 = ydata[step_id]
+                        if np.isnan(y0):
+                            text.set_visible(False)
+                            continue
+                        text.set_text(f"{y0:.5f}")
+                        text.set_visible(True)
+                        w, h = tuple(text_bbox_size(text, ax))
+                        pos0 = ax.transData.transform((x0, y0))
+                        pos1 = ax.transData.transform((x0 + w, y0 + h))
+                        m = ax.transData.inverted()
+                        pos0 = m.transform(pos0 - offset)
+                        pos1 = m.transform(pos1 - offset)
+                        x0, y0 = tuple(pos0)
+                        w, h = tuple(pos1 - pos0)
+                        if pos1[0] > xmax:
+                            x0 -= w
+                        if pos1[1] > ymax:
+                            y0 -= h
+                        text.set_position((x0, y0))
         else:
-            axes[0].texts[1].set_visible(False)
             for ax in axes:
-                ax.lines[0].set_visible(False)
-                ax.texts[0].set_visible(False)
+                ax.lines[-1].set_visible(False)
+                for text in ax.texts:
+                    text.set_visible(False)
 
         self.canvas_blit()
 
@@ -201,10 +201,9 @@ class PlotsView(ttk.Frame):
         axes = canvas.figure.axes
         if self.bbox:
             canvas.restore_region(self.bbox)
-            ax0 = axes[0]
-            ax0.draw_artist(ax0.texts[1])
             for ax in axes:
-                ax.draw_artist(ax.texts[0])
+                for text in ax.texts:
+                    ax.draw_artist(text)
                 for line in ax.lines:
                     ax.draw_artist(line)
             canvas.blit(canvas.figure.bbox)
@@ -287,15 +286,14 @@ class PlotsView(ttk.Frame):
         figure.set_size_inches(w / self.dpi, h / self.dpi)
         for plot_id, plots in enumerate(self.plots):
             ax = figure.add_subplot(nplots, 1, plot_id + 1)
-            # Cross hair
-            v0 = self.properties_values[plots[0], 0]
-            ax.plot([0.0, 0.0], [v0, v0], color="red", visible=False)
-            ax.text(0.0, v0, f"{v0:.2f}", color="red", visible=False, fontweight="bold")
-            if plot_id == 0:
-                ax.text(0.0, v0, "0.0", color="red", visible=False, fontweight="bold")
             # Plot the property history
             for idx, prop_id in enumerate(plots):
-                ax.plot(t, self.properties_values[prop_id, :], color=f"C{idx%10}")
+                color = f"C{idx%10}"
+                ax.plot(t, self.properties_values[prop_id, :], color=color)
+                ax.text(0.0, 0.0, "0.0", color=color, visible=False, fontweight="bold")
+            # Cross hair
+            ax.plot([0.0, 0.0], [0.0, 0.0], color="red", visible=False)
+            # Figure decorations
             ax.set_ylabel(self.properties[plots[0]].get_name())
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
@@ -308,6 +306,9 @@ class PlotsView(ttk.Frame):
                 ax.tick_params(labelbottom=False)
             else:
                 ax.set_xlabel("Time (s)")
+        figure.axes[0].text(
+            0.0, 0.0, "0.0", color="red", visible=False, fontweight="bold"
+        )
         self.reset_and_redraw()
 
     def reset_and_redraw(self):
@@ -324,11 +325,11 @@ class PlotsView(ttk.Frame):
         self.properties_values = np.hstack((self.properties_values, col))
 
         axes = self.canvas.figure.axes
-        t = axes[0].lines[1].get_xdata()
+        t = axes[0].lines[0].get_xdata()
         t = np.append(t, t[-1] + self.dt)
         # Iterate over the plots and update the data
         for axe, plots in zip(axes, self.plots):
-            for line, prop_id in zip(axe.lines[1:], plots):
+            for line, prop_id in zip(axe.lines[:-1], plots):
                 line.set_xdata(t)
                 line.set_ydata(self.properties_values[prop_id, :])
             axe.set_xlim(t[0], t[-1])
