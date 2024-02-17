@@ -289,12 +289,20 @@ class PlotsView(ttk.Frame):
             # Plot the property history
             for idx, prop_id in enumerate(plots):
                 color = f"C{idx%10}"
-                ax.plot(t, self.properties_values[prop_id, :], color=color)
+                ax.plot(
+                    t,
+                    self.properties_values[prop_id, :],
+                    label=self.properties[prop_id].get_name(),
+                    color=color,
+                )
                 ax.text(0.0, 0.0, "0.0", color=color, visible=False, fontweight="bold")
             # Cross hair
             ax.plot([0.0, 0.0], [0.0, 0.0], color="red", visible=False)
             # Figure decorations
-            ax.set_ylabel(self.properties[plots[0]].get_name())
+            if len(plots) > 1:
+                ax.legend()
+            else:
+                ax.set_ylabel(self.properties[plots[0]].get_name())
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
             if len(t) > 1:
