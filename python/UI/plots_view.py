@@ -267,8 +267,9 @@ class PlotsView(ttk.Frame):
         h = self.winfo_height()
         figure = self.canvas.figure
         figure.set_size_inches(w / self.dpi, h / self.dpi)
+        figure.subplots(nplots, 1, sharex=True)
         for plot_id, plots in enumerate(self.plots):
-            ax = figure.add_subplot(nplots, 1, plot_id + 1)
+            ax = figure.axes[plot_id]
             # Plot the property history
             for idx, prop in enumerate(plots):
                 color = f"C{idx%10}"
@@ -278,7 +279,7 @@ class PlotsView(ttk.Frame):
                     label=prop.get_name(),
                     color=color,
                 )
-                ax.text(0.0, 0.0, "0.0", color=color, visible=False, fontweight="bold")
+                ax.text(0.0, 0.0, "0.0", color=color, visible=False)
             # Cross hair
             ax.plot([0.0, 0.0], [0.0, 0.0], color="red", visible=False)
             # Figure decorations
@@ -292,14 +293,10 @@ class PlotsView(ttk.Frame):
                 ax.set_xlim(t[0], t[-1])
             else:
                 ax.set_xlim(0, dt)
-            # Hide the x-axis tick labels of all but the bottom subplot
-            if plot_id < nplots - 1:
-                ax.tick_params(labelbottom=False)
-            else:
+
+            if plot_id == nplots - 1:
                 ax.set_xlabel("Time (s)")
-        figure.axes[0].text(
-            0.0, 0.0, "0.0", color="red", visible=False, fontweight="bold"
-        )
+        figure.axes[0].text(0.0, 0.0, "0.0", color="red", visible=False)
         self.reset_and_redraw()
 
     def reset_and_redraw(self):
@@ -311,10 +308,10 @@ class PlotsView(ttk.Frame):
         values = self.controller.get_property_log(prop0)
         ncol = len(values)
         axes = self.canvas.figure.axes
-        t = axes[0].lines[0].get_xdata()
-        nsteps = ncol - len(t)
-        if nsteps > 0:
-            t = np.append(t, t[-1] + self.controller.dt * np.arange(1, nsteps + 1))
+
+        if ncol > len(axes[0].lines[0].get_xdata()):
+            t = np.arange(0, ncol) * self.controller.dt
+
             # Iterate over the plots and update the data
             for axe, plots in zip(axes, self.plots):
                 for line, prop in zip(axe.lines[:-1], plots):
