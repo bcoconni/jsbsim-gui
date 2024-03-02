@@ -262,7 +262,7 @@ class PlotsView(ttk.Frame):
         prop0 = self.plots[0][0]
         values = self.controller.get_property_log(prop0)
         dt = self.controller.dt
-        t = np.arange(0.0, len(values) * dt, dt)
+        t = np.arange(0, len(values)) * dt
         w = self.winfo_width()
         h = self.winfo_height()
         figure = self.canvas.figure
