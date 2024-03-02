@@ -69,8 +69,8 @@ class Controller:
     def run(self) -> bool:
         with self._console.redirect_stdout():
             ret = self.fdm.run()
-            col = np.array([[prop.get_double_value() for prop in self.properties]]).T
-            self.properties_values = np.hstack((self.properties_values, col))
+            values = [prop.get_double_value() for prop in self.properties]
+            self.properties_values = np.vstack((self.properties_values, values))
             return ret
 
     def get_input_files(self) -> List[str]:
@@ -152,28 +152,24 @@ class Controller:
     def log_initial_values(self) -> None:
         self.properties_values = np.array(
             [[prop.get_double_value() for prop in self.properties]]
-        ).T
+        )
 
     def log_properties(self, properties: List[jsbsim.FGPropertyNode]) -> None:
-        ncol = self.properties_values.shape[1]
-        nprops = len(properties)
-        new_prop_values = np.full((nprops, max(ncol, 1)), np.nan)
-        new_props = 0
+        nrows = self.properties_values.shape[0]
+        new_prop_values = np.full((max(nrows, 1), 1), np.nan)
 
         for prop in properties:
             if prop not in self.properties:
                 self.properties.append(prop)
-                new_prop_values[new_props, -1] = prop.get_double_value()
-                new_props += 1
+                if nrows > 0:
+                    new_prop_values[-1] = prop.get_double_value()
+                    self.properties_values = np.hstack(
+                        (self.properties_values, new_prop_values)
+                    )
 
-        if ncol > 0:
-            if new_props > 0:
-                self.properties_values = np.vstack(
-                    (self.properties_values, new_prop_values[:new_props, :])
-                )
-        else:
+        if nrows == 0:
             self.log_initial_values()
 
     def get_property_log(self, node: FGPropertyNode) -> np.ndarray:
         prop_id = self.properties.index(node)
-        return self.properties_values[prop_id, :]
+        return self.properties_values[:, prop_id]
