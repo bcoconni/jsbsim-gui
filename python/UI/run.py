@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import time
 import tkinter as tk
 from abc import ABC, abstractmethod
 from tkinter import ttk
@@ -112,6 +113,7 @@ class Run(ttk.Frame):
         self.property_view.grid(column=0, row=0, sticky=NS)
         self.controller = controller
         self.update_id = None
+        self.initial_seconds = 0.0
 
         controls_frame = ttk.Frame(self)
         button = ttk.Button(controls_frame, text="Initialize", command=self.run_ic)
@@ -164,11 +166,15 @@ class Run(ttk.Frame):
         self.plots_view.update_plots()
 
     def update(self) -> None:
-        for _ in range(100):
+        actual_elapsed_time = time.time() - self.initial_seconds
+        sim_lag_time = actual_elapsed_time - self.controller.fdm.get_sim_time()
+
+        for _ in range(int(sim_lag_time / self.controller.dt)):
             self.controller.run()
+
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
-        self.update_id = self.after(500, self.update)
+        self.update_id = self.after(200, self.update)
 
     def pause(self) -> None:
         self.after_cancel(self.update_id)
@@ -178,7 +184,8 @@ class Run(ttk.Frame):
         self.pause_button.config(state=tk.DISABLED)
 
     def run(self) -> None:
-        self.update_id = self.after(500, self.update)
+        self.update_id = self.after(200, self.update)
+        self.initial_seconds = time.time() - self.controller.fdm.get_sim_time()
         self.step_button.config(state=tk.DISABLED)
         self.run_button.config(state=tk.DISABLED)
         self.pause_button.config(state=tk.NORMAL)
