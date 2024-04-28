@@ -81,21 +81,8 @@ class PlotsView(ttk.Frame):
         self.bbox = None
         self.selected_line: SelectedLine | None = None
 
-    def on_enter_figure(self, event: LocationEvent):
-        canvas = event.canvas
-        params = self.selected_line.get_params()
-        if params:
-            self.selected_line.deselect()
-            canvas.draw_idle()
-        self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
-        if params:
-            self.selected_line.select(*params)
-
     def on_leave_figure(self, event: LocationEvent):
-        canvas = event.canvas
-        axes = canvas.figure.axes
-
-        for ax in axes:
+        for ax in event.canvas.figure.axes:
             ax.lines[-1].set_visible(False)
             for text in ax.texts:
                 text.set_visible(False)
@@ -103,19 +90,17 @@ class PlotsView(ttk.Frame):
         self.reset_and_redraw()
 
     def on_click(self, event: MouseEvent):
-        axes = self.canvas.figure.axes
-
         if event.inaxes:
-            for ax_id, ax in enumerate(axes):
+            for ax_id, ax in enumerate(self.canvas.figure.axes):
                 if ax == event.inaxes:
                     for line_id, line in enumerate(ax.lines[:-1]):
                         if line.contains(event)[0]:
                             self.selected_line.select(ax_id, line_id)
-                            self.canvas_blit()
+                            self.reset_and_redraw()
                             return
 
         self.selected_line.deselect()
-        self.canvas_blit()
+        self.reset_and_redraw()
 
     def on_key_press(self, event: KeyEvent):
         if event.key == "delete":
@@ -194,21 +179,21 @@ class PlotsView(ttk.Frame):
                 for text in ax.texts:
                     text.set_visible(False)
 
-        self.canvas_blit()
+        self.on_draw(event)
+        canvas.blit(canvas.figure.bbox)
 
-    def canvas_blit(self):
-        canvas = self.canvas
+    def on_draw(self, event):
+        canvas = event.canvas
+
         if self.bbox:
             canvas.restore_region(self.bbox)
-            for ax in canvas.figure.axes:
-                for text in ax.texts:
-                    ax.draw_artist(text)
-                for line in ax.lines:
-                    ax.draw_artist(line)
-            canvas.blit(canvas.figure.bbox)
         else:
-            canvas.draw_idle()
             self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
+
+        for ax in canvas.figure.axes:
+            ax.draw_artist(ax.lines[-1])
+            for text in ax.texts:
+                ax.draw_artist(text)
 
     def add_properties(self, properties: List[FGPropertyNode], event: tk.Event):
         # Check if the properties are dropped on a subplot
@@ -246,7 +231,7 @@ class PlotsView(ttk.Frame):
             self.canvas.figure.clear()
         else:
             self.canvas = FigureCanvasTkAgg(Figure(dpi=self.dpi), master=self)
-            self.canvas.mpl_connect("figure_enter_event", self.on_enter_figure)
+            self.canvas.mpl_connect("draw_event", self.on_draw)
             self.canvas.mpl_connect("figure_leave_event", self.on_leave_figure)
             self.canvas.mpl_connect("motion_notify_event", self.on_move)
             self.canvas.mpl_connect("button_press_event", self.on_click)
@@ -277,9 +262,16 @@ class PlotsView(ttk.Frame):
                     label=prop.get_name(),
                     color=color,
                 )
-                ax.text(0.0, 0.0, "0.0", color=color, visible=False)
+                ax.text(0.0, 0.0, "0.0", color=color, visible=False, animated=True)
             # Cross hair
-            ax.plot([0.0, 0.0], [0.0, 0.0], color="0.0", linewidth=0.5, visible=False)
+            ax.plot(
+                [0.0, 0.0],
+                [0.0, 0.0],
+                color="0.0",
+                linewidth=0.5,
+                visible=False,
+                animated=True,
+            )
             # Figure decorations
             if len(plots) > 1:
                 ax.legend()
@@ -294,12 +286,12 @@ class PlotsView(ttk.Frame):
 
             if plot_id == nplots - 1:
                 ax.set_xlabel("Time (s)")
-        figure.axes[0].text(0.0, 0.0, "0.0", color="0.0", visible=False)
+        figure.axes[0].text(0.0, 0.0, "0.0", color="0.0", visible=False, animated=True)
         self.reset_and_redraw()
 
     def reset_and_redraw(self):
-        self.canvas.draw_idle()
         self.bbox = None
+        self.canvas.draw_idle()
 
     def update_plots(self):
         prop0 = self.plots[0][0]
