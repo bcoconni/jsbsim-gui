@@ -127,20 +127,12 @@ class Run(ttk.Frame):
         button_pos = self.step_button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
 
-        # Run button
-        self.run_button = ttk.Button(
+        # Run/Pause button
+        self.run_pause_button = ttk.Button(
             controls_frame, text="Run", command=self.run, state=tk.DISABLED
         )
-        self.run_button.grid(column=1, row=1, sticky=EW, padx=5, pady=5)
-        button_pos = self.run_button.grid_info()
-        controls_frame.columnconfigure(button_pos["column"], weight=1)
-
-        # Pause button
-        self.pause_button = ttk.Button(
-            controls_frame, text="Pause", command=self.pause, state=tk.DISABLED
-        )
-        self.pause_button.grid(column=2, row=1, sticky=EW, padx=5, pady=5)
-        button_pos = self.pause_button.grid_info()
+        self.run_pause_button.grid(column=1, row=1, sticky=EW, padx=5, pady=5)
+        button_pos = self.run_pause_button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
         controls_frame.grid(column=0, row=1, sticky=EW)
 
@@ -158,7 +150,7 @@ class Run(ttk.Frame):
         self.controller.run_ic()
         self.property_view.widget.update_values()
         self.step_button.config(state=tk.NORMAL)
-        self.run_button.config(state=tk.NORMAL)
+        self.run_pause_button.config(state=tk.NORMAL)
 
     def step(self):
         self.controller.run()
@@ -180,12 +172,10 @@ class Run(ttk.Frame):
         self.after_cancel(self.update_id)
         self.update_id = None
         self.step_button.config(state=tk.NORMAL)
-        self.run_button.config(state=tk.NORMAL)
-        self.pause_button.config(state=tk.DISABLED)
+        self.run_pause_button.config(command=self.run, text="Run")
 
     def run(self) -> None:
         self.update_id = self.after(200, self.update)
         self.initial_seconds = time.time() - self.controller.fdm.get_sim_time()
         self.step_button.config(state=tk.DISABLED)
-        self.run_button.config(state=tk.DISABLED)
-        self.pause_button.config(state=tk.NORMAL)
+        self.run_pause_button.config(command=self.pause, text="Pause")
