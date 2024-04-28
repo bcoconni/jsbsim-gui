@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import math
 import tkinter as tk
 from tkinter import font, ttk
 from typing import Any, List, Optional, Tuple
@@ -195,6 +196,23 @@ class PlotsView(ttk.Frame):
             for text in ax.texts:
                 ax.draw_artist(text)
 
+    def on_scroll(self, event: MouseEvent):
+        ax0 = event.inaxes
+
+        if ax0:
+            xmin, xmax = ax0.get_xbound()
+            dxl = event.xdata - xmin
+            dxr = xmax - event.xdata
+            factor = math.pow(1.5, -event.step)
+            tmax = ax0.lines[0].get_xdata()[-1]
+            xl = max(event.xdata - dxl * factor, 0.0)
+            xr = min(event.xdata + dxr * factor, tmax)
+
+            for ax in event.canvas.figure.axes:
+                ax.set_xlim(xl, xr)
+
+            self.reset_and_redraw()
+
     def add_properties(self, properties: List[FGPropertyNode], event: tk.Event):
         # Check if the properties are dropped on a subplot
         canvas = self.canvas
@@ -236,6 +254,7 @@ class PlotsView(ttk.Frame):
             self.canvas.mpl_connect("motion_notify_event", self.on_move)
             self.canvas.mpl_connect("button_press_event", self.on_click)
             self.canvas.mpl_connect("key_press_event", self.on_key_press)
+            self.canvas.mpl_connect("scroll_event", self.on_scroll)
             self.selected_line = SelectedLine(
                 self.canvas.figure, linewidth=4, color="red"
             )
