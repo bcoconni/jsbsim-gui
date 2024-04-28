@@ -86,7 +86,7 @@ class PlotsView(ttk.Frame):
         params = self.selected_line.get_params()
         if params:
             self.selected_line.deselect()
-            canvas.draw()
+            canvas.draw_idle()
         self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
         if params:
             self.selected_line.select(*params)
@@ -100,8 +100,7 @@ class PlotsView(ttk.Frame):
             for text in ax.texts:
                 text.set_visible(False)
 
-        canvas.draw()
-        self.bbox = None
+        self.reset_and_redraw()
 
     def on_click(self, event: MouseEvent):
         axes = self.canvas.figure.axes
@@ -199,17 +198,16 @@ class PlotsView(ttk.Frame):
 
     def canvas_blit(self):
         canvas = self.canvas
-        axes = canvas.figure.axes
         if self.bbox:
             canvas.restore_region(self.bbox)
-            for ax in axes:
+            for ax in canvas.figure.axes:
                 for text in ax.texts:
                     ax.draw_artist(text)
                 for line in ax.lines:
                     ax.draw_artist(line)
             canvas.blit(canvas.figure.bbox)
         else:
-            canvas.draw()
+            canvas.draw_idle()
             self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
 
     def add_properties(self, properties: List[FGPropertyNode], event: tk.Event):
@@ -281,7 +279,7 @@ class PlotsView(ttk.Frame):
                 )
                 ax.text(0.0, 0.0, "0.0", color=color, visible=False)
             # Cross hair
-            ax.plot([0.0, 0.0], [0.0, 0.0], color="red", visible=False)
+            ax.plot([0.0, 0.0], [0.0, 0.0], color="0.0", linewidth=0.5, visible=False)
             # Figure decorations
             if len(plots) > 1:
                 ax.legend()
@@ -296,11 +294,11 @@ class PlotsView(ttk.Frame):
 
             if plot_id == nplots - 1:
                 ax.set_xlabel("Time (s)")
-        figure.axes[0].text(0.0, 0.0, "0.0", color="red", visible=False)
+        figure.axes[0].text(0.0, 0.0, "0.0", color="0.0", visible=False)
         self.reset_and_redraw()
 
     def reset_and_redraw(self):
-        self.canvas.draw()
+        self.canvas.draw_idle()
         self.bbox = None
 
     def update_plots(self):
@@ -318,6 +316,6 @@ class PlotsView(ttk.Frame):
                     line.set_xdata(t)
                     line.set_ydata(self.controller.get_property_log(prop))
                 axe.set_xlim(t[0], t[-1])
-                axe.relim()
-                axe.autoscale_view()
+                axe.relim(True)
+                axe.autoscale_view(scalex=False, scaley=True)
             self.reset_and_redraw()
