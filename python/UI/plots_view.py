@@ -23,7 +23,12 @@ from typing import Any, List, Optional, Tuple
 import matplotlib as mpl
 import numpy as np
 from jsbsim import FGPropertyNode
-from matplotlib.backend_bases import KeyEvent, LocationEvent, MouseEvent
+from matplotlib.backend_bases import (
+    KeyEvent,
+    LocationEvent,
+    MouseEvent,
+    FigureCanvasBase,
+)
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
@@ -57,6 +62,16 @@ class SelectedLine:
         if self.ax_id is not None and self.line_id is not None:
             return self.ax_id, self.line_id
         return None
+
+
+def get_axes_at_coordinates(canvas: FigureCanvasBase) -> Optional[mpl.axes.Axes]:
+    tk_canvas = canvas.get_tk_widget()
+    x, y = tk_canvas.winfo_pointerxy()
+    x -= tk_canvas.winfo_rootx()
+    # Matplotlib y-axis is inverted: (0,0) is the bottom left corner while in
+    # tkinter (0,0) is the top left corner
+    y = tk_canvas.winfo_height() - (y - tk_canvas.winfo_rooty())
+    return canvas.inaxes((x, y))
 
 
 class PlotsView(ttk.Frame):
@@ -147,9 +162,8 @@ class PlotsView(ttk.Frame):
                 vline = ax.lines[-1]
                 vline.set_visible(True)
                 xmax = ax.get_xbound()[1]
-                ymin, ymax = ax.get_ybound()
+                ymax = ax.get_ybound()[1]
                 vline.set_xdata([event.xdata, event.xdata])
-                vline.set_ydata([ymin, ymax])
 
                 for line_id, line in enumerate(ax.lines[:-1]):
                     ydata = line.get_ydata()
@@ -213,18 +227,12 @@ class PlotsView(ttk.Frame):
 
             self.reset_and_redraw()
 
-    def add_properties(self, properties: List[FGPropertyNode], event: tk.Event):
+    def add_properties(self, properties: List[FGPropertyNode]):
         # Check if the properties are dropped on a subplot
         canvas = self.canvas
         target_ax_id: int | None = None
         if canvas:
-            x, y = event.widget.winfo_pointerxy()
-            tk_canvas = canvas.get_tk_widget()
-            x -= tk_canvas.winfo_rootx()
-            # Matplotlib y-axis is inverted: (0,0) is the bottom left corner while in
-            # tkinter (0,0) is the top left corner
-            y = tk_canvas.winfo_height() - (y - tk_canvas.winfo_rooty())
-            target_ax = canvas.inaxes((x, y))
+            target_ax = get_axes_at_coordinates(canvas)
             if target_ax:
                 for ax_id, ax in enumerate(canvas.figure.axes):
                     if ax == target_ax:
@@ -283,14 +291,7 @@ class PlotsView(ttk.Frame):
                 )
                 ax.text(0.0, 0.0, "0.0", color=color, visible=False, animated=True)
             # Cross hair
-            ax.plot(
-                [0.0, 0.0],
-                [0.0, 0.0],
-                color="0.0",
-                linewidth=0.5,
-                visible=False,
-                animated=True,
-            )
+            ax.axvline(color="0.0", linewidth=0.5, visible=False, animated=True)
             # Figure decorations
             if len(plots) > 1:
                 ax.legend()

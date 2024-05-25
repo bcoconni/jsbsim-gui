@@ -31,13 +31,19 @@ from .source_editor import LabeledWidget
 
 class DragNDropManager(ABC):
     def __init__(self, source: tk.Widget, target: tk.Widget):
-        source.bind("<ButtonPress-1>", self.select)
-        source.bind("<B1-Motion>", self.drag)
-        source.bind("<ButtonRelease-1>", self.drop)
+        self.source = source
+        self.bound_events = []
+        self.bound_events.append(source.bind("<ButtonPress-1>", self.select))
+        self.bound_events.append(source.bind("<B1-Motion>", self.drag))
+        self.bound_events.append(source.bind("<ButtonRelease-1>", self.drop))
         self.offset_x = 0
         self.offset_y = 0
         self.dragged_widget_preview: tk.Widget | None = None
         self.target = target
+
+    def __del__(self):
+        for event in self.bound_events:
+            self.source.unbind(event)
 
     def select(self, event: tk.Event):
         root = event.widget.winfo_toplevel()
@@ -98,8 +104,8 @@ class DnDProperties(DragNDropManager):
             return widget_preview
         return None
 
-    def drop_on_target(self, event: tk.Event):
-        self.target.add_properties(self.property_list, event)
+    def drop_on_target(self, _):
+        self.target.add_properties(self.property_list)
 
 
 class Run(ttk.Frame):
@@ -139,7 +145,7 @@ class Run(ttk.Frame):
         self.plots_view = PlotsView(self, controller)
         self.plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
 
-        DnDProperties(self.property_view.widget, self.plots_view)
+        self.dnd_properties = DnDProperties(self.property_view.widget, self.plots_view)
 
         # Window Layout
         plotsview_pos = self.plots_view.grid_info()
