@@ -225,7 +225,7 @@ class PropertyTree(ttk.Frame):
 
         content = tree.item(item_id, "values")[0]
         # Dismiss when the cell is empty
-        if not content:
+        if content == "":
             return
 
         node = self.properties[item_id]
