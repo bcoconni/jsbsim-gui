@@ -20,6 +20,7 @@ import tkinter as tk
 from abc import ABC, abstractmethod
 from tkinter import ttk
 from tkinter.constants import EW, NS, NSEW
+from typing import Optional
 
 from jsbsim import FGPropertyNode
 
@@ -38,7 +39,7 @@ class DragNDropManager(ABC):
         self.bound_events.append(source.bind("<ButtonRelease-1>", self.drop))
         self.offset_x = 0
         self.offset_y = 0
-        self.dragged_widget_preview: tk.Widget | None = None
+        self.dragged_widget_preview: Optional[tk.Widget] = None
         self.target = target
 
     def __del__(self):
@@ -93,7 +94,7 @@ class DnDProperties(DragNDropManager):
                 if idx < 3:
                     propname = ttk.Label(
                         widget_preview,
-                        text=prop.get_relative_name(),
+                        text=self.property_tree.get_relative_name(prop),
                         justify=tk.LEFT,
                     )
                     propname.pack(anchor=tk.W)
@@ -113,7 +114,11 @@ class Run(ttk.Frame):
         super().__init__(master, **kw)
         self.property_view = LabeledWidget(self, "Property List")
         self.property_view.set_widget(
-            PropertyTree(self.property_view, controller.get_property_list())
+            PropertyTree(
+                self.property_view,
+                controller.get_property_list(),
+                controller.get_property_root().get_fully_qualified_name(),
+            )
         )
         self.property_view.widget.grid(sticky=NS)
         self.property_view.grid(column=0, row=0, sticky=NS)

@@ -68,7 +68,11 @@ class SourceEditor(ttk.Frame):
 
         property_view = LabeledWidget(left_frame, "Property List")
         property_view.set_widget(
-            PropertyTree(property_view, controller.get_property_list())
+            PropertyTree(
+                property_view,
+                controller.get_property_list(),
+                controller.get_property_root().get_fully_qualified_name(),
+            )
         )
 
         fileview.widget.bind_selection(self.open_source_file)

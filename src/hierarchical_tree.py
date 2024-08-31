@@ -19,9 +19,9 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NS, VERTICAL
 from tkinter.messagebox import showerror
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
-from jsbsim import Attribute, FGPropertyNode
+from jsbsim import FGPropertyNode
 
 
 class HierarchicalTree(ttk.Frame):
@@ -35,7 +35,7 @@ class HierarchicalTree(ttk.Frame):
         super().__init__(master)
         self.tree = ttk.Treeview(self, columns=columns_id)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self._hidden_items: list[tuple[str, str, int]] = []
+        self._hidden_items: List[Tuple[str, str, int]] = []
 
         for elm in sorted(elements):
             parent_id = ""
@@ -154,12 +154,11 @@ class CellEntry(ttk.Entry):
 
 class PropertyTree(ttk.Frame):
     def __init__(
-        self,
-        master: tk.Widget,
-        properties: List[FGPropertyNode],
+        self, master: tk.Widget, properties: List[FGPropertyNode], property_root: str
     ):
         super().__init__(master)
-        self.properties: dict[str, FGPropertyNode] = {}
+        self.properties: Dict[str, FGPropertyNode] = {}
+        self.property_root: str = property_root
 
         search_frame = ttk.Frame(self, padding=(0, 2))
         search_frame.grid(column=0, row=0, sticky=EW)
@@ -169,7 +168,7 @@ class PropertyTree(ttk.Frame):
         self.search_box.grid(column=1, row=0, sticky=EW)
 
         self.proptree = HierarchicalTree(
-            self, [p.get_relative_name() for p in properties], ["value"], False
+            self, [self.get_relative_name(p) for p in properties], ["value"], False
         )
         self.proptree.grid(column=0, row=1, columnspan=3, sticky=NS)
         tree = self.proptree.tree
@@ -192,11 +191,17 @@ class PropertyTree(ttk.Frame):
         self.search_box.bind("<KeyRelease>", self.search)
         self.proptree.tree.bind("<Double-1>", self.edit_property_value)
 
+    def get_relative_name(self, node: FGPropertyNode) -> str:
+        name = node.get_fully_qualified_name()
+        if name.startswith(self.property_root):
+            return name[len(self.property_root) + 1 :]
+        return name
+
     def initialize_values(self, properties: List[FGPropertyNode]) -> None:
         tree = self.proptree.tree
         for node in properties:
             parent_id = ""
-            pname = node.get_relative_name()
+            pname = self.get_relative_name(node)
             for name in pname.split("/"):
                 for child_id in tree.get_children(parent_id):
                     if name == tree.item(child_id, "text"):
@@ -228,10 +233,10 @@ class PropertyTree(ttk.Frame):
         if content == "":
             return
 
-        node = self.properties[item_id]
+        # node = self.properties[item_id]
         # Dismiss when the property is readonly
-        if not node.get_attribute(Attribute.WRITE):
-            return
+        # if not node.get_attribute(Attribute.WRITE):
+        #     return
 
         x, y, width, height = tree.bbox(item_id, "value")
         cell_entry = CellEntry(

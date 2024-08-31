@@ -17,7 +17,7 @@
 import os
 import platform
 import xml.etree.ElementTree as et
-from typing import List
+from typing import List, Optional
 
 import jsbsim
 import numpy as np
@@ -40,7 +40,7 @@ class Controller:
         self._console = console
         self.dt = 1.0 / 120.0
         self.filename = ""
-        self.properties: list[FGPropertyNode] = []
+        self.properties: List[FGPropertyNode] = []
         self.properties_values = np.empty((0, 0))
         with console.redirect_stdout():
             self.fdm = jsbsim.FGFDMExec(root_dir)
@@ -96,6 +96,7 @@ class Controller:
             )
 
             root = et.parse(aircraft_filename).getroot()
+
         engine_path = self.fdm.get_engine_path()
         systems_path = self.fdm.get_systems_path()
 
@@ -136,6 +137,9 @@ class Controller:
             return [name.replace("\\", "/") for name in input_files]
 
         return input_files
+
+    def get_property_root(self) -> Optional[FGPropertyNode]:
+        return self.fdm.get_property_manager().get_node()
 
     def get_property_list(self) -> List[jsbsim.FGPropertyNode]:
         pm = self.fdm.get_property_manager()
