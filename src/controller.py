@@ -74,10 +74,10 @@ class Controller:
             return ret
 
     def get_input_files(self) -> List[str]:
-        root_dir = self.fdm.get_root_dir()
+        root_dir = os.path.realpath(self.fdm.get_root_dir())
 
         def relpath_filename(filename):
-            return [os.path.relpath(filename, root_dir)]
+            return [os.path.relpath(os.path.realpath(filename), root_dir)]
 
         aircraft_path = self.fdm.get_aircraft_path()
         input_files = relpath_filename(self.filename)
