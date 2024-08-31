@@ -73,15 +73,16 @@ class Controller:
             self.properties_values = np.vstack((self.properties_values, values))
             return ret
 
+    def get_root_dir(self) -> str:
+        return os.path.realpath(self.fdm.get_root_dir())
+
+    def get_relative_path(self, filename: str) -> str:
+        return [os.path.relpath(os.path.realpath(filename), self.get_root_dir())]
+
     def get_input_files(self) -> List[str]:
-        root_dir = os.path.realpath(self.fdm.get_root_dir())
-
-        def relpath_filename(filename):
-            return [os.path.relpath(os.path.realpath(filename), root_dir)]
-
         aircraft_path = self.fdm.get_aircraft_path()
-        input_files = relpath_filename(self.filename)
-        root = et.parse(os.path.join(root_dir, self.filename)).getroot()
+        input_files = self.get_relative_path(self.filename)
+        root = et.parse(os.path.join(self.fdm.get_root_dir(), self.filename)).getroot()
 
         if root.tag == "runscript":
             use_el = root.find("use")
@@ -89,9 +90,9 @@ class Controller:
             aircraft_filename = os.path.join(
                 aircraft_path, aircraft_name, append_xml(aircraft_name)
             )
-            input_files += relpath_filename(aircraft_filename)
+            input_files += self.get_relative_path(aircraft_filename)
             IC_file = use_el.attrib["initialize"]
-            input_files += relpath_filename(
+            input_files += self.get_relative_path(
                 os.path.join(aircraft_path, aircraft_name, append_xml(IC_file))
             )
 
@@ -103,35 +104,41 @@ class Controller:
         for include_el in root.findall(".//*[@file]"):
             filename = append_xml(include_el.attrib["file"])
             if os.path.exists(os.path.join(aircraft_path, filename)):
-                input_files += relpath_filename(os.path.join(aircraft_path, filename))
+                input_files += self.get_relative_path(
+                    os.path.join(aircraft_path, filename)
+                )
             elif os.path.exists(os.path.join(aircraft_path, "Systems", filename)):
-                input_files += relpath_filename(
+                input_files += self.get_relative_path(
                     os.path.join(aircraft_path, "Systems", filename)
                 )
             elif os.path.exists(os.path.join(aircraft_path, "systems", filename)):
-                input_files += relpath_filename(
+                input_files += self.get_relative_path(
                     os.path.join(aircraft_path, "systems", filename)
                 )
             elif os.path.exists(os.path.join(aircraft_path, "Engines", filename)):
-                input_files += relpath_filename(
+                input_files += self.get_relative_path(
                     os.path.join(aircraft_path, "Engines", filename)
                 )
             elif os.path.exists(os.path.join(aircraft_path, "engines", filename)):
-                input_files += relpath_filename(
+                input_files += self.get_relative_path(
                     os.path.join(aircraft_path, "engines", filename)
                 )
             elif os.path.exists(os.path.join(aircraft_path, "Engine", filename)):
-                input_files += relpath_filename(
+                input_files += self.get_relative_path(
                     os.path.join(aircraft_path, "Engine", filename)
                 )
             elif os.path.exists(os.path.join(aircraft_path, "engine", filename)):
-                input_files += relpath_filename(
+                input_files += self.get_relative_path(
                     os.path.join(aircraft_path, "engine", filename)
                 )
             elif os.path.exists(os.path.join(engine_path, filename)):
-                input_files += relpath_filename(os.path.join(engine_path, filename))
+                input_files += self.get_relative_path(
+                    os.path.join(engine_path, filename)
+                )
             elif os.path.exists(os.path.join(systems_path, filename)):
-                input_files += relpath_filename(os.path.join(systems_path, filename))
+                input_files += self.get_relative_path(
+                    os.path.join(systems_path, filename)
+                )
 
         if platform.system() == "Windows":
             return [name.replace("\\", "/") for name in input_files]

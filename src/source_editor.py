@@ -19,6 +19,7 @@ import os
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import EW, NONE, NS, NSEW
+from typing import Optional
 
 from .controller import Controller
 from .hierarchical_tree import FileTree, PropertyTree
@@ -28,7 +29,7 @@ from .textview import XMLSourceCodeView
 class LabeledWidget(ttk.Frame):
     def __init__(self, master: tk.Widget, label: str):
         super().__init__(master)
-        self.widget: tk.Widget | None = None
+        self.widget: Optional[tk.Widget] = None
         self.label = ttk.Label(self, text=label)
         self.label.grid(column=0, row=0)
 
@@ -47,10 +48,9 @@ class SourceEditor(ttk.Frame):
         self,
         master: tk.Widget,
         controller: Controller,
-        root_dir: str,
     ):
         super().__init__(master)
-        self.root_dir = root_dir
+        self.root_dir = controller.get_root_dir()
         main_frame = ttk.Frame(self)
         left_frame = ttk.Frame(main_frame)
 
@@ -58,7 +58,7 @@ class SourceEditor(ttk.Frame):
         fileview.set_widget(FileTree(fileview, controller.get_input_files()))
 
         with open(controller.filename, "r") as f:
-            file_relpath = os.path.relpath(controller.filename, self.root_dir)
+            file_relpath = controller.get_relative_path(controller.filename)
             self.codeview = LabeledWidget(main_frame, file_relpath)
             self.codeview.set_widget(
                 XMLSourceCodeView(

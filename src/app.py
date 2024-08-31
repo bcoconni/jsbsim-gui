@@ -115,7 +115,7 @@ class App(tk.Tk):
         self.main.destroy()
 
         # Open the file in a text widget
-        self.main = SourceEditor(self, self._controller, self.root_dir)
+        self.main = SourceEditor(self, self._controller)
 
         # Window layout
         self.main.grid(column=0, row=0, sticky=NSEW)
