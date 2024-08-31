@@ -1,0 +1,5 @@
+# This file lists the dependencies required for the project.
+# Specify the Python packages and their versions that need to be installed for the project to run successfully.
+
+jsbsim>=1.2.1
+matplotlib
