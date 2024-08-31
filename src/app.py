@@ -79,10 +79,7 @@ class App(tk.Tk):
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
 
-        menubar = MenuBar(self, root_dir)
-        self.config(menu=menubar)
-
-        with Image.open("logo_JSBSIM_globe.png") as image:
+        with Image.open("logo/logo_JSBSIM_globe.png") as image:
             logo_resized = image.resize((image.width * 400 // image.height, 400))
             logo_image = ImageTk.PhotoImage(logo_resized)
             self.main = ttk.Label(self, image=logo_image, background="white")
@@ -100,6 +97,9 @@ class App(tk.Tk):
 
         self._console: ConsoleStdoutRedirect | None = None
         self._controller: Controller | None = None
+
+        menubar = MenuBar(self, self.root_dir)
+        self.config(menu=menubar)
 
     def run(self) -> None:
         w = self.main.winfo_width()
