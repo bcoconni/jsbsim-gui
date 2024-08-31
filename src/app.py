@@ -76,15 +76,16 @@ class MenuBar(tk.Menu):
 class App(tk.Tk):
     def __init__(self, root_dir: Optional[str] = None):
         super().__init__()
+        self._console: Optional[ConsoleStdoutRedirect] = None
+        self._controller: Optional[Controller] = None
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
 
-        with Image.open("logo/logo_JSBSIM_globe.png") as image:
-            logo_resized = image.resize((image.width * 400 // image.height, 400))
-            logo_image = ImageTk.PhotoImage(logo_resized)
+        with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
+            logo_image = ImageTk.PhotoImage(image)
             self.main = ttk.Label(self, image=logo_image, background="white")
             self.main.image = logo_image
-            self.main.grid(padx=(600 - logo_resized.width) // 2)
+            self.main.grid(padx=(600 - image.width) // 2)
 
         if root_dir:
             self.root_dir = root_dir
@@ -94,9 +95,6 @@ class App(tk.Tk):
             except IOError as e:
                 showerror("Error", message=e)
                 self.destroy()
-
-        self._console: ConsoleStdoutRedirect | None = None
-        self._controller: Controller | None = None
 
         menubar = MenuBar(self, self.root_dir)
         self.config(menu=menubar)
