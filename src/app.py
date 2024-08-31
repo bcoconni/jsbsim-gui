@@ -83,18 +83,25 @@ class App(tk.Tk):
 
         with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
             logo_image = ImageTk.PhotoImage(image)
-            self.main = ttk.Label(self, image=logo_image, background="white")
+            self.main = ttk.Label(self, image=logo_image)
             self.main.image = logo_image
             self.main.grid(padx=(600 - image.width) // 2)
 
         if root_dir:
             self.root_dir = root_dir
+            if not os.path.exists(self.root_dir):
+                showerror(
+                    "Error", message=f'The directory "{self.root_dir}" does not exist'
+                )
+                self.destroy()
+                return
         else:
             try:
                 self.root_dir = Controller.get_default_root_dir()
             except IOError as e:
                 showerror("Error", message=e)
                 self.destroy()
+                return
 
         menubar = MenuBar(self, self.root_dir)
         self.config(menu=menubar)
