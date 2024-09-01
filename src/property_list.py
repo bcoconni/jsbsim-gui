@@ -16,6 +16,7 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import os
+import platform
 from typing import List, Iterable, Optional, Tuple
 
 from jsbsim import FGPropertyNode
@@ -48,6 +49,9 @@ class PropertyList:
         self.unique_names = [
             os.path.relpath(name, common_root) for name in fully_qualified_names
         ]
+
+        if platform.system() == "Windows":
+            self.unique_names = [name.replace("\\", "/") for name in self.unique_names]
 
     def add_properties(self, props: List[FGPropertyNode]) -> None:
         if not props:
