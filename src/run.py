@@ -125,6 +125,7 @@ class Run(ttk.Frame):
         self.controller = controller
         self.update_id = None
         self.initial_seconds = 0.0
+        self.script_end_reached = False
 
         controls_frame = ttk.Frame(self)
         button = ttk.Button(controls_frame, text="Initialize", command=self.run_ic)
@@ -173,11 +174,15 @@ class Run(ttk.Frame):
         sim_lag_time = actual_elapsed_time - self.controller.fdm.get_sim_time()
 
         for _ in range(int(sim_lag_time / self.controller.dt)):
-            self.controller.run()
+            if not self.controller.run() and not self.script_end_reached:
+                self.pause()
+                self.script_end_reached = True
+                break
+        else:
+            self.update_id = self.after(200, self.update)
 
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
-        self.update_id = self.after(200, self.update)
 
     def pause(self) -> None:
         self.after_cancel(self.update_id)
