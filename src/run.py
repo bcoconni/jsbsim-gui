@@ -128,8 +128,10 @@ class Run(ttk.Frame):
         self.script_end_reached = False
 
         controls_frame = ttk.Frame(self)
-        button = ttk.Button(controls_frame, text="Initialize", command=self.run_ic)
-        button.grid(column=0, row=0, columnspan=3, sticky=EW, padx=5, pady=5)
+        self.init_button = ttk.Button(
+            controls_frame, text="Initialize", command=self.run_ic
+        )
+        self.init_button.grid(column=0, row=0, columnspan=3, sticky=EW, padx=5, pady=5)
 
         # Step button
         self.step_button = ttk.Button(
@@ -161,6 +163,7 @@ class Run(ttk.Frame):
     def run_ic(self):
         self.controller.run_ic()
         self.property_view.widget.update_values()
+        self.init_button.config(state=tk.DISABLED)
         self.step_button.config(state=tk.NORMAL)
         self.run_pause_button.config(state=tk.NORMAL)
 
