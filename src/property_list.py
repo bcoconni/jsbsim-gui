@@ -16,29 +16,53 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import os
-from typing import List
+from typing import List, Iterable, Optional, Tuple
 
 from jsbsim import FGPropertyNode
 
 
 class PropertyList:
-    def __init__(self):
-        self.properties: List[FGPropertyNode] = []
-        self.unique_names: List[str] = []
-
-    def add_property(self, prop: FGPropertyNode) -> None:
-        self.properties.append(prop)
-
-        if len(self.properties) > 1:
-            fully_qualified_names = [
-                p.get_fully_qualified_name() for p in self.properties
-            ]
-            common_root = os.path.commonpath(fully_qualified_names)
-            self.unique_names = [
-                os.path.relpath(name, common_root) for name in fully_qualified_names
-            ]
+    def __init__(self, properties: Optional[List[FGPropertyNode]] = None):
+        if properties:
+            self.properties: List[FGPropertyNode] = properties.copy()
+            if len(properties) > 1:
+                self._update_unique_names()
+            else:
+                self.unique_names = [properties[0].get_name()]
         else:
-            self.unique_names.append(prop.get_name())
+            self.properties = []
+            self.unique_names: List[str] = []
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[Tuple[str, FGPropertyNode]]:
         return zip(self.unique_names, self.properties)
+
+    def __len__(self) -> int:
+        return len(self.properties)
+
+    def __getitem__(self, index: int) -> Tuple[str, FGPropertyNode]:
+        return self.unique_names[index], self.properties[index]
+
+    def _update_unique_names(self) -> None:
+        fully_qualified_names = [p.get_fully_qualified_name() for p in self.properties]
+        common_root = os.path.commonpath(fully_qualified_names)
+        self.unique_names = [
+            os.path.relpath(name, common_root) for name in fully_qualified_names
+        ]
+
+    def add_properties(self, props: List[FGPropertyNode]) -> None:
+        if not props:
+            return
+
+        self.properties.extend(props)
+        if len(self.properties) > 1:
+            self._update_unique_names()
+        else:
+            self.unique_names.append(props[0].get_name())
+
+    def pop(self, index: int) -> FGPropertyNode:
+        prop = self.properties.pop(index)
+        if len(self.properties) > 1:
+            self._update_unique_names()
+        else:
+            self.unique_names = [p.get_name() for p in self.properties]
+        return prop
