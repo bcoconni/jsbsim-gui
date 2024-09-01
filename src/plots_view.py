@@ -33,6 +33,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 from .controller import Controller
+from .property_list import PropertyList
 
 
 class SelectedLine:
@@ -93,7 +94,7 @@ class PlotsView(ttk.Frame):
         width = root.winfo_screenmmwidth()
         self.dpi = 25.4 * pixels / width
         self.canvas: Optional[FigureCanvasTkAgg] = None
-        self.plots: List[List[FGPropertyNode]] = []
+        self.plots: List[PropertyList] = []
         self.bbox = None
         self.selected_line: Optional[SelectedLine] = None
 
@@ -240,9 +241,9 @@ class PlotsView(ttk.Frame):
                         break
 
         if target_ax_id is None:
-            self.plots.append(properties)
+            self.plots.append(PropertyList(properties))
         else:
-            self.plots[target_ax_id] += properties
+            self.plots[target_ax_id].add_properties(properties)
 
         self.initialize_canvas()
 
@@ -268,7 +269,7 @@ class PlotsView(ttk.Frame):
             self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         nplots = len(self.plots)
-        prop0 = self.plots[0][0]
+        _, prop0 = self.plots[0][0]
         values = self.controller.get_property_log(prop0)
         dt = self.controller.dt
         t = np.arange(0, len(values)) * dt
@@ -280,12 +281,12 @@ class PlotsView(ttk.Frame):
         for plot_id, plots in enumerate(self.plots):
             ax = figure.axes[plot_id]
             # Plot the property history
-            for idx, prop in enumerate(plots):
+            for idx, (name, prop) in enumerate(plots):
                 color = f"C{idx%10}"
                 ax.plot(
                     t,
                     self.controller.get_property_log(prop),
-                    label=prop.get_name(),
+                    label=name,
                     color=color,
                 )
                 ax.text(0.0, 0.0, "0.0", color=color, visible=False, animated=True)
@@ -295,7 +296,8 @@ class PlotsView(ttk.Frame):
             if len(plots) > 1:
                 ax.legend()
             else:
-                ax.set_ylabel(plots[0].get_name())
+                name, _ = plots[0]
+                ax.set_ylabel(name)
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
             if len(t) > 1:
@@ -313,7 +315,7 @@ class PlotsView(ttk.Frame):
         self.canvas.draw_idle()
 
     def update_plots(self):
-        prop0 = self.plots[0][0]
+        _, prop0 = self.plots[0][0]
         values = self.controller.get_property_log(prop0)
         ncol = len(values)
         axes = self.canvas.figure.axes
@@ -323,7 +325,7 @@ class PlotsView(ttk.Frame):
 
             # Iterate over the plots and update the data
             for axe, plots in zip(axes, self.plots):
-                for line, prop in zip(axe.lines[:-1], plots):
+                for line, (_, prop) in zip(axe.lines[:-1], plots):
                     line.set_xdata(t)
                     line.set_ydata(self.controller.get_property_log(prop))
                 axe.set_xlim(t[0], t[-1])
