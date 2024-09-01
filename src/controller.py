@@ -24,6 +24,7 @@ import numpy as np
 from jsbsim._jsbsim import _append_xml as append_xml
 from jsbsim import FGPropertyNode
 
+from .property_history import PropertyHistory
 from .textview import ConsoleStdoutRedirect
 
 
@@ -40,8 +41,7 @@ class Controller:
         self._console = console
         self.dt = 1.0 / 120.0
         self.filename = ""
-        self.properties: List[FGPropertyNode] = []
-        self.properties_values = np.empty((0, 0))
+        self.property_history = PropertyHistory([])
         with console.redirect_stdout():
             self.fdm = jsbsim.FGFDMExec(root_dir)
 
@@ -51,6 +51,7 @@ class Controller:
         script_name = os.path.relpath(filename, self.fdm.get_root_dir())
         with self._console.redirect_stdout():
             self.fdm.load_script(script_name)
+            self.property_history = PropertyHistory(self.get_property_list())
 
     def load_aircraft(self, filename: str) -> None:
         # TODO Validate the aircraft definition before loading
@@ -58,19 +59,19 @@ class Controller:
         aircraft_name = os.path.splitext(os.path.basename(filename))[0]
         with self._console.redirect_stdout():
             self.fdm.load_model(aircraft_name, True)
+            self.property_history = PropertyHistory(self.get_property_list())
 
     def run_ic(self) -> bool:
         with self._console.redirect_stdout():
             ret = self.fdm.run_ic()
             self.dt = self.fdm.get_delta_t()
-            self.log_initial_values()
+            self.property_history.record()
             return ret
 
     def run(self) -> bool:
         with self._console.redirect_stdout():
             ret = self.fdm.run()
-            values = [prop.get_double_value() for prop in self.properties]
-            self.properties_values = np.vstack((self.properties_values, values))
+            self.property_history.record()
             return ret
 
     def get_root_dir(self) -> str:
@@ -148,7 +149,7 @@ class Controller:
     def get_property_root(self) -> Optional[FGPropertyNode]:
         return self.fdm.get_property_manager().get_node()
 
-    def get_property_list(self) -> List[jsbsim.FGPropertyNode]:
+    def get_property_list(self) -> List[FGPropertyNode]:
         pm = self.fdm.get_property_manager()
         names = [
             p.split(" ")[0]
@@ -160,27 +161,5 @@ class Controller:
     def get_property_value(self, property_name: str) -> float:
         return self.fdm[property_name]
 
-    def log_initial_values(self) -> None:
-        self.properties_values = np.array(
-            [[prop.get_double_value() for prop in self.properties]]
-        )
-
-    def log_properties(self, properties: List[jsbsim.FGPropertyNode]) -> None:
-        nrows = self.properties_values.shape[0]
-        new_prop_values = np.full((max(nrows, 1), 1), np.nan)
-
-        for prop in properties:
-            if prop not in self.properties:
-                self.properties.append(prop)
-                if nrows > 0:
-                    new_prop_values[-1] = prop.get_double_value()
-                    self.properties_values = np.hstack(
-                        (self.properties_values, new_prop_values)
-                    )
-
-        if nrows == 0:
-            self.log_initial_values()
-
     def get_property_log(self, node: FGPropertyNode) -> np.ndarray:
-        prop_id = self.properties.index(node)
-        return self.properties_values[:, prop_id]
+        return self.property_history.get_property_history(node)

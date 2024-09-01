@@ -18,7 +18,7 @@
 import math
 import tkinter as tk
 from tkinter import font, ttk
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib as mpl
 import numpy as np
@@ -37,11 +37,11 @@ from .controller import Controller
 
 class SelectedLine:
     def __init__(self, figure: Figure, **props):
-        self.ax_id: int | None = None
-        self.line_id: int | None = None
+        self.ax_id: Optional[int] = None
+        self.line_id: Optional[int] = None
         self.figure = figure
         self.pick_props = props
-        self.orig_props: dict[str, Any] = {}
+        self.orig_props: Dict[str, Any] = {}
 
     def select(self, ax_id: int, line_id: int) -> None:
         self.deselect()
@@ -92,10 +92,10 @@ class PlotsView(ttk.Frame):
         pixels = root.winfo_screenwidth()
         width = root.winfo_screenmmwidth()
         self.dpi = 25.4 * pixels / width
-        self.canvas: FigureCanvasTkAgg | None = None
-        self.plots: list[list[FGPropertyNode]] = []
+        self.canvas: Optional[FigureCanvasTkAgg] = None
+        self.plots: List[List[FGPropertyNode]] = []
         self.bbox = None
-        self.selected_line: SelectedLine | None = None
+        self.selected_line: Optional[SelectedLine] = None
 
     def on_leave_figure(self, event: LocationEvent):
         for ax in event.canvas.figure.axes:
@@ -230,7 +230,7 @@ class PlotsView(ttk.Frame):
     def add_properties(self, properties: List[FGPropertyNode]):
         # Check if the properties are dropped on a subplot
         canvas = self.canvas
-        target_ax_id: int | None = None
+        target_ax_id: Optional[int] = None
         if canvas:
             target_ax = get_axes_at_coordinates(canvas)
             if target_ax:
@@ -244,7 +244,6 @@ class PlotsView(ttk.Frame):
         else:
             self.plots[target_ax_id] += properties
 
-        self.controller.log_properties(properties)
         self.initialize_canvas()
 
     def initialize_canvas(self):

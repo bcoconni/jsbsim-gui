@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-from typing import List
+from typing import Dict, List
 
 import numpy as np
 from jsbsim import FGPropertyNode
@@ -26,6 +26,9 @@ class PropertyHistory:
 
     def __init__(self, properties: List[FGPropertyNode]):
         self.properties: List[FGPropertyNode] = properties
+        self.property_index: Dict[str, int] = {
+            prop.get_fully_qualified_name(): i for i, prop in enumerate(properties)
+        }
         self.history = [np.full((len(properties), self.CHUNK_SIZE), np.nan)]
         self.step = 0
 
@@ -42,7 +45,11 @@ class PropertyHistory:
             self.step = 0
 
     def get_property_history(self, prop: FGPropertyNode) -> np.ndarray:
-        index = self.properties.index(prop)
+        index = self.property_index.get(prop.get_fully_qualified_name())
+
+        if index is None:
+            raise ValueError("Unknown property")
+
         n_full_chunks = len(self.history) - 1
         size = n_full_chunks * self.CHUNK_SIZE + self.step
         property_history = np.empty(size)
