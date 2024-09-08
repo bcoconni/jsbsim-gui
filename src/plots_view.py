@@ -161,6 +161,9 @@ class PlotsView(ttk.Frame):
             if self.pan:
                 ax0 = axes[0]
                 data0 = ax0.lines[0].get_xdata()
+                if len(data0) < 2:
+                    return
+
                 tmin = data0[0]
                 tmax = data0[-1]
                 xmin, xmax = ax0.get_xbound()
