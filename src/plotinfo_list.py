@@ -59,7 +59,7 @@ class PlotInfoList:
             p.name = os.path.relpath(p.node.get_fully_qualified_name(), common_root)
 
             if platform.system() == "Windows":
-                p.name.replace("\\", "/")
+                p.name = p.name.replace("\\", "/")
 
     def add_properties(self, props: List[FGPropertyNode]) -> None:
         if not props:
