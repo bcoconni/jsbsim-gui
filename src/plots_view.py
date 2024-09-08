@@ -107,7 +107,8 @@ class PlotsView(ttk.Frame):
             for text in ax.texts:
                 text.set_visible(False)
 
-        self.reset_and_redraw()
+        self.on_draw(event)
+        event.canvas.blit(event.canvas.figure.bbox)
 
     def on_button_press(self, event: MouseEvent):
         if event.inaxes:
