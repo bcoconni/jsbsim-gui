@@ -188,7 +188,7 @@ class PropertyTree(ttk.Frame):
         self.initialize_values(properties)
 
         collapse_button = ttk.Button(
-            search_frame, text="Collapse", command=self.proptree.collapse
+            search_frame, text="Collapse", command=self.collapse
         )
         collapse_button.grid(column=2, row=0, padx=10)
 
@@ -207,6 +207,10 @@ class PropertyTree(ttk.Frame):
         if name.startswith(self.property_root):
             return name[len(self.property_root) + 1 :]
         return name
+
+    def collapse(self, parent_id: str = ""):
+        self.proptree.collapse(parent_id)
+        self.update_visible_properties(None)
 
     def initialize_values(self, properties: List[FGPropertyNode]) -> None:
         tree = self.proptree.tree
