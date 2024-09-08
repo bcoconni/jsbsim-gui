@@ -19,7 +19,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NS, VERTICAL
 from tkinter.messagebox import showerror
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from jsbsim import FGPropertyNode
 
@@ -62,7 +62,7 @@ class HierarchicalTree(ttk.Frame):
         self,
         sequence: Optional[str],
         func: Callable[[tk.Event], None],
-        add: Optional[str] = None,
+        add: Union[bool, Literal["", "+"], None] = None,
     ):
         self.yscrollbar.bind(sequence, func, add)
         self.tree.bind(sequence, func, add)
@@ -292,7 +292,7 @@ class PropertyTree(ttk.Frame):
 
         return selected_prop
 
-    def update_visible_properties(self, _) -> None:
+    def update_visible_properties(self, _: tk.Event) -> None:
         self.visible_items = []
         tree = self.proptree.tree
 
@@ -317,9 +317,11 @@ class FileTree(HierarchicalTree):
         self.tree.configure(show="tree", selectmode=BROWSE)
 
     def bind_selection(
-        self, func: Callable[[str], None], add: Optional[bool] = None
+        self,
+        func: Callable[[str], None],
+        add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
-        def bind_func(_):
+        def bind_func(_: tk.Event) -> None:
             selection = self.get_selected_elements()
             if selection:
                 func(selection[0])
