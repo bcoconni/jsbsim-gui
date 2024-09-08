@@ -54,9 +54,18 @@ class HierarchicalTree(ttk.Frame):
                     )
 
         # Vertical scrollbar
-        ys = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
-        ys.pack(side=tk.LEFT, fill=tk.Y)
-        self.tree["yscrollcommand"] = ys.set
+        self.yscrollbar = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
+        self.yscrollbar.pack(side=tk.LEFT, fill=tk.Y)
+        self.tree["yscrollcommand"] = self.yscrollbar.set
+
+    def bind(
+        self,
+        sequence: Optional[str],
+        func: Callable[[tk.Event], None],
+        add: Optional[str] = None,
+    ):
+        self.yscrollbar.bind(sequence, func, add)
+        self.tree.bind(sequence, func, add)
 
     def get_selected_elements(self) -> List[str]:
         selected_prop = []
@@ -159,6 +168,7 @@ class PropertyTree(ttk.Frame):
         super().__init__(master)
         self.properties: Dict[str, FGPropertyNode] = {}
         self.property_root: str = property_root
+        self.visible_items: List[str] = []
 
         search_frame = ttk.Frame(self, padding=(0, 2))
         search_frame.grid(column=0, row=0, sticky=EW)
@@ -189,7 +199,8 @@ class PropertyTree(ttk.Frame):
         self.grid_rowconfigure(1, weight=1)
 
         self.search_box.bind("<KeyRelease>", self.search)
-        self.proptree.tree.bind("<Double-1>", self.edit_property_value)
+        self.proptree.tree.bind("<Double-Button-1>", self.edit_property_value)
+        self.proptree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
 
     def get_relative_name(self, node: FGPropertyNode) -> str:
         name = node.get_fully_qualified_name()
@@ -254,15 +265,11 @@ class PropertyTree(ttk.Frame):
         self.properties[item_id].set_double_value(v)
         self.update_values()
 
-    def update_values(self, parent_id: str = "") -> None:
+    def update_values(self) -> None:
         tree = self.proptree.tree
-        children = tree.get_children(parent_id)
-        if children:
-            for child_id in children:
-                self.update_values(child_id)
-        else:
-            node = self.properties[parent_id]
-            tree.set(parent_id, "value", node.get_double_value())
+        for item_id in self.visible_items:
+            node = self.properties[item_id]
+            tree.set(item_id, "value", node.get_double_value())
 
     def get_selected_elements(self) -> List[FGPropertyNode]:
         selected_prop = []
@@ -280,6 +287,24 @@ class PropertyTree(ttk.Frame):
             enumerate_children(selected_item)
 
         return selected_prop
+
+    def update_visible_properties(self, _) -> None:
+        self.visible_items = []
+        tree = self.proptree.tree
+
+        def enumerate_children(parent_id: str) -> None:
+            children = tree.get_children(parent_id)
+            if children:
+                if tree.item(parent_id, "open"):
+                    for item in children:
+                        enumerate_children(item)
+            elif tree.bbox(parent_id):
+                self.visible_items.append(parent_id)
+
+        for item in tree.get_children():
+            enumerate_children(item)
+
+        self.update_values()
 
 
 class FileTree(HierarchicalTree):
