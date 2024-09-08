@@ -358,20 +358,21 @@ class PlotsView(ttk.Frame):
         self.canvas.draw_idle()
 
     def update_plots(self):
-        pinfo0 = self.plots[0][0]
-        values = self.controller.get_property_log(pinfo0.node)
-        ncol = len(values)
-        axes = self.canvas.figure.axes
+        if self.plots:
+            pinfo0 = self.plots[0][0]
+            values = self.controller.get_property_log(pinfo0.node)
+            ncol = len(values)
+            axes = self.canvas.figure.axes
 
-        if ncol > len(axes[0].lines[0].get_xdata()):
-            t = np.arange(0, ncol) * self.controller.dt
+            if ncol > len(axes[0].lines[0].get_xdata()):
+                t = np.arange(0, ncol) * self.controller.dt
 
-            # Iterate over the plots and update the data
-            for axe, plots in zip(axes, self.plots):
-                for line, pinfo in zip(axe.lines[:-1], plots):
-                    line.set_xdata(t)
-                    line.set_ydata(self.controller.get_property_log(pinfo.node))
-                axe.set_xlim(t[0], t[-1])
-                axe.relim(True)
-                axe.autoscale_view(scalex=False, scaley=True)
-            self.reset_and_redraw()
+                # Iterate over the plots and update the data
+                for axe, plots in zip(axes, self.plots):
+                    for line, pinfo in zip(axe.lines[:-1], plots):
+                        line.set_xdata(t)
+                        line.set_ydata(self.controller.get_property_log(pinfo.node))
+                    axe.set_xlim(t[0], t[-1])
+                    axe.relim(True)
+                    axe.autoscale_view(scalex=False, scaley=True)
+                self.reset_and_redraw()
