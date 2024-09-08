@@ -82,10 +82,12 @@ class App(tk.Tk):
         self.resizable(False, False)
 
         with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
-            logo_image = ImageTk.PhotoImage(image)
+            resized_image = Image.new("RGB", size=(600, image.height), color="white")
+            resized_image.paste(image, ((600 - image.width) // 2, 0))
+            logo_image = ImageTk.PhotoImage(resized_image)
             self.main = ttk.Label(self, image=logo_image)
             self.main.image = logo_image
-            self.main.grid(padx=(600 - image.width) // 2)
+            self.main.grid()
 
         if root_dir:
             self.root_dir = root_dir
