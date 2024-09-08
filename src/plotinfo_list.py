@@ -17,56 +17,63 @@
 
 import os
 import platform
-from typing import List, Iterable, Optional, Tuple
+from dataclasses import dataclass
+from typing import List, Iterable, Optional
 
 from jsbsim import FGPropertyNode
 
 
-class PropertyList:
+@dataclass
+class PlotInfo:
+    node: FGPropertyNode
+    name: str
+
+
+class PlotInfoList:
     def __init__(self, properties: Optional[List[FGPropertyNode]] = None):
         if properties:
-            self.properties: List[FGPropertyNode] = properties.copy()
+            self.plotinfos: List[PlotInfo] = [
+                PlotInfo(p, p.get_name()) for p in properties
+            ]
             if len(properties) > 1:
                 self._update_unique_names()
-            else:
-                self.unique_names = [properties[0].get_name()]
         else:
-            self.properties = []
-            self.unique_names: List[str] = []
+            self.plotinfos = []
 
-    def __iter__(self) -> Iterable[Tuple[str, FGPropertyNode]]:
-        return zip(self.unique_names, self.properties)
+    def __iter__(self) -> Iterable[PlotInfo]:
+        return iter(self.plotinfos)
 
     def __len__(self) -> int:
-        return len(self.properties)
+        return len(self.plotinfos)
 
-    def __getitem__(self, index: int) -> Tuple[str, FGPropertyNode]:
-        return self.unique_names[index], self.properties[index]
+    def __getitem__(self, index: int) -> PlotInfo:
+        return self.plotinfos[index]
 
     def _update_unique_names(self) -> None:
-        fully_qualified_names = [p.get_fully_qualified_name() for p in self.properties]
-        common_root = os.path.commonpath(fully_qualified_names)
-        self.unique_names = [
-            os.path.relpath(name, common_root) for name in fully_qualified_names
+        fully_qualified_names = [
+            p.node.get_fully_qualified_name() for p in self.plotinfos
         ]
+        common_root = os.path.commonpath(fully_qualified_names)
 
-        if platform.system() == "Windows":
-            self.unique_names = [name.replace("\\", "/") for name in self.unique_names]
+        for p in self.plotinfos:
+            p.name = os.path.relpath(p.node.get_fully_qualified_name(), common_root)
+
+            if platform.system() == "Windows":
+                p.name.replace("\\", "/")
 
     def add_properties(self, props: List[FGPropertyNode]) -> None:
         if not props:
             return
 
-        self.properties.extend(props)
-        if len(self.properties) > 1:
+        self.plotinfos.extend([PlotInfo(p, p.get_name()) for p in props])
+        if len(self.plotinfos) > 1:
             self._update_unique_names()
-        else:
-            self.unique_names.append(props[0].get_name())
 
     def pop(self, index: int) -> FGPropertyNode:
-        prop = self.properties.pop(index)
-        if len(self.properties) > 1:
+        prop = self.plotinfos.pop(index)
+        if len(self.plotinfos) > 1:
             self._update_unique_names()
         else:
-            self.unique_names = [p.get_name() for p in self.properties]
-        return prop
+            for p in self.plotinfos:
+                p.name = p.node.get_name()
+        return prop.node

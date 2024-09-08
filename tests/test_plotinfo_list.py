@@ -19,191 +19,203 @@ import unittest
 
 from jsbsim import FGPropertyManager
 
-from src.property_list import PropertyList
+from src.plotinfo_list import PlotInfoList, PlotInfo
 
 
-class TestPropertyList(unittest.TestCase):
+class TestPlotInfoList(unittest.TestCase):
     def test_init_default(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
 
-        for _, _ in prop_list:
+        for _, _ in plot_info:
             self.fail("PropertyList should be empty")
 
     def test_init_empty_list(self):
-        prop_list = PropertyList([])
+        plot_info = PlotInfoList([])
 
-        for _, _ in prop_list:
+        for _, _ in plot_info:
             self.fail("PropertyList should be empty")
 
     def test_init_one_property(self):
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
-        prop_list = PropertyList([prop1])
-        self.assertEqual(list(prop_list)[0], ("c", prop1))
+        plot_info = PlotInfoList([prop1])
+        self.assertEqual(list(plot_info)[0], PlotInfo(prop1, "c"))
 
     def test_init_two_properties(self):
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
-        prop_list = PropertyList([prop1, prop2])
-        self.assertEqual(list(prop_list), [("c", prop1), ("d", prop2)])
+        plot_info = PlotInfoList([prop1, prop2])
+        self.assertEqual(list(plot_info), [PlotInfo(prop1, "c"), PlotInfo(prop2, "d")])
 
     def test_init_two_properties_with_same_name(self):
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/d/c", True)
-        prop_list = PropertyList([prop1, prop2])
-        self.assertEqual(list(prop_list), [("b/c", prop1), ("d/c", prop2)])
+        plot_info = PlotInfoList([prop1, prop2])
+        self.assertEqual(
+            list(plot_info), [PlotInfo(prop1, "b/c"), PlotInfo(prop2, "d/c")]
+        )
 
     def test_init_one_add_one_property(self):
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/d/c", True)
         l = [prop1]
-        prop_list = PropertyList(l)
-        prop_list.add_properties([prop2])
-        self.assertEqual(list(prop_list), [("b/c", prop1), ("d/c", prop2)])
+        plot_info = PlotInfoList(l)
+        plot_info.add_properties([prop2])
+        self.assertEqual(
+            list(plot_info), [PlotInfo(prop1, "b/c"), PlotInfo(prop2, "d/c")]
+        )
         # Check that the original list is not modified
         self.assertEqual(l, [prop1])
 
     def test_add_no_property(self):
-        prop_list = PropertyList()
-        prop_list.add_properties([])
-        self.assertEqual(list(prop_list), [])
+        plot_info = PlotInfoList()
+        plot_info.add_properties([])
+        self.assertEqual(list(plot_info), [])
 
     def test_add_one_property_list(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
 
-        prop_list.add_properties([prop1])
-        self.assertEqual(list(prop_list)[0], ("c", prop1))
+        plot_info.add_properties([prop1])
+        self.assertEqual(list(plot_info)[0], PlotInfo(prop1, "c"))
 
     def test_add_two_properties_list(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
 
-        prop_list.add_properties([prop1, prop2])
-        self.assertEqual(list(prop_list), [("c", prop1), ("d", prop2)])
+        plot_info.add_properties([prop1, prop2])
+        self.assertEqual(list(plot_info), [PlotInfo(prop1, "c"), PlotInfo(prop2, "d")])
 
     def test_add_two_properties_list_with_same_name(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/d/c", True)
 
-        prop_list.add_properties([prop1, prop2])
-        self.assertEqual(list(prop_list), [("b/c", prop1), ("d/c", prop2)])
+        plot_info.add_properties([prop1, prop2])
+        self.assertEqual(
+            list(plot_info), [PlotInfo(prop1, "b/c"), PlotInfo(prop2, "d/c")]
+        )
 
     def test_add_two_properties_list_and_one_property_with_common_path(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
         prop3 = pm.get_node("a/e/c", True)
 
-        prop_list.add_properties([prop1, prop2])
-        self.assertEqual(list(prop_list), [("c", prop1), ("d", prop2)])
+        plot_info.add_properties([prop1, prop2])
+        self.assertEqual(list(plot_info), [PlotInfo(prop1, "c"), PlotInfo(prop2, "d")])
 
-        prop_list.add_properties([prop3])
+        plot_info.add_properties([prop3])
         self.assertEqual(
-            list(prop_list), [("b/c", prop1), ("b/d", prop2), ("e/c", prop3)]
+            list(plot_info),
+            [PlotInfo(prop1, "b/c"), PlotInfo(prop2, "b/d"), PlotInfo(prop3, "e/c")],
         )
 
     def test_add_two_properties_list_and_one_property_list_with_common_path(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
         prop3 = pm.get_node("a/e/c", True)
 
-        prop_list.add_properties([prop1, prop2])
-        self.assertEqual(list(prop_list), [("c", prop1), ("d", prop2)])
+        plot_info.add_properties([prop1, prop2])
+        self.assertEqual(list(plot_info), [PlotInfo(prop1, "c"), PlotInfo(prop2, "d")])
 
-        prop_list.add_properties([prop3])
+        plot_info.add_properties([prop3])
         self.assertEqual(
-            list(prop_list), [("b/c", prop1), ("b/d", prop2), ("e/c", prop3)]
+            list(plot_info),
+            [PlotInfo(prop1, "b/c"), PlotInfo(prop2, "b/d"), PlotInfo(prop3, "e/c")],
         )
 
     def test_pop_one_property(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
 
-        prop_list.add_properties([prop1])
-        prop_list.pop(0)
-        self.assertEqual(list(prop_list), [])
+        plot_info.add_properties([prop1])
+        plot_info.pop(0)
+        self.assertEqual(list(plot_info), [])
 
     def test_pop_first_of_two_properties_list_with_same_name(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/d/c", True)
 
-        prop_list.add_properties([prop1, prop2])
-        prop_list.pop(0)
-        self.assertEqual(list(prop_list)[0], ("c", prop2))
+        plot_info.add_properties([prop1, prop2])
+        plot_info.pop(0)
+        self.assertEqual(list(plot_info)[0], PlotInfo(prop2, "c"))
 
     def test_pop_last_of_two_properties_list_with_same_name(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/d/c", True)
 
-        prop_list.add_properties([prop1, prop2])
-        prop_list.pop(1)
-        self.assertEqual(list(prop_list)[0], ("c", prop1))
+        plot_info.add_properties([prop1, prop2])
+        plot_info.pop(1)
+        self.assertEqual(list(plot_info)[0], PlotInfo(prop1, "c"))
 
     def test_pop_first_of_three_properties_list_with_common_path(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
         prop3 = pm.get_node("a/e/c", True)
 
-        prop_list.add_properties([prop1, prop2, prop3])
-        prop_list.pop(0)
-        self.assertEqual(list(prop_list), [("b/d", prop2), ("e/c", prop3)])
+        plot_info.add_properties([prop1, prop2, prop3])
+        plot_info.pop(0)
+        self.assertEqual(
+            list(plot_info), [PlotInfo(prop2, "b/d"), PlotInfo(prop3, "e/c")]
+        )
 
     def test_pop_second_of_three_properties_list_with_common_path(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
         prop3 = pm.get_node("a/e/c", True)
 
-        prop_list.add_properties([prop1, prop2, prop3])
-        prop_list.pop(1)
-        self.assertEqual(list(prop_list), [("b/c", prop1), ("e/c", prop3)])
+        plot_info.add_properties([prop1, prop2, prop3])
+        plot_info.pop(1)
+        self.assertEqual(
+            list(plot_info), [PlotInfo(prop1, "b/c"), PlotInfo(prop3, "e/c")]
+        )
 
     def test_pop_last_of_three_properties_list_with_common_path(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
         prop3 = pm.get_node("a/e/c", True)
 
-        prop_list.add_properties([prop1, prop2, prop3])
-        prop_list.pop(2)
-        self.assertEqual(list(prop_list), [("c", prop1), ("d", prop2)])
+        plot_info.add_properties([prop1, prop2, prop3])
+        plot_info.pop(2)
+        self.assertEqual(list(plot_info), [PlotInfo(prop1, "c"), PlotInfo(prop2, "d")])
 
     def test_getitem_one_item(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
 
-        prop_list.add_properties([prop1])
-        self.assertEqual(prop_list[0], ("c", prop1))
+        plot_info.add_properties([prop1])
+        self.assertEqual(plot_info[0], PlotInfo(prop1, "c"))
 
     def test_getitem_two_items(self):
-        prop_list = PropertyList()
+        plot_info = PlotInfoList()
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
 
-        prop_list.add_properties([prop1, prop2])
-        self.assertEqual(prop_list[0], ("c", prop1))
-        self.assertEqual(prop_list[1], ("d", prop2))
-        self.assertEqual(prop_list[-1], ("d", prop2))
+        plot_info.add_properties([prop1, prop2])
+        self.assertEqual(plot_info[0], PlotInfo(prop1, "c"))
+        self.assertEqual(plot_info[1], PlotInfo(prop2, "d"))
+        self.assertEqual(plot_info[-1], PlotInfo(prop2, "d"))
