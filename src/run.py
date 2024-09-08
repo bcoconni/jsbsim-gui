@@ -33,9 +33,9 @@ from .source_editor import LabeledWidget
 class DragNDropManager(ABC):
     def __init__(self, source: tk.Widget, target: tk.Widget):
         self.source = source
-        source.bind("<ButtonPress-1>", self.select)
-        source.bind("<B1-Motion>", self.drag)
-        source.bind("<ButtonRelease-1>", self.drop)
+        source.bind("<ButtonPress-1>", self.select, add=True)
+        source.bind("<B1-Motion>", self.drag, add=True)
+        source.bind("<ButtonRelease-1>", self.drop, add=True)
         self.offset_x = 0
         self.offset_y = 0
         self.dragged_widget_preview: Optional[tk.Widget] = None
