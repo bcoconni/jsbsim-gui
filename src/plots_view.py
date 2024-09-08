@@ -27,6 +27,7 @@ from matplotlib.backend_bases import (
     KeyEvent,
     LocationEvent,
     MouseEvent,
+    MouseButton,
     FigureCanvasBase,
 )
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -97,6 +98,8 @@ class PlotsView(ttk.Frame):
         self.plots: List[PlotInfoList] = []
         self.bbox = None
         self.selected_line: Optional[SelectedLine] = None
+        self.pan: bool = False
+        self.pan_xref: float = 0.0
 
     def on_leave_figure(self, event: LocationEvent):
         for ax in event.canvas.figure.axes:
@@ -106,18 +109,26 @@ class PlotsView(ttk.Frame):
 
         self.reset_and_redraw()
 
-    def on_click(self, event: MouseEvent):
+    def on_button_press(self, event: MouseEvent):
         if event.inaxes:
-            for ax_id, ax in enumerate(self.canvas.figure.axes):
-                if ax == event.inaxes:
-                    for line_id, line in enumerate(ax.lines[:-1]):
-                        if line.contains(event)[0]:
-                            self.selected_line.select(ax_id, line_id)
-                            self.reset_and_redraw()
-                            return
+            if event.button == MouseButton.LEFT:
+                for ax_id, ax in enumerate(self.canvas.figure.axes):
+                    if ax == event.inaxes:
+                        for line_id, line in enumerate(ax.lines[:-1]):
+                            if line.contains(event)[0]:
+                                self.selected_line.select(ax_id, line_id)
+                                self.reset_and_redraw()
+                                return
+            elif event.button == MouseButton.RIGHT:
+                self.pan = True
+                self.pan_xref = event.xdata
 
         self.selected_line.deselect()
         self.reset_and_redraw()
+
+    def on_button_release(self, event: MouseEvent):
+        if event.button == MouseButton.RIGHT:
+            self.pan = False
 
     def on_key_press(self, event: KeyEvent):
         if event.key == "delete":
@@ -144,6 +155,36 @@ class PlotsView(ttk.Frame):
             return pos1 - pos0
 
         if event.inaxes:
+            if self.pan:
+                ax0 = axes[0]
+                data0 = ax0.lines[0].get_xdata()
+                tmin = data0[0]
+                tmax = data0[-1]
+                xmin, xmax = ax0.get_xbound()
+                width = xmax - xmin
+                dx = event.xdata - self.pan_xref
+                xmin -= dx
+                xmax -= dx
+                pan_offset = 0.0
+                if xmin < tmin:
+                    pan_offset = tmin - xmin
+                    xmin = tmin
+                    xmax = xmin + width
+                if xmax > tmax:
+                    pan_offset = tmax - xmax
+                    xmax = tmax
+                    xmin = xmax - width
+
+                for ax in axes:
+                    ax.set_xlim(xmin, xmax)
+                    ax.lines[-1].set_visible(False)
+                    for text in ax.texts:
+                        text.set_visible(False)
+
+                self.pan_xref += pan_offset
+                self.reset_and_redraw()
+                return
+
             dt = self.controller.dt
             step_id = int(event.xdata / dt)
             x0 = step_id * dt
@@ -219,8 +260,10 @@ class PlotsView(ttk.Frame):
             dxl = event.xdata - xmin
             dxr = xmax - event.xdata
             factor = math.pow(1.5, -event.step)
-            tmax = ax0.lines[0].get_xdata()[-1]
-            xl = max(event.xdata - dxl * factor, 0.0)
+            data0 = ax0.lines[0].get_xdata()
+            tmin = data0[0]
+            tmax = data0[-1]
+            xl = max(event.xdata - dxl * factor, tmin)
             xr = min(event.xdata + dxr * factor, tmax)
 
             for ax in event.canvas.figure.axes:
@@ -260,7 +303,8 @@ class PlotsView(ttk.Frame):
             self.canvas.mpl_connect("draw_event", self.on_draw)
             self.canvas.mpl_connect("figure_leave_event", self.on_leave_figure)
             self.canvas.mpl_connect("motion_notify_event", self.on_move)
-            self.canvas.mpl_connect("button_press_event", self.on_click)
+            self.canvas.mpl_connect("button_press_event", self.on_button_press)
+            self.canvas.mpl_connect("button_release_event", self.on_button_release)
             self.canvas.mpl_connect("key_press_event", self.on_key_press)
             self.canvas.mpl_connect("scroll_event", self.on_scroll)
             self.selected_line = SelectedLine(
