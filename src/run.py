@@ -33,18 +33,13 @@ from .source_editor import LabeledWidget
 class DragNDropManager(ABC):
     def __init__(self, source: tk.Widget, target: tk.Widget):
         self.source = source
-        self.bound_events = []
-        self.bound_events.append(source.bind("<ButtonPress-1>", self.select))
-        self.bound_events.append(source.bind("<B1-Motion>", self.drag))
-        self.bound_events.append(source.bind("<ButtonRelease-1>", self.drop))
+        source.bind("<ButtonPress-1>", self.select)
+        source.bind("<B1-Motion>", self.drag)
+        source.bind("<ButtonRelease-1>", self.drop)
         self.offset_x = 0
         self.offset_y = 0
         self.dragged_widget_preview: Optional[tk.Widget] = None
         self.target = target
-
-    def __del__(self):
-        for event in self.bound_events:
-            self.source.unbind(event)
 
     def select(self, event: tk.Event):
         root = event.widget.winfo_toplevel()
