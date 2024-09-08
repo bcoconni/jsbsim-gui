@@ -66,3 +66,22 @@ class PropertyHistory:
         )
 
         return property_history
+
+    def get_time_snapshot(
+        self, step: int, properties: List[FGPropertyNode]
+    ) -> np.ndarray:
+        n_full_chunks = len(self.history) - 1
+        size = n_full_chunks * self.CHUNK_SIZE + self.step
+        if step >= size:
+            raise ValueError("Invalid step")
+
+        chunk_id = step // self.CHUNK_SIZE
+        chunk_step = step - chunk_id * self.CHUNK_SIZE
+        chunk = self.history[chunk_id]
+        snapshot = np.empty(len(properties))
+
+        for idx, prop in enumerate(properties):
+            index = self.property_index.get(prop.get_fully_qualified_name())
+            snapshot[idx] = chunk[index, chunk_step]
+
+        return snapshot
