@@ -123,6 +123,7 @@ class PlotsView(ttk.Frame):
             elif event.button == MouseButton.RIGHT:
                 self.pan = True
                 self.pan_xref = event.xdata
+                self.config(cursor="sb_h_double_arrow")
 
         self.selected_line.deselect()
         self.reset_and_redraw()
@@ -130,6 +131,7 @@ class PlotsView(ttk.Frame):
     def on_button_release(self, event: MouseEvent):
         if event.button == MouseButton.RIGHT:
             self.pan = False
+            self.config(cursor="")
 
     def on_key_press(self, event: KeyEvent):
         if event.key == "delete":
