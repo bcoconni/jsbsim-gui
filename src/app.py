@@ -78,6 +78,7 @@ class App(tk.Tk):
         super().__init__()
         self._console: Optional[ConsoleStdoutRedirect] = None
         self._controller: Optional[Controller] = None
+        self._statusbar: Optional[ttk.Label] = None
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
 
@@ -112,7 +113,7 @@ class App(tk.Tk):
         w = self.main.winfo_width()
         h = self.main.winfo_height()
         self.main.destroy()
-        self.main = Run(self, self._controller, width=w, height=h)
+        self.main = Run(self, self._controller, self._statusbar, width=w, height=h)
         self.main.grid_propagate(0)
 
         # Window layout
@@ -144,6 +145,10 @@ class App(tk.Tk):
         if not self._console:
             self._console = ConsoleStdoutRedirect(self, height=10)
             self._console.grid(column=0, row=1, sticky=EW)
+
+        if not self._statusbar:
+            self._statusbar = ttk.Label(self, text="Ready", relief=tk.RAISED)
+            self._statusbar.grid(column=0, row=2, sticky=EW)
 
         self._controller = Controller(self.root_dir, self._console)
         load_file(self._controller, filename)

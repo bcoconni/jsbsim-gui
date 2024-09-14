@@ -105,7 +105,9 @@ class DnDProperties(DragNDropManager):
 
 
 class Run(ttk.Frame):
-    def __init__(self, master: tk.Widget, controller: Controller, **kw):
+    def __init__(
+        self, master: tk.Widget, controller: Controller, status_bar: ttk.Label, **kw
+    ):
         super().__init__(master, **kw)
         self.property_view = LabeledWidget(self, "Property Explorer")
         self.property_view.set_widget(
@@ -118,6 +120,7 @@ class Run(ttk.Frame):
         self.property_view.widget.grid(sticky=NS)
         self.property_view.grid(column=0, row=0, sticky=NS)
         self.controller = controller
+        self._status_bar = status_bar
         self.update_id = None
         self.initial_seconds = 0.0
         self.script_end_reached = False
@@ -170,7 +173,8 @@ class Run(ttk.Frame):
 
     def update_plots(self) -> None:
         actual_elapsed_time = time.time() - self.initial_seconds
-        sim_lag_time = actual_elapsed_time - self.controller.fdm.get_sim_time()
+        sim_time = self.controller.fdm.get_sim_time()
+        sim_lag_time = actual_elapsed_time - sim_time
 
         for _ in range(int(sim_lag_time / self.controller.dt)):
             if not self.controller.run() and not self.script_end_reached:
@@ -182,6 +186,7 @@ class Run(ttk.Frame):
 
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
+        self._status_bar.config(text=f"Simulated time: {sim_time:.3f}s")
 
     def pause(self) -> None:
         self.after_cancel(self.update_id)
@@ -196,10 +201,13 @@ class Run(ttk.Frame):
         self.run_pause_button.config(command=self.pause, text="Pause")
 
     def update_properties(self, _) -> None:
-        t = self.plots_view.t_hover
-        if t:
+        sim_time = self.plots_view.t_hover
+        if sim_time:
             props = self.property_view.widget.get_visible_properties()
-            values = self.controller.get_time_snapshot(t, props)
+            values = self.controller.get_time_snapshot(sim_time, props)
             self.property_view.widget.update_values(values)
         else:
             self.property_view.widget.update_values()
+            sim_time = self.controller.fdm.get_sim_time()
+
+        self._status_bar.config(text=f"Simulated time: {sim_time:.3f}s")
