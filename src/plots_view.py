@@ -157,7 +157,11 @@ class PlotsView(ttk.Frame):
         def text_bbox_size(
             text: mpl.text.Text, axe: mpl.axes.Axes
         ) -> Tuple[float, float]:
-            bbox = text.get_window_extent()
+            patch = text.get_bbox_patch()
+            if patch:
+                bbox = patch.get_bbox()
+            else:
+                bbox = text.get_window_extent()
             m = axe.transData.inverted()
             pos0 = m.transform((bbox.x0, bbox.y0))
             pos1 = m.transform((bbox.x1, bbox.y1))
@@ -212,13 +216,10 @@ class PlotsView(ttk.Frame):
             w = text_bbox_size(text0, ax0)[0]
             ymin, ymax = ax0.get_ybound()
             text0.set_position((x0 - w / 2, ymax + 0.05 * (ymax - ymin)))
-            offset = np.array([1, 1])
 
             for ax in axes:
                 vline = ax.lines[-1]
                 vline.set_visible(True)
-                xmax = ax.get_xbound()[1]
-                ymax = ax.get_ybound()[1]
                 vline.set_xdata([event.xdata, event.xdata])
 
                 for line_id, line in enumerate(ax.lines[:-1]):
@@ -231,19 +232,18 @@ class PlotsView(ttk.Frame):
                             continue
                         text.set_text(f"{y0:.5f}")
                         text.set_visible(True)
-                        w, h = tuple(text_bbox_size(text, ax))
-                        pos0 = ax.transData.transform((x0, y0))
-                        pos1 = ax.transData.transform((x0 + w, y0 + h))
-                        m = ax.transData.inverted()
-                        pos0 = m.transform(pos0 - offset)
-                        pos1 = m.transform(pos1 - offset)
-                        x0, y0 = tuple(pos0)
-                        w, h = tuple(pos1 - pos0)
-                        if pos1[0] > xmax:
-                            x0 -= w
-                        if pos1[1] > ymax:
-                            y0 -= h
-                        text.set_position((x0, y0))
+                        patch = text.get_bbox_patch()
+                        text_width = patch.get_width()
+                        text_height = patch.get_height()
+                        v = patch.get_verts()
+                        box_width = v[1, 0] - v[0, 0]
+                        box_height = v[2, 1] - v[1, 1]
+                        padx = 0.5 * (box_width - text_width)
+                        pady = 0.5 * (box_height - text_height)
+                        pos_data = text.get_transform().transform((x0, y0))
+                        pos_text = pos_data + [2.0 * padx, 2.5 * pady]
+                        m = text.get_transform().inverted()
+                        text.set_position(tuple(m.transform(pos_text)))
         else:
             self.t_hover = None
             for ax in axes:
@@ -351,7 +351,17 @@ class PlotsView(ttk.Frame):
                     label=pinfo.name,
                     color=color,
                 )
-                ax.text(0.0, 0.0, "0.0", color=color, visible=False, animated=True)
+                value_text = ax.text(
+                    0.0,
+                    0.0,
+                    "0.0",
+                    color=color,
+                    backgroundcolor="white",
+                    visible=False,
+                    animated=True,
+                )
+                patch_text = value_text.get_bbox_patch()
+                patch_text.set(edgecolor=color)
             # Cross hair
             ax.axvline(color="0.0", linewidth=0.5, visible=False, animated=True)
             # Figure decorations
