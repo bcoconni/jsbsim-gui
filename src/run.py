@@ -147,6 +147,7 @@ class Run(ttk.Frame):
 
         self.plots_view = PlotsView(self, controller)
         self.plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
+        self.plots_view.bind_motion_handler(self.update_properties)
 
         self.dnd_properties = DnDProperties(self.property_view.widget, self.plots_view)
 
@@ -167,7 +168,7 @@ class Run(ttk.Frame):
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
 
-    def update(self) -> None:
+    def update_plots(self) -> None:
         actual_elapsed_time = time.time() - self.initial_seconds
         sim_lag_time = actual_elapsed_time - self.controller.fdm.get_sim_time()
 
@@ -177,7 +178,7 @@ class Run(ttk.Frame):
                 self.script_end_reached = True
                 break
         else:
-            self.update_id = self.after(200, self.update)
+            self.update_id = self.after(200, self.update_plots)
 
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
@@ -189,7 +190,16 @@ class Run(ttk.Frame):
         self.run_pause_button.config(command=self.run, text="Run")
 
     def run(self) -> None:
-        self.update_id = self.after(200, self.update)
+        self.update_id = self.after(200, self.update_plots)
         self.initial_seconds = time.time() - self.controller.fdm.get_sim_time()
         self.step_button.config(state=tk.DISABLED)
         self.run_pause_button.config(command=self.pause, text="Pause")
+
+    def update_properties(self, _) -> None:
+        t = self.plots_view.t_hover
+        if t:
+            props = self.property_view.widget.get_visible_properties()
+            values = self.controller.get_time_snapshot(t, props)
+            self.property_view.widget.update_values(values)
+        else:
+            self.property_view.widget.update_values()

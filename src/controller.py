@@ -163,3 +163,12 @@ class Controller:
 
     def get_property_log(self, node: FGPropertyNode) -> np.ndarray:
         return self.property_history.get_property_history(node)
+
+    def get_time_snapshot(
+        self, time: float, properties: List[FGPropertyNode]
+    ) -> np.ndarray:
+        step = int(time / self.dt)
+        try:
+            return self.property_history.get_time_snapshot(step, properties)
+        except ValueError:
+            return [prop.get_double_value() for prop in properties]

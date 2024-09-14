@@ -18,17 +18,17 @@
 import math
 import tkinter as tk
 from tkinter import font, ttk
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import matplotlib as mpl
 import numpy as np
 from jsbsim import FGPropertyNode
 from matplotlib.backend_bases import (
+    FigureCanvasBase,
     KeyEvent,
     LocationEvent,
-    MouseEvent,
     MouseButton,
-    FigureCanvasBase,
+    MouseEvent,
 )
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
@@ -100,6 +100,11 @@ class PlotsView(ttk.Frame):
         self.selected_line: Optional[SelectedLine] = None
         self.pan: bool = False
         self.pan_xref: float = 0.0
+        self.t_hover: Optional[float] = None
+        self.motion_handlers: List[Callable[[tk.Event], None]] = []
+
+    def bind_motion_handler(self, handler: Callable[[tk.Event], None]) -> None:
+        self.motion_handlers.append(handler)
 
     def on_leave_figure(self, event: LocationEvent):
         for ax in event.canvas.figure.axes:
@@ -107,6 +112,7 @@ class PlotsView(ttk.Frame):
             for text in ax.texts:
                 text.set_visible(False)
 
+        self.t_hover = None
         self.on_draw(event)
         event.canvas.blit(event.canvas.figure.bbox)
 
@@ -158,6 +164,14 @@ class PlotsView(ttk.Frame):
             return pos1 - pos0
 
         if event.inaxes:
+            dt = self.controller.dt
+            step_id = int(event.xdata / dt)
+            x0 = step_id * dt
+            if event.xdata - x0 > dt / 2:
+                step_id += 1
+                x0 += dt
+            self.t_hover = x0
+
             if self.pan:
                 ax0 = axes[0]
                 data0 = ax0.lines[0].get_xdata()
@@ -191,12 +205,6 @@ class PlotsView(ttk.Frame):
                 self.reset_and_redraw()
                 return
 
-            dt = self.controller.dt
-            step_id = int(event.xdata / dt)
-            x0 = step_id * dt
-            if event.xdata - x0 > dt / 2:
-                step_id += 1
-                x0 += dt
             ax0 = axes[0]
             text0 = ax0.texts[-1]
             text0.set_text(f"t={x0:.3f}s")
@@ -237,10 +245,14 @@ class PlotsView(ttk.Frame):
                             y0 -= h
                         text.set_position((x0, y0))
         else:
+            self.t_hover = None
             for ax in axes:
                 ax.lines[-1].set_visible(False)
                 for text in ax.texts:
                     text.set_visible(False)
+
+        for handler in self.motion_handlers:
+            handler(event)
 
         self.on_draw(event)
         canvas.blit(canvas.figure.bbox)

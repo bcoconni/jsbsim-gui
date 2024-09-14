@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023 Bertrand Coconnier
+# Copyright (c) 2023-2024 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -269,11 +269,15 @@ class PropertyTree(ttk.Frame):
         self.properties[item_id].set_double_value(v)
         self.update_values()
 
-    def update_values(self) -> None:
+    def update_values(self, values: Optional[List[float]] = None) -> None:
         tree = self.proptree.tree
-        for item_id in self.visible_items:
-            node = self.properties[item_id]
-            tree.set(item_id, "value", node.get_double_value())
+        if values is None:
+            for item_id in self.visible_items:
+                node = self.properties[item_id]
+                tree.set(item_id, "value", node.get_double_value())
+        else:
+            for item_id, value in zip(self.visible_items, values):
+                tree.set(item_id, "value", value)
 
     def get_selected_elements(self) -> List[FGPropertyNode]:
         selected_prop = []
@@ -309,6 +313,9 @@ class PropertyTree(ttk.Frame):
             enumerate_children(item)
 
         self.update_values()
+
+    def get_visible_properties(self) -> List[FGPropertyNode]:
+        return [self.properties[item_id] for item_id in self.visible_items]
 
 
 class FileTree(HierarchicalTree):
