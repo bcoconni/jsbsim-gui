@@ -228,12 +228,12 @@ class PropertyTree(ttk.Frame):
             self.properties[parent_id] = node
 
     def search(self, _) -> None:
-        if self.proptree.unfilter():
-            self.update_values()
-
+        self.proptree.unfilter()
         pattern = self.search_box.get()
         if pattern:
             self.proptree.filter(pattern)
+
+        self.update_visible_properties(None)
 
     def edit_property_value(self, event: tk.Event) -> None:
         tree = self.proptree.tree
