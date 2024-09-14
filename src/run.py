@@ -107,7 +107,7 @@ class DnDProperties(DragNDropManager):
 class Run(ttk.Frame):
     def __init__(self, master: tk.Widget, controller: Controller, **kw):
         super().__init__(master, **kw)
-        self.property_view = LabeledWidget(self, "Property List")
+        self.property_view = LabeledWidget(self, "Property Explorer")
         self.property_view.set_widget(
             PropertyTree(
                 self.property_view,

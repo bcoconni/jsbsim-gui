@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023 Bertrand Coconnier
+# Copyright (c) 2023-2024 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -66,7 +66,7 @@ class SourceEditor(ttk.Frame):
                 )
             )
 
-        property_view = LabeledWidget(left_frame, "Property List")
+        property_view = LabeledWidget(left_frame, "Property Explorer")
         property_view.set_widget(
             PropertyTree(
                 property_view,
