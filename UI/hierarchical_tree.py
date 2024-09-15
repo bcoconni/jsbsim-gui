@@ -62,12 +62,12 @@ class HierarchicalTree(QTreeWidget):
             else:
                 item = QTreeWidgetItem(self)
                 item.setText(0, name)
-                item.setExpanded(expand)
                 if nfolders == 0:
                     item.setIcon(0, file_icon)
                     continue
 
                 item.setIcon(0, folder_icon)
+                item.setExpanded(expand)
                 parent = item
 
             for idx, name in enumerate(hierarchy[1:]):
@@ -80,11 +80,11 @@ class HierarchicalTree(QTreeWidget):
                 else:
                     item = QTreeWidgetItem(parent)
                     item.setText(0, name)
-                    item.setExpanded(expand)
                     if idx == nfolders - 1:
                         item.setIcon(0, file_icon)
                     else:
                         item.setIcon(0, folder_icon)
+                        item.setExpanded(expand)
 
 
 class PropertyExplorer(QVBoxLayout):
