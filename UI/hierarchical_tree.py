@@ -20,13 +20,13 @@ from typing import List, Optional
 from jsbsim import FGPropertyNode
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
+    QHeaderView,
     QLabel,
     QStyle,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
-    QHeaderView,
 )
 
 
