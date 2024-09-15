@@ -29,6 +29,7 @@ from matplotlib.backend_bases import (
     LocationEvent,
     MouseButton,
     MouseEvent,
+    ResizeEvent,
 )
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
@@ -289,6 +290,10 @@ class PlotsView(ttk.Frame):
 
             self.reset_and_redraw()
 
+    def on_resize(self, _: ResizeEvent) -> None:
+        if self.canvas:
+            self.reset_and_redraw()
+
     def add_properties(self, properties: List[FGPropertyNode]):
         # Check if the properties are dropped on a subplot
         canvas = self.canvas
@@ -325,6 +330,7 @@ class PlotsView(ttk.Frame):
             self.canvas.mpl_connect("button_release_event", self.on_button_release)
             self.canvas.mpl_connect("key_press_event", self.on_key_press)
             self.canvas.mpl_connect("scroll_event", self.on_scroll)
+            self.canvas.mpl_connect("resize_event", self.on_resize)
             self.selected_line = SelectedLine(
                 self.canvas.figure, linewidth=4, color="red"
             )
