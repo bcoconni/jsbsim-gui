@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QVBoxLayout,
     QWidget,
+    QSplitter,
 )
 from PySide6.QtXml import QDomDocument
 
@@ -127,20 +128,24 @@ class JSBSimGUI(QMainWindow):
             self.statusBar().showMessage(f"Opening aircraft {aircraft_name}")
             self._controller.load_aircraft(file_name)
 
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        layout = QVBoxLayout(main_widget)
+        project_widget = QWidget()
+        layout = QVBoxLayout(project_widget)
         layout.addWidget(QLabel("Project files"))
         project_files = HierarchicalTree(
             self._controller.get_input_files(), ["Files"], True
         )
         project_files.setHeaderHidden(True)
         layout.addWidget(project_files)
+        splitter = QSplitter(Qt.Vertical)
+        splitter.addWidget(layout.parentWidget())
+        property_widget = QWidget()
         property_explorer = PropertyExplorer(
+            property_widget,
             self._controller.get_property_list(),
             self._controller.get_property_root().get_fully_qualified_name(),
         )
-        layout.addLayout(property_explorer)
+        splitter.addWidget(property_explorer.parentWidget())
+        self.setCentralWidget(splitter)
 
     def about(self) -> None:
         QMessageBox.about(

@@ -15,11 +15,19 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-from typing import List
+from typing import List, Optional
 
 from jsbsim import FGPropertyNode
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QLabel, QStyle, QTreeWidget, QTreeWidgetItem, QVBoxLayout
+from PySide6.QtWidgets import (
+    QLabel,
+    QStyle,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+    QHeaderView,
+)
 
 
 class HierarchicalTree(QTreeWidget):
@@ -80,16 +88,23 @@ class HierarchicalTree(QTreeWidget):
 
 
 class PropertyExplorer(QVBoxLayout):
-    def __init__(self, properties: List[FGPropertyNode], property_root: str):
-        super().__init__()
+    def __init__(
+        self,
+        parent: Optional[QWidget],
+        properties: List[FGPropertyNode],
+        property_root: str,
+    ):
+        super().__init__(parent)
         self._property_root = property_root
 
         self.addWidget(QLabel("Property Explorer"))
-        self.addWidget(
-            HierarchicalTree(
-                [self.get_relative_name(p) for p in properties], ["Property", "Value"]
-            )
+        property_tree = HierarchicalTree(
+            [self.get_relative_name(p) for p in properties], ["Property", "Value"]
         )
+        property_tree.header().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.addWidget(property_tree)
 
     def get_relative_name(self, node: FGPropertyNode) -> str:
         name = node.get_fully_qualified_name()
