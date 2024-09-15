@@ -28,12 +28,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
-    QTreeWidget,
-    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
 from PySide6.QtXml import QDomDocument
 
 from .controller import Controller
+from .hierarchical_tree import HierarchicalTree
 
 
 class JSBSimGUI(QMainWindow):
@@ -126,9 +127,15 @@ class JSBSimGUI(QMainWindow):
             self.statusBar().showMessage(f"Opening aircraft {aircraft_name}")
             self._controller.load_aircraft(file_name)
 
-        self.setCentralWidget(
-            HierarchicalTree(self._controller.get_input_files(), ["Files"])
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
+        layout = QVBoxLayout(main_widget)
+        layout.addWidget(QLabel("Project files"))
+        project_files = HierarchicalTree(
+            self._controller.get_input_files(), ["Files"], True
         )
+        project_files.setHeaderHidden(True)
+        layout.addWidget(project_files)
 
     def about(self) -> None:
         QMessageBox.about(
@@ -148,39 +155,6 @@ class JSBSimGUI(QMainWindow):
             "You should have received a copy of the GNU General Public License along with"
             "this program; if not, see <http://www.gnu.org/licenses/>",
         )
-
-
-class HierarchicalTree(QTreeWidget):
-    def __init__(self, items: List[str], headers_labels: List[str]):
-        super().__init__()
-
-        self.setHeaderLabels(headers_labels)
-
-        for elm in sorted(items):
-            parent_id = self
-            hierarchy = elm.split("/")
-            name = hierarchy[0]
-            ntopchild = parent_id.topLevelItemCount()
-            for topchild_id in range(ntopchild):
-                topchild = parent_id.topLevelItem(topchild_id)
-                if topchild.text(0) == name:
-                    parent_id = topchild
-                    break
-            else:
-                item = QTreeWidgetItem(parent_id)
-                item.setText(0, name)
-                parent_id = item
-
-            for name in hierarchy[1:]:
-                nchild = parent_id.childCount()
-                for child_id in range(nchild):
-                    child = parent_id.child(child_id)
-                    if child.text(0) == name:
-                        parent_id = child
-                        break
-                else:
-                    item = QTreeWidgetItem(parent_id)
-                    item.setText(0, name)
 
 
 if __name__ == "__main__":
