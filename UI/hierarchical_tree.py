@@ -17,8 +17,9 @@
 
 from typing import List
 
+from jsbsim import FGPropertyNode
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem, QStyle
+from PySide6.QtWidgets import QLabel, QStyle, QTreeWidget, QTreeWidgetItem, QVBoxLayout
 
 
 class HierarchicalTree(QTreeWidget):
@@ -29,17 +30,17 @@ class HierarchicalTree(QTreeWidget):
 
         self.setHeaderLabels(headers_labels)
 
-        self._folder_icon = QIcon()
-        self._folder_icon.addPixmap(
+        folder_icon = QIcon()
+        folder_icon.addPixmap(
             self.style().standardPixmap(QStyle.SP_DirClosedIcon),
             QIcon.Normal,
             QIcon.Off,
         )
-        self._folder_icon.addPixmap(
+        folder_icon.addPixmap(
             self.style().standardPixmap(QStyle.SP_DirOpenIcon), QIcon.Normal, QIcon.On
         )
-        self._file_icon = QIcon()
-        self._file_icon.addPixmap(self.style().standardPixmap(QStyle.SP_FileIcon))
+        file_icon = QIcon()
+        file_icon.addPixmap(self.style().standardPixmap(QStyle.SP_FileIcon))
 
         for elm in sorted(items):
             hierarchy = elm.split("/")
@@ -55,10 +56,10 @@ class HierarchicalTree(QTreeWidget):
                 item.setText(0, name)
                 item.setExpanded(expand)
                 if nfolders == 0:
-                    item.setIcon(0, self._file_icon)
+                    item.setIcon(0, file_icon)
                     continue
 
-                item.setIcon(0, self._folder_icon)
+                item.setIcon(0, folder_icon)
                 parent = item
 
             for idx, name in enumerate(hierarchy[1:]):
@@ -73,6 +74,25 @@ class HierarchicalTree(QTreeWidget):
                     item.setText(0, name)
                     item.setExpanded(expand)
                     if idx == nfolders - 1:
-                        item.setIcon(0, self._file_icon)
+                        item.setIcon(0, file_icon)
                     else:
-                        item.setIcon(0, self._folder_icon)
+                        item.setIcon(0, folder_icon)
+
+
+class PropertyExplorer(QVBoxLayout):
+    def __init__(self, properties: List[FGPropertyNode], property_root: str):
+        super().__init__()
+        self._property_root = property_root
+
+        self.addWidget(QLabel("Property Explorer"))
+        self.addWidget(
+            HierarchicalTree(
+                [self.get_relative_name(p) for p in properties], ["Property", "Value"]
+            )
+        )
+
+    def get_relative_name(self, node: FGPropertyNode) -> str:
+        name = node.get_fully_qualified_name()
+        if name.startswith(self._property_root):
+            return name[len(self._property_root) + 1 :]
+        return name

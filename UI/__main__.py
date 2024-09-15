@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtXml import QDomDocument
 
 from .controller import Controller
-from .hierarchical_tree import HierarchicalTree
+from .hierarchical_tree import HierarchicalTree, PropertyExplorer
 
 
 class JSBSimGUI(QMainWindow):
@@ -136,6 +136,11 @@ class JSBSimGUI(QMainWindow):
         )
         project_files.setHeaderHidden(True)
         layout.addWidget(project_files)
+        property_explorer = PropertyExplorer(
+            self._controller.get_property_list(),
+            self._controller.get_property_root().get_fully_qualified_name(),
+        )
+        layout.addLayout(property_explorer)
 
     def about(self) -> None:
         QMessageBox.about(
