@@ -20,7 +20,7 @@ from PySide6.QtGui import QFontDatabase, QFontMetrics
 from PySide6.QtWidgets import (
     QLabel,
     QSplitter,
-    QTextEdit,
+    QPlainTextEdit,
     QVBoxLayout,
     QWidget,
     QMessageBox,
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from .controller import Controller
 from .hierarchical_tree import HierarchicalTree, PropertyExplorer
+from .code_editor import QCodeEditor, XMLHighlighter
 
 
 class SourceEditor(QSplitter):
@@ -53,13 +54,13 @@ class SourceEditor(QSplitter):
         left_column.addWidget(property_explorer.parentWidget())
         self.addWidget(left_column)
 
-        text_editor = QTextEdit()
+        text_editor = QCodeEditor(True, True, XMLHighlighter)
         font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         font_metrics = QFontMetrics(font)
         text_size = font_metrics.size(0, ("X" * 80 + "\n") * 30)
         text_editor.setMinimumSize(text_size)
         text_editor.setFont(font)
-        text_editor.setLineWrapMode(QTextEdit.NoWrap)
+        text_editor.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.addWidget(text_editor)
 
         in_file = QFile(controller.filename)
