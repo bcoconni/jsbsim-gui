@@ -18,8 +18,10 @@
 from typing import List, Optional
 
 from jsbsim import FGPropertyNode
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QHeaderView,
     QLabel,
     QStyle,
@@ -64,9 +66,11 @@ class HierarchicalTree(QTreeWidget):
                 item.setText(0, name)
                 if nfolders == 0:
                     item.setIcon(0, file_icon)
+                    item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                     continue
 
                 item.setIcon(0, folder_icon)
+                item.setFlags(Qt.ItemIsEnabled)
                 item.setExpanded(expand)
                 parent = item
 
@@ -82,9 +86,37 @@ class HierarchicalTree(QTreeWidget):
                     item.setText(0, name)
                     if idx == nfolders - 1:
                         item.setIcon(0, file_icon)
+                        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                     else:
                         item.setIcon(0, folder_icon)
+                        item.setFlags(Qt.ItemIsEnabled)
                         item.setExpanded(expand)
+                        parent = item
+
+
+class FileTree(HierarchicalTree):
+    file_selected = Signal(str)
+
+    def __init__(self, files: List[str]):
+        super().__init__(files, ["Files"], True)
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setHeaderHidden(True)
+        self.itemSelectionChanged.connect(self.file_clicked)
+
+    @Slot()
+    def file_clicked(self):
+        items = self.selectedItems()
+        if not items:
+            return
+
+        item = items[0]
+        name = [item.text(0)]
+
+        while item.parent():
+            item = item.parent()
+            name.insert(0, item.text(0))
+
+        self.file_selected.emit("/".join(name))
 
 
 class PropertyExplorer(QVBoxLayout):

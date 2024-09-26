@@ -10,7 +10,7 @@ provides the line numbers bar and the syntax and the current line highlighting.
     class QCodeEditor(QPlainTextEdit):
 """
 
-from PySide6.QtCore import QRect, QRegularExpression, Qt
+from PySide6.QtCore import QRect, QRegularExpression, Qt, Slot
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -137,7 +137,7 @@ class QCodeEditor(QPlainTextEdit):
             self.editor.blockCountChanged.connect(self.update_width)
             self.editor.updateRequest.connect(self.update_contents)
             self.font = editor.font()
-            self.background_color = editor.palette().shadow().color()
+            self.background_color = editor.palette().window().color()
             self.highlight_color = editor.palette().highlight().color()
             self.text_color = editor.palette().windowText().color()
 
@@ -187,12 +187,14 @@ class QCodeEditor(QPlainTextEdit):
             width = self.fontMetrics().size(0, str(count)).width() + 10
             return width
 
+        @Slot()
         def update_width(self):
             width = self.get_width()
             if self.width() != width:
                 self.setFixedWidth(width)
                 self.editor.setViewportMargins(width, 0, 0, 0)
 
+        @Slot(QRect, int)
         def update_contents(self, rect, scroll):
             if scroll:
                 self.scroll(0, scroll)
@@ -251,6 +253,7 @@ class QCodeEditor(QPlainTextEdit):
 
         QPlainTextEdit.resizeEvent(self, *e)
 
+    @Slot()
     def highlight_current_line(self):
         new_current_line_number = self.textCursor().blockNumber()
         if new_current_line_number != self.current_line_number:
