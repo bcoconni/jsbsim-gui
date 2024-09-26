@@ -101,10 +101,10 @@ class FileTree(HierarchicalTree):
         super().__init__(files, ["Files"], True)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setHeaderHidden(True)
-        self.itemSelectionChanged.connect(self.file_clicked)
+        self.itemSelectionChanged.connect(self._file_selected)
 
     @Slot()
-    def file_clicked(self):
+    def _file_selected(self):
         items = self.selectedItems()
         if not items:
             return
@@ -119,24 +119,24 @@ class FileTree(HierarchicalTree):
         self.file_selected.emit("/".join(name))
 
 
-class PropertyExplorer(QVBoxLayout):
+class PropertyExplorer(QWidget):
     def __init__(
         self,
-        parent: Optional[QWidget],
         properties: List[FGPropertyNode],
         property_root: str,
     ):
-        super().__init__(parent)
+        super().__init__()
         self._property_root = property_root
+        layout = QVBoxLayout(self)
 
-        self.addWidget(QLabel("Property Explorer"))
+        layout.addWidget(QLabel("Property Explorer"))
         property_tree = HierarchicalTree(
             [self.get_relative_name(p) for p in properties], ["Property", "Value"]
         )
         property_tree.header().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
         )
-        self.addWidget(property_tree)
+        layout.addWidget(property_tree)
 
     def get_relative_name(self, node: FGPropertyNode) -> str:
         name = node.get_fully_qualified_name()

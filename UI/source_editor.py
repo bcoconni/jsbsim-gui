@@ -44,19 +44,21 @@ class SourceEditor(QSplitter):
         layout = QVBoxLayout(project_widget)
         layout.addWidget(QLabel("Project files"))
         project_files = FileTree(controller.get_input_files())
-        project_files.file_selected.connect(self.open_file)
+        project_files.file_selected.connect(self._open_file)
         project_files.setMinimumWidth(250)
         layout.addWidget(project_files)
         left_column.addWidget(layout.parentWidget())
-        property_widget = QWidget()
         property_explorer = PropertyExplorer(
-            property_widget,
             controller.get_property_list(),
             controller.get_property_root().get_fully_qualified_name(),
         )
-        left_column.addWidget(property_explorer.parentWidget())
+        left_column.addWidget(property_explorer)
         self.addWidget(left_column)
 
+        editor_widget = QWidget()
+        layout = QVBoxLayout(editor_widget)
+        self.editor_label = QLabel("File name")
+        layout.addWidget(self.editor_label)
         self.text_editor = QCodeEditor(True, True, XMLHighlighter)
         font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         font_metrics = QFontMetrics(font)
@@ -64,16 +66,20 @@ class SourceEditor(QSplitter):
         self.text_editor.setMinimumSize(text_size)
         self.text_editor.setFont(font)
         self.text_editor.setLineWrapMode(QPlainTextEdit.NoWrap)
-        self.addWidget(self.text_editor)
+        layout.addWidget(self.text_editor)
+        self.addWidget(editor_widget)
         self.load_file(controller.filename)
 
     @Slot(str)
-    def open_file(self, filename: str) -> None:
+    def _open_file(self, filename: str) -> None:
         self.load_file(os.path.join(self.controller.get_root_dir(), filename))
 
     def load_file(self, filename: str) -> None:
         in_file = QFile(filename)
         if in_file.open(QFile.ReadOnly | QFile.Text):
+            self.editor_label.setText(
+                os.path.relpath(filename, self.controller.get_root_dir())
+            )
             self.text_editor.clear()
             self.text_editor.setPlainText(in_file.readAll().data().decode())
         else:
