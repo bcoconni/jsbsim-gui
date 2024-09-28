@@ -68,7 +68,6 @@ class HierarchicalTree(QTreeWidget):
                 if nfolders == 0:
                     item = self.create_leaf(self, name, item_fullname)
                     item.setIcon(0, file_icon)
-                    item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                     continue
 
                 item = QTreeWidgetItem(self)
@@ -89,7 +88,6 @@ class HierarchicalTree(QTreeWidget):
                     if idx == nfolders - 1:
                         item = self.create_leaf(parent, name, item_fullname)
                         item.setIcon(0, file_icon)
-                        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                     else:
                         item = QTreeWidgetItem(parent)
                         item.setText(0, name)
@@ -103,6 +101,7 @@ class HierarchicalTree(QTreeWidget):
     ) -> QTreeWidgetItem:
         item = QTreeWidgetItem(parent)
         item.setText(0, name)
+        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
         return item
 
     def filter_items(self, pattern: str) -> bool:
@@ -207,6 +206,7 @@ class PropertyTree(HierarchicalTree):
         super().__init__(
             [self.get_relative_name(p) for p in properties], ["Property", "Value"]
         )
+        self.itemChanged.connect(self._change_property_value)
 
     def get_relative_name(self, node: FGPropertyNode) -> str:
         name = node.get_fully_qualified_name()
@@ -219,8 +219,18 @@ class PropertyTree(HierarchicalTree):
     ) -> QTreeWidgetItem:
         for p in self._properties:
             if self.get_relative_name(p) == fullname:
-                return PropertyTreeItem(parent, p, name)
+                item = PropertyTreeItem(parent, p, name)
+                item.setFlags(
+                    Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+                )
+                return item
         raise ValueError(f"Property {fullname} not found")
+
+    @Slot(QTreeWidgetItem, int)
+    def _change_property_value(self, item: PropertyTreeItem, column: int):
+        if column == 1:
+            item.node.set_double_value(float(item.text(1)))
+            item.setText(1, str(item.node.get_double_value()))
 
 
 class PropertyExplorer(QWidget):
