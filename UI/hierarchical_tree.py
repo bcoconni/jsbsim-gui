@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QPushButton,
     QStyle,
     QTreeWidget,
     QTreeWidgetItem,
@@ -149,6 +150,18 @@ class HierarchicalTree(QTreeWidget):
                 child.setHidden(False)
             unfilter_children(child)
 
+    def collapse(self):
+        def collapse_children(parent: QTreeWidgetItem):
+            for child_id in range(parent.childCount()):
+                child = parent.child(child_id)
+                child.setExpanded(False)
+                collapse_children(child)
+
+        for child_id in range(self.topLevelItemCount()):
+            child = self.topLevelItem(child_id)
+            collapse_children(child)
+            child.setExpanded(False)
+
 
 class FileTree(HierarchicalTree):
     file_selected = Signal(str)
@@ -224,6 +237,9 @@ class PropertyExplorer(QWidget):
         search_text = QLineEdit()
         search_text.textEdited.connect(self._filter)
         search_bar.addWidget(search_text)
+        collapse_button = QPushButton("Collapse")
+        collapse_button.clicked.connect(self._collapse)
+        search_bar.addWidget(collapse_button)
         layout.addLayout(search_bar)
         self.property_tree = PropertyTree(properties, property_root)
         self.property_tree.header().setSectionResizeMode(
@@ -236,3 +252,7 @@ class PropertyExplorer(QWidget):
         self.property_tree.unfilter_items()
         if pattern:
             self.property_tree.filter_items(pattern)
+
+    @Slot()
+    def _collapse(self):
+        self.property_tree.collapse()
