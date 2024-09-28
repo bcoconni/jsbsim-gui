@@ -69,21 +69,13 @@ class XMLHighlighter(QSyntaxHighlighter):
         value_format = QTextCharFormat()
         value_format.setForeground(QColor("#ffff00"))  # yellow
         self.highlighting_rules.append((QRegularExpression('"[^"]*"'), value_format))
-        # self.valueStartExpression = QRegularExpression('"')
-        # self.valueEndExpression = QRegularExpression('"(?=[\\s></])')
 
-        # singleLineCommentFormat = QTextCharFormat()
-        # singleLineCommentFormat.setForeground(QColor("#a0a0a4"))  # grey
-        # self.highlightingRules.append(
-        #     (QRegularExpression("<!--[^\n]*-->"), singleLineCommentFormat)
-        # )
+        self.start_comment_expression = QRegularExpression("<!--")
+        self.end_comment_expression = QRegularExpression("-->")
+        self.comment_format = QTextCharFormat()
+        self.comment_format.setForeground(QColor("#a0a0a4"))  # grey
+        self.comment_format.setFontItalic(True)
 
-        # textFormat = QTextCharFormat()
-        # textFormat.setForeground(QColor("#ffffff"))  # white
-        # (?<=...)  - lookbehind is not supported
-        # self.highlightingRules.append((QRegularExpression(">(.+)(?=</)"), textFormat))
-
-    # VIRTUAL FUNCTION WE OVERRIDE THAT DOES ALL THE COLLORING
     def highlightBlock(self, text):
         for pattern, text_format in self.highlighting_rules:
             index = pattern.globalMatch(text)
@@ -93,24 +85,37 @@ class XMLHighlighter(QSyntaxHighlighter):
                     match.capturedStart(), match.capturedLength(), text_format
                 )
 
-        # HANDLE QUOTATION MARKS NOW.. WE WANT TO START WITH " AND END WITH ".. A THIRD " SHOULD NOT CAUSE THE WORDS INBETWEEN SECOND AND THIRD TO BE COLORED
-        # self.setCurrentBlockState(0)
-        # startIndex = 0
-        # if self.previousBlockState() != 1:
-        #     startIndex = self.valueStartExpression.indexIn(text)
-        # while startIndex >= 0:
-        #     endIndex = self.valueEndExpression.indexIn(text, startIndex)
-        #     if endIndex == -1:
-        #         self.setCurrentBlockState(1)
-        #         commentLength = len(text) - startIndex
-        #     else:
-        #         commentLength = (
-        #             endIndex - startIndex + self.valueEndExpression.matchedLength()
-        #         )
-        #     self.setFormat(startIndex, commentLength, self.valueFormat)
-        #     startIndex = self.valueStartExpression.indexIn(
-        #         text, startIndex + commentLength
-        #     )
+        # Handle comment marks
+        self.setCurrentBlockState(0)
+        start_index = 0
+        if self.previousBlockState() != 1:
+            index = self.start_comment_expression.globalMatch(text)
+            if index.hasNext():
+                match = index.next()
+                start_index = match.capturedStart()
+                text = text[start_index:]
+            else:
+                return
+
+        while start_index >= 0:
+            index = self.end_comment_expression.globalMatch(text)
+            if index.hasNext():
+                match = index.next()
+                comment_length = match.capturedStart() + match.capturedLength()
+            else:
+                self.setCurrentBlockState(1)
+                comment_length = len(text)
+
+            self.setFormat(start_index, comment_length, self.comment_format)
+
+            text = text[comment_length:]
+            index = self.start_comment_expression.globalMatch(text)
+            if index.hasNext():
+                match = index.next()
+                start_index = match.capturedStart()
+                text = text[start_index:]
+            else:
+                break
 
 
 class QCodeEditor(QPlainTextEdit):
