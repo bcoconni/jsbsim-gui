@@ -52,8 +52,8 @@ class HierarchicalTree(QTreeWidget):
         file_icon = QIcon()
         file_icon.addPixmap(self.style().standardPixmap(QStyle.SP_FileIcon))
 
-        for elm in sorted(items):
-            hierarchy = elm.split("/")
+        for item_fullname in sorted(items):
+            hierarchy = item_fullname.split("/")
             name = hierarchy[0]
             nfolders = len(hierarchy) - 1
             for child_id in range(self.topLevelItemCount()):
@@ -62,13 +62,14 @@ class HierarchicalTree(QTreeWidget):
                     parent = child
                     break
             else:
-                item = QTreeWidgetItem(self)
-                item.setText(0, name)
                 if nfolders == 0:
+                    item = self.create_leaf(parent, name, item_fullname)
                     item.setIcon(0, file_icon)
                     item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                     continue
 
+                item = QTreeWidgetItem(self)
+                item.setText(0, name)
                 item.setIcon(0, folder_icon)
                 item.setFlags(Qt.ItemIsEnabled)
                 item.setExpanded(expand)
@@ -82,16 +83,24 @@ class HierarchicalTree(QTreeWidget):
                         parent = child
                         break
                 else:
-                    item = QTreeWidgetItem(parent)
-                    item.setText(0, name)
                     if idx == nfolders - 1:
+                        item = self.create_leaf(parent, name, item_fullname)
                         item.setIcon(0, file_icon)
                         item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                     else:
+                        item = QTreeWidgetItem(parent)
+                        item.setText(0, name)
                         item.setIcon(0, folder_icon)
                         item.setFlags(Qt.ItemIsEnabled)
                         item.setExpanded(expand)
                         parent = item
+
+    def create_leaf(
+        self, parent: QTreeWidgetItem, name: str, fullname: str
+    ) -> QTreeWidgetItem:
+        item = QTreeWidgetItem(parent)
+        item.setText(0, name)
+        return item
 
 
 class FileTree(HierarchicalTree):
@@ -119,6 +128,40 @@ class FileTree(HierarchicalTree):
         self.file_selected.emit("/".join(name))
 
 
+class PropertyTreeItem(QTreeWidgetItem):
+    def __init__(self, parent: QTreeWidgetItem, node: FGPropertyNode, name: str):
+        super().__init__(parent)
+        self.node = node
+        self.setText(0, name)
+        self.setText(1, str(node.get_double_value()))
+
+
+class PropertyTree(HierarchicalTree):
+    def __init__(
+        self,
+        properties: List[FGPropertyNode],
+        property_root: str,
+    ):
+        self._property_root = property_root
+        self._properties = properties
+        super().__init__(
+            [self.get_relative_name(p) for p in properties], ["Property", "Value"]
+        )
+
+    def get_relative_name(self, node: FGPropertyNode) -> str:
+        name = node.get_fully_qualified_name()
+        if name.startswith(self._property_root):
+            return name[len(self._property_root) + 1 :]
+        return name
+
+    def create_leaf(
+        self, parent: QTreeWidgetItem, name: str, fullname: str
+    ) -> QTreeWidgetItem:
+        for p in self._properties:
+            if self.get_relative_name(p) == fullname:
+                return PropertyTreeItem(parent, p, name)
+
+
 class PropertyExplorer(QWidget):
     def __init__(
         self,
@@ -126,20 +169,10 @@ class PropertyExplorer(QWidget):
         property_root: str,
     ):
         super().__init__()
-        self._property_root = property_root
         layout = QVBoxLayout(self)
-
         layout.addWidget(QLabel("Property Explorer"))
-        property_tree = HierarchicalTree(
-            [self.get_relative_name(p) for p in properties], ["Property", "Value"]
-        )
+        property_tree = PropertyTree(properties, property_root)
         property_tree.header().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
         )
         layout.addWidget(property_tree)
-
-    def get_relative_name(self, node: FGPropertyNode) -> str:
-        name = node.get_fully_qualified_name()
-        if name.startswith(self._property_root):
-            return name[len(self._property_root) + 1 :]
-        return name
