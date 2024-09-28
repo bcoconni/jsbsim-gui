@@ -15,15 +15,17 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-from typing import List, Optional
+from typing import List, Union
 
 from jsbsim import FGPropertyNode
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QStyle,
     QTreeWidget,
     QTreeWidgetItem,
@@ -63,7 +65,7 @@ class HierarchicalTree(QTreeWidget):
                     break
             else:
                 if nfolders == 0:
-                    item = self.create_leaf(parent, name, item_fullname)
+                    item = self.create_leaf(self, name, item_fullname)
                     item.setIcon(0, file_icon)
                     item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                     continue
@@ -96,11 +98,56 @@ class HierarchicalTree(QTreeWidget):
                         parent = item
 
     def create_leaf(
-        self, parent: QTreeWidgetItem, name: str, fullname: str
+        self, parent: Union[QTreeWidget, QTreeWidgetItem], name: str, fullname: str
     ) -> QTreeWidgetItem:
         item = QTreeWidgetItem(parent)
         item.setText(0, name)
         return item
+
+    def filter_items(self, pattern: str) -> bool:
+        def filter_children(parent: QTreeWidgetItem):
+            success = False
+            for child_id in range(parent.childCount()):
+                child = parent.child(child_id)
+                if pattern in child.text(0):
+                    success = True
+                    continue
+                if child.childCount() and filter_children(child):
+                    success = True
+                    child.setExpanded(True)
+                    continue
+                child.setHidden(True)
+            return success
+
+        success = False
+
+        for child_id in range(self.topLevelItemCount()):
+            child = self.topLevelItem(child_id)
+            if pattern in child.text(0):
+                success = True
+                continue
+
+            if filter_children(child):
+                child.setExpanded(True)
+                success = True
+            else:
+                child.setHidden(True)
+
+        return success
+
+    def unfilter_items(self):
+        def unfilter_children(parent: QTreeWidgetItem):
+            for child_id in range(parent.childCount()):
+                child = parent.child(child_id)
+                if child.isHidden():
+                    child.setHidden(False)
+                unfilter_children(child)
+
+        for child_id in range(self.topLevelItemCount()):
+            child = self.topLevelItem(child_id)
+            if child.isHidden():
+                child.setHidden(False)
+            unfilter_children(child)
 
 
 class FileTree(HierarchicalTree):
@@ -160,6 +207,7 @@ class PropertyTree(HierarchicalTree):
         for p in self._properties:
             if self.get_relative_name(p) == fullname:
                 return PropertyTreeItem(parent, p, name)
+        raise ValueError(f"Property {fullname} not found")
 
 
 class PropertyExplorer(QWidget):
@@ -171,8 +219,20 @@ class PropertyExplorer(QWidget):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Property Explorer"))
-        property_tree = PropertyTree(properties, property_root)
-        property_tree.header().setSectionResizeMode(
+        search_bar = QHBoxLayout()
+        search_bar.addWidget(QLabel("Search:"))
+        search_text = QLineEdit()
+        search_text.textEdited.connect(self._filter)
+        search_bar.addWidget(search_text)
+        layout.addLayout(search_bar)
+        self.property_tree = PropertyTree(properties, property_root)
+        self.property_tree.header().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
         )
-        layout.addWidget(property_tree)
+        layout.addWidget(self.property_tree)
+
+    @Slot(str)
+    def _filter(self, pattern: str):
+        self.property_tree.unfilter_items()
+        if pattern:
+            self.property_tree.filter_items(pattern)
