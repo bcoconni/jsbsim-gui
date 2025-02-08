@@ -106,6 +106,9 @@ class DnDProperties(DragNDropManager):
 
 
 class Run(ttk.Frame):
+    REALTIME_UPDATE_INTERVAL_ms = 200
+    MAX_UPDATE_TIME_s = 0.95 * REALTIME_UPDATE_INTERVAL_ms / 1000
+
     def __init__(
         self, master: tk.Widget, controller: Controller, status_bar: ttk.Label, **kw
     ):
@@ -173,7 +176,8 @@ class Run(ttk.Frame):
         self.plots_view.update_plots()
 
     def update_plots(self) -> None:
-        actual_elapsed_time = time.time() - self.initial_seconds
+        start_time = time.time()
+        actual_elapsed_time = start_time - self.initial_seconds
         sim_time = self.controller.fdm.get_sim_time()
         sim_lag_time = actual_elapsed_time - sim_time
 
@@ -182,8 +186,16 @@ class Run(ttk.Frame):
                 self.pause()
                 self.script_end_reached = True
                 break
+            # If the update takes too long, break the loop
+            if time.time() - start_time > self.MAX_UPDATE_TIME_s:
+                self.update_id = self.after(
+                    self.REALTIME_UPDATE_INTERVAL_ms, self.update_plots
+                )
+                break
         else:
-            self.update_id = self.after(200, self.update_plots)
+            self.update_id = self.after(
+                self.REALTIME_UPDATE_INTERVAL_ms, self.update_plots
+            )
 
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
@@ -196,7 +208,7 @@ class Run(ttk.Frame):
         self.run_pause_button.config(command=self.run, text="Run")
 
     def run(self) -> None:
-        self.update_id = self.after(200, self.update_plots)
+        self.update_id = self.after(self.REALTIME_UPDATE_INTERVAL_ms, self.update_plots)
         self.initial_seconds = time.time() - self.controller.fdm.get_sim_time()
         self.step_button.config(state=tk.DISABLED)
         self.run_pause_button.config(command=self.pause, text="Pause")
