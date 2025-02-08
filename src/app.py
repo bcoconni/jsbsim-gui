@@ -38,6 +38,7 @@ class MenuBar(tk.Menu):
         self.root_dir = root_dir
 
         file_menu = tk.Menu(self, tearoff=False)
+        file_menu.add_command(label="Root...", command=self.set_root_dir)
         file_menu.add_command(label="Open...", command=self.select_script_file)
         file_menu.add_command(label="Exit", command=master.destroy)
         self.add_cascade(label="File", menu=file_menu)
@@ -80,7 +81,16 @@ class MenuBar(tk.Menu):
                     message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
                 )
                 return
-        self.entryconfig("View", state=tk.NORMAL)
+            self.entryconfig("View", state=tk.NORMAL)
+
+    def set_root_dir(self) -> None:
+        directory = fd.askdirectory(
+            title="Select Root Directory",
+            initialdir=self.root_dir,
+        )
+        if directory:
+            self.root_dir = directory
+            self.master.root_dir = directory
 
 
 class App(tk.Tk):
