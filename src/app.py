@@ -48,6 +48,16 @@ class MenuBar(tk.Menu):
         self.add_cascade(label="View", menu=view_menu)
         self.entryconfig("View", state=tk.DISABLED)
 
+        trim_menu = tk.Menu(self, tearoff=False)
+        trim_menu.add_command(
+            label="Ground Trim", command=lambda: self.master.main.trim(2)
+        )
+        trim_menu.add_command(
+            label="Full Trim", command=lambda: self.master.main.trim(1)
+        )
+        self.add_cascade(label="Trim", menu=trim_menu)
+        self.entryconfig("Trim", state=tk.DISABLED)
+
     def select_script_file(self) -> None:
         filename = fd.askopenfilename(
             title="Open a script / aircraft",
@@ -106,8 +116,8 @@ class App(tk.Tk):
                 self.destroy()
                 return
 
-        menubar = MenuBar(self, self.root_dir)
-        self.config(menu=menubar)
+        self.menubar = MenuBar(self, self.root_dir)
+        self.config(menu=self.menubar)
 
     def run(self) -> None:
         w = self.main.winfo_width()
@@ -120,6 +130,7 @@ class App(tk.Tk):
         self.main.grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+        self.menubar.entryconfig("Trim", state=tk.NORMAL)
 
     def edit(self) -> None:
         self.main.destroy()
@@ -131,6 +142,7 @@ class App(tk.Tk):
         self.main.grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+        self.menubar.entryconfig("Trim", state=tk.DISABLED)
 
     def open_file(
         self,

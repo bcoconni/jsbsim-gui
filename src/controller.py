@@ -172,3 +172,11 @@ class Controller:
             return self.property_history.get_time_snapshot(step, properties)
         except ValueError:
             return [prop.get_double_value() for prop in properties]
+
+    def trim(self, mode: int) -> bool:
+        with self._console.redirect_stdout():
+            try:
+                self.fdm["simulation/do_simple_trim"] = mode
+            except jsbsim.TrimFailureError:
+                return False
+            return True

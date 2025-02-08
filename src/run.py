@@ -20,6 +20,7 @@ import tkinter as tk
 from abc import ABC, abstractmethod
 from tkinter import ttk
 from tkinter.constants import EW, NS, NSEW
+from tkinter.messagebox import showerror
 from typing import Optional
 
 from jsbsim import FGPropertyNode
@@ -199,6 +200,12 @@ class Run(ttk.Frame):
         self.initial_seconds = time.time() - self.controller.fdm.get_sim_time()
         self.step_button.config(state=tk.DISABLED)
         self.run_pause_button.config(command=self.pause, text="Pause")
+
+    def trim(self, mode: int) -> None:
+        if not self.controller.trim(mode):
+            showerror("Error", message="Trim failed")
+        else:
+            self.update_properties(None)
 
     def update_properties(self, _) -> None:
         sim_time = self.plots_view.t_hover
