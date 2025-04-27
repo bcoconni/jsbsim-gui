@@ -88,13 +88,12 @@ class Controller:
         if root.tag == "runscript":
             use_el = root.find("use")
             aircraft_name = use_el.attrib["aircraft"]
-            aircraft_filename = os.path.join(
-                aircraft_path, aircraft_name, append_xml(aircraft_name)
-            )
+            aircraft_path = os.path.join(aircraft_path, aircraft_name)
+            aircraft_filename = os.path.join(aircraft_path, append_xml(aircraft_name))
             input_files += self.get_relative_path(aircraft_filename)
             IC_file = use_el.attrib["initialize"]
             input_files += self.get_relative_path(
-                os.path.join(aircraft_path, aircraft_name, append_xml(IC_file))
+                os.path.join(aircraft_path, append_xml(IC_file))
             )
 
             root = et.parse(aircraft_filename).getroot()
