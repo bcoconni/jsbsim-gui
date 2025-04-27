@@ -178,7 +178,7 @@ class PropertyTree(ttk.Frame):
         self.search_box.grid(column=1, row=0, sticky=EW)
 
         self.proptree = HierarchicalTree(
-            self, [self.get_relative_name(p) for p in properties], ["value"], False
+            self, self.get_unified_property_names(properties), ["value"], False
         )
         self.proptree.grid(column=0, row=1, columnspan=3, sticky=NS)
         tree = self.proptree.tree
@@ -202,11 +202,24 @@ class PropertyTree(ttk.Frame):
         self.proptree.tree.bind("<Double-Button-1>", self.edit_property_value)
         self.proptree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
 
-    def get_relative_name(self, node: FGPropertyNode) -> str:
-        name = node.get_fully_qualified_name()
-        if name.startswith(self.property_root):
-            return name[len(self.property_root) + 1 :]
-        return name
+    def get_unified_property_names(
+        self, properties: List[FGPropertyNode]
+    ) -> List[FGPropertyNode]:
+        have_common_root = True
+        unified_property_names = []
+        for node in properties:
+            name = node.get_fully_qualified_name()
+            unified_property_names.append(name)
+            if have_common_root and not name.startswith(self.property_root):
+                have_common_root = False
+
+        if have_common_root:
+            # Remove the root name and its trailing slash
+            offset = len(self.property_root) + 1
+        else:
+            offset = 1  # Remove the leading slash
+
+        return [name[offset:] for name in unified_property_names]
 
     def collapse(self, parent_id: str = ""):
         self.proptree.collapse(parent_id)
@@ -214,9 +227,9 @@ class PropertyTree(ttk.Frame):
 
     def initialize_values(self, properties: List[FGPropertyNode]) -> None:
         tree = self.proptree.tree
-        for node in properties:
+        property_names = self.get_unified_property_names(properties)
+        for node, pname in zip(properties, property_names):
             parent_id = ""
-            pname = self.get_relative_name(node)
             for name in pname.split("/"):
                 for child_id in tree.get_children(parent_id):
                     if name == tree.item(child_id, "text"):
