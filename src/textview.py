@@ -33,7 +33,6 @@ from tkinter.constants import (
     NORMAL,
     NS,
     NSEW,
-    SUNKEN,
     VERTICAL,
 )
 from typing import Dict, Optional, Tuple
@@ -43,14 +42,20 @@ from xml.parsers import expat
 class TextView(ttk.Frame):
     """Display text with scrollbar(s)"""
 
-    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
+    def __init__(
+        self,
+        master: tk.Widget,
+        contents: Optional[str] = None,
+        frame_column: int = 0,
+        **kw,
+    ):
         super().__init__(master)
         self.text = tk.Text(self, **kw)
-        self.text.grid(column=0, row=0, sticky=NSEW)
+        self.text.grid(column=frame_column, row=0, sticky=NSEW)
 
         # Vertical scrollbar
         self.yscrollbar = ttk.Scrollbar(self, orient=VERTICAL, command=self.text.yview)
-        self.yscrollbar.grid(column=1, row=0, sticky=NS)
+        self.yscrollbar.grid(column=frame_column + 1, row=0, sticky=NS)
         self.text["yscrollcommand"] = self.yscrollbar.set
 
         # Horizontal scrollbar if the text is not wrapped
@@ -58,7 +63,7 @@ class TextView(ttk.Frame):
             self.xscrollbar: Optional[ttk.Scrollbar] = ttk.Scrollbar(
                 self, orient=HORIZONTAL, command=self.text.xview
             )
-            self.xscrollbar.grid(column=0, row=1, sticky=EW)
+            self.xscrollbar.grid(column=frame_column, row=1, sticky=EW)
             self.text["xscrollcommand"] = self.xscrollbar.set
         else:
             self.xscrollbar = None
@@ -80,33 +85,20 @@ class SourceCodeView(TextView):
     """Display text with line numbers"""
 
     def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
-        super().__init__(master, contents, **kw)
-        source_frame = ttk.Frame(self, borderwidth=1, relief=SUNKEN)
-        source_frame.grid(column=0, row=0, sticky=NSEW)
+        super().__init__(master, frame_column=1, borderwidth=0, relief=FLAT, **kw)
 
         self.line_numbers = tk.Text(
-            source_frame, width=3, bg="#eeeeee", borderwidth=0, relief=FLAT
+            self, width=1, bg="#eeeeee", borderwidth=0, relief=FLAT
         )
+        # Even when empty, the first line is where the cursor is so we need a number
+        self.line_numbers.insert("1.0", "1")
         self.line_numbers.grid(column=0, row=0, sticky=NS)
         self.line_numbers["yscrollcommand"] = self.move_text
 
-        self.text.destroy()
-        self.text = tk.Text(source_frame, borderwidth=0, **kw)
-        self.text.grid(column=1, row=0, sticky=NSEW)
         self.text["yscrollcommand"] = self.move_line_numbers
-        self.text.configure(relief=FLAT)
-
-        if self.xscrollbar:
-            self.text["xscrollcommand"] = self.xscrollbar.set
-            self.xscrollbar.config(command=self.text.xview)
-
-        self.yscrollbar.config(command=self.yview)
-
-        source_frame.grid_columnconfigure(1, weight=1)
-        source_frame.grid_rowconfigure(0, weight=1)
 
         if contents:
-            SourceCodeView.new_content(self, contents)
+            self.new_content(contents)
 
         self.line_numbers.bind("<Button-1>", self.goto_line)
         self.text.bind("<KeyRelease>", self.update_line_numbers)
@@ -124,6 +116,10 @@ class SourceCodeView(TextView):
         return self.line_numbers.yview(*args)
 
     def new_content(self, contents: str) -> None:
+        # Source files are having a trailing carriage return (CR) that we do not want
+        # to display.
+        if contents[-1] == "\n":
+            contents = contents[:-1]  # Remove the last trailing CR
         super().new_content(contents)
         self.update_line_numbers(None)
 
@@ -133,18 +129,35 @@ class SourceCodeView(TextView):
 
     def update_line_numbers(self, _) -> None:
         num_text_lines = int(self.text.index(END).split(".", maxsplit=1)[0])
-        num_line_numbers = (
-            int(self.line_numbers.index(END).split(".", maxsplit=1)[0]) - 1
-        )
+        num_line_numbers = int(self.line_numbers.index(END).split(".", maxsplit=1)[0])
         self.line_numbers.configure(state=NORMAL)
+
+        # Adjust the width of the line numbers widget based on the number of digits
+        # required to display the last line number
+        required_width = len(str(num_text_lines))
+        current_width = int(self.line_numbers.cget("width"))
+        if required_width != current_width:
+            self.line_numbers.configure(width=required_width)
+            # Adjust the text widget so that the cumulated width of the line numbers
+            # widget and the text widget is constant. This is to avoid display glitches.
+            text_width = int(self.text.cget("width"))
+            text_width -= required_width - current_width
+            self.text.configure(width=text_width)
+            # Empty the line numbers widget because we are modifying the text layout.
+            num_line_numbers = 1
+            self.line_numbers.delete("1.0", END)
+
         if num_text_lines < num_line_numbers:
             self.line_numbers.delete(f"{num_text_lines}.0", END)
-            self.line_numbers.insert(END, "\n")
         elif num_text_lines > num_line_numbers:
             self.line_numbers.insert(
                 END,
-                "\n".join([str(i) for i in range(num_line_numbers, num_text_lines)])
-                + "\n",
+                "\n".join(
+                    [
+                        str(i).rjust(required_width)
+                        for i in range(num_line_numbers, num_text_lines)
+                    ]
+                ),
             )
         self.line_numbers.configure(state=DISABLED)
 
@@ -210,7 +223,7 @@ class XMLSourceCodeView(SourceCodeView):
             end = start + len(data_lines[-1]) + 7  # len("<!--") + len("-->") == 7
         self.text.tag_add("XML_comment", f"{line1}.{start}", f"{line2}.{end}")
 
-    def xmldecl(self, version: str, encoding: Optional[str], standalone: int) -> None:
+    def xmldecl(self, version: str, encoding: Optional[str], _: int) -> None:
         attrs = {"version": version}
         if encoding:
             attrs["encoding"] = encoding
