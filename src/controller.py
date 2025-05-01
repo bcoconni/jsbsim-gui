@@ -16,8 +16,8 @@
 
 import os
 import platform
-import xml.etree.ElementTree as et
-from typing import List, Optional
+from typing import Dict, Iterator, List, Optional
+from xml.parsers import expat
 
 import jsbsim
 import numpy as np
@@ -26,6 +26,94 @@ from jsbsim import FGPropertyNode
 
 from .property_history import PropertyHistory
 from .textview import ConsoleStdoutRedirect
+
+
+class XMLNode:
+    def __init__(
+        self,
+        name: str,
+        attrs: Dict[str, str],
+        filepath: str,
+        column: int,
+        line: int,
+    ):
+        self.name = name
+        self.attrs = attrs
+        self.filepath = filepath
+        self.column = column
+        self.line = line
+        self._parent: Optional[XMLNode] = None
+        self.children: List[XMLNode] = []
+        self.children_it = iter(self.children)
+        self.it: Optional[Iterator[XMLNode]] = None
+
+    @property
+    def parent(self):
+        return self._parent
+
+    @parent.setter
+    def parent(self, parent) -> None:
+        if self._parent:
+            self._parent.children.remove(self)
+        if parent:
+            parent.children.append(self)
+        self._parent = parent
+
+    @property
+    def path(self) -> str:
+        names: List[str] = [self.name]
+        parent = self._parent
+        while parent:
+            names.append(parent.name)
+            parent = parent._parent
+        return "/".join(reversed(names))
+
+    def __iter__(self):
+        self.children_it = iter(self.children)
+        self.it = None
+        return self
+
+    def __next__(self):
+        if self.it:
+            try:
+                return next(self.it)
+            except StopIteration:
+                self.it = iter(next(self.children_it))
+                return next(self.it)
+        else:
+            if self.children:
+                self.it = iter(next(self.children_it))
+            else:
+                self.it = iter([])
+            return self
+
+
+class XMLNodeBuilder:
+    def __init__(self, filepath: str, fullpath: str):
+        self.filepath = filepath
+        self.parent: Optional[XMLNode] = None
+        self.root: Optional[XMLNode] = None
+        self.parser = expat.ParserCreate()
+        self.parser.StartElementHandler = self.start_element
+        self.parser.EndElementHandler = self.end_element
+
+        with open(fullpath, "rb") as f:
+            self.parser.ParseFile(f)
+
+    def start_element(self, name: str, attrs: Dict[str, str]) -> None:
+        node = XMLNode(
+            name,
+            attrs,
+            self.filepath,
+            self.parser.CurrentColumnNumber,
+            self.parser.CurrentLineNumber,
+        )
+        node.parent = self.parent
+        self.parent = node
+
+    def end_element(self, _: str) -> None:
+        self.root = self.parent
+        self.parent = self.parent.parent
 
 
 class Controller:
@@ -78,72 +166,77 @@ class Controller:
         return os.path.realpath(self.fdm.get_root_dir())
 
     def get_relative_path(self, filename: str) -> str:
-        return [os.path.relpath(os.path.realpath(filename), self.get_root_dir())]
+        path = os.path.relpath(os.path.realpath(filename), self.get_root_dir())
+        if platform.system() == "Windows":
+            return path.replace("\\", "/")
+        return path
 
-    def get_input_files(self) -> List[str]:
+    def get_xml_trees(self) -> List[XMLNode]:
         aircraft_path = self.fdm.get_aircraft_path()
-        input_files = self.get_relative_path(self.filename)
-        root = et.parse(os.path.join(self.fdm.get_root_dir(), self.filename)).getroot()
+        root = XMLNodeBuilder(self.get_relative_path(self.filename), self.filename).root
+        xml_trees = [root]
 
-        if root.tag == "runscript":
-            use_el = root.find("use")
-            aircraft_name = use_el.attrib["aircraft"]
+        if root.name == "runscript":
+            for node in root:
+                if node.name == "use":
+                    aircraft_name = node.attrs["aircraft"]
+                    break
             aircraft_path = os.path.join(aircraft_path, aircraft_name)
             aircraft_filename = os.path.join(aircraft_path, append_xml(aircraft_name))
-            input_files += self.get_relative_path(aircraft_filename)
-            IC_file = use_el.attrib["initialize"]
-            input_files += self.get_relative_path(
-                os.path.join(aircraft_path, append_xml(IC_file))
-            )
+            root = XMLNodeBuilder(
+                self.get_relative_path(aircraft_filename), aircraft_filename
+            ).root
 
-            root = et.parse(aircraft_filename).getroot()
+            IC_file = node.attrs["initialize"]
+            fullpath = os.path.join(aircraft_path, append_xml(IC_file))
+            xml_trees.append(
+                XMLNodeBuilder(self.get_relative_path(fullpath), fullpath).root
+            )
+            xml_trees.append(root)
 
         engine_path = self.fdm.get_engine_path()
         systems_path = self.fdm.get_systems_path()
 
-        for include_el in root.findall(".//*[@file]"):
-            filename = append_xml(include_el.attrib["file"])
+        include_files = []
+        for node in root:
+            if "file" in node.attrs:
+                filename = append_xml(node.attrs["file"])
+                include_files.append((node, filename))
+
+        for node, filename in include_files:
             if os.path.exists(os.path.join(aircraft_path, filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(aircraft_path, filename)
-                )
+                fullpath = os.path.join(aircraft_path, filename)
             elif os.path.exists(os.path.join(aircraft_path, "Systems", filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(aircraft_path, "Systems", filename)
-                )
+                fullpath = os.path.join(aircraft_path, "Systems", filename)
             elif os.path.exists(os.path.join(aircraft_path, "systems", filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(aircraft_path, "systems", filename)
-                )
+                fullpath = os.path.join(aircraft_path, "systems", filename)
             elif os.path.exists(os.path.join(aircraft_path, "Engines", filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(aircraft_path, "Engines", filename)
-                )
+                fullpath = os.path.join(aircraft_path, "Engines", filename)
             elif os.path.exists(os.path.join(aircraft_path, "engines", filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(aircraft_path, "engines", filename)
-                )
+                fullpath = os.path.join(aircraft_path, "engines", filename)
             elif os.path.exists(os.path.join(aircraft_path, "Engine", filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(aircraft_path, "Engine", filename)
-                )
+                fullpath = os.path.join(aircraft_path, "Engine", filename)
             elif os.path.exists(os.path.join(aircraft_path, "engine", filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(aircraft_path, "engine", filename)
-                )
+                fullpath = os.path.join(aircraft_path, "engine", filename)
             elif os.path.exists(os.path.join(engine_path, filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(engine_path, filename)
-                )
+                fullpath = os.path.join(engine_path, filename)
             elif os.path.exists(os.path.join(systems_path, filename)):
-                input_files += self.get_relative_path(
-                    os.path.join(systems_path, filename)
-                )
+                fullpath = os.path.join(systems_path, filename)
+            else:
+                raise FileNotFoundError(f"Could not find {filename}")
 
-        if platform.system() == "Windows":
-            return [name.replace("\\", "/") for name in input_files]
+            root_include = XMLNodeBuilder(
+                self.get_relative_path(fullpath), fullpath
+            ).root
 
-        return input_files
+            if node.name in ("engine", "thruster"):
+                xml_trees.append(root_include)
+            else:
+                parent = node.parent
+                node.parent = None
+                root_include.parent = parent
+
+        return xml_trees
 
     def get_property_root(self) -> Optional[FGPropertyNode]:
         return self.fdm.get_property_manager().get_node()

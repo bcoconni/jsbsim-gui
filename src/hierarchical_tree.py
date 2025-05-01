@@ -17,7 +17,7 @@
 
 import tkinter as tk
 from tkinter import ttk
-from tkinter.constants import BROWSE, EW, NS, VERTICAL
+from tkinter.constants import BROWSE, EW, NS, NSEW, VERTICAL
 from tkinter.messagebox import showerror
 from typing import Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
 
@@ -161,13 +161,11 @@ class CellEntry(ttk.Entry):
         return "break"
 
 
-class PropertyTree(ttk.Frame):
+class SearchableTree(ttk.Frame):
     def __init__(
-        self, master: tk.Widget, properties: List[FGPropertyNode], property_root: str
+        self, master: tk.Widget, create_tree: Callable[[tk.Widget], HierarchicalTree]
     ):
         super().__init__(master)
-        self.properties: Dict[str, FGPropertyNode] = {}
-        self.property_root: str = property_root
         self.visible_items: List[str] = []
 
         search_frame = ttk.Frame(self, padding=(0, 2))
@@ -176,16 +174,8 @@ class PropertyTree(ttk.Frame):
         search_label.grid(column=0, row=0, padx=10)
         self.search_box = ttk.Entry(search_frame)
         self.search_box.grid(column=1, row=0, sticky=EW)
-
-        self.proptree = HierarchicalTree(
-            self, self.get_unified_property_names(properties), ["value"], False
-        )
-        self.proptree.grid(column=0, row=1, columnspan=3, sticky=NS)
-        tree = self.proptree.tree
-        tree.configure(displaycolumns=("value",))  # Hide the node columns
-        tree.heading("#0", text="Property")
-        tree.heading("value", text="Value")
-        self.initialize_values(properties)
+        self.tree = create_tree(self)
+        self.tree.grid(column=0, row=1, columnspan=3, sticky=NSEW)
 
         collapse_button = ttk.Button(
             search_frame, text="Collapse", command=self.collapse
@@ -199,8 +189,55 @@ class PropertyTree(ttk.Frame):
         self.grid_rowconfigure(1, weight=1)
 
         self.search_box.bind("<KeyRelease>", self.search)
-        self.proptree.tree.bind("<Double-Button-1>", self.edit_property_value)
-        self.proptree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
+
+    def collapse(self, parent_id: str = "") -> None:
+        self.tree.collapse(parent_id)
+
+    def search(self, _: tk.Event) -> None:
+        self.tree.unfilter()
+        pattern = self.search_box.get()
+        if pattern:
+            self.tree.filter(pattern)
+
+        self.update_visible_properties(None)
+
+    def update_visible_properties(self, _: tk.Event) -> None:
+        self.visible_items = []
+        tree = self.tree.tree
+
+        def enumerate_children(parent_id: str) -> None:
+            children = tree.get_children(parent_id)
+            if children:
+                if tree.item(parent_id, "open"):
+                    for item in children:
+                        enumerate_children(item)
+            elif tree.bbox(parent_id):
+                self.visible_items.append(parent_id)
+
+        for item in tree.get_children():
+            enumerate_children(item)
+
+
+class PropertyTree(SearchableTree):
+    def __init__(
+        self, master: tk.Widget, properties: List[FGPropertyNode], property_root: str
+    ):
+        self.property_root: str = property_root
+        super().__init__(
+            master,
+            lambda parent: HierarchicalTree(
+                parent, self.get_unified_property_names(properties), ["value"], False
+            ),
+        )
+        self.properties: Dict[str, FGPropertyNode] = {}
+
+        tree = self.tree.tree
+        tree.configure(displaycolumns=("value",))  # Hide the node columns
+        tree.heading("#0", text="Property")
+        tree.heading("value", text="Value")
+        self.initialize_values(properties)
+        self.tree.tree.bind("<Double-Button-1>", self.edit_property_value)
+        self.tree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
 
     def get_unified_property_names(
         self, properties: List[FGPropertyNode]
@@ -222,11 +259,11 @@ class PropertyTree(ttk.Frame):
         return map(lambda name: name[offset:], unified_property_names)
 
     def collapse(self, parent_id: str = "") -> None:
-        self.proptree.collapse(parent_id)
+        super().collapse(parent_id)
         self.update_visible_properties(None)
 
     def initialize_values(self, properties: List[FGPropertyNode]) -> None:
-        tree = self.proptree.tree
+        tree = self.tree.tree
         property_names = self.get_unified_property_names(properties)
         for node, pname in zip(properties, property_names):
             parent_id = ""
@@ -240,16 +277,12 @@ class PropertyTree(ttk.Frame):
             tree.set(parent_id, "value", node.get_double_value())
             self.properties[parent_id] = node
 
-    def search(self, _) -> None:
-        self.proptree.unfilter()
-        pattern = self.search_box.get()
-        if pattern:
-            self.proptree.filter(pattern)
-
+    def search(self, event: tk.Event) -> None:
+        super().search(event)
         self.update_visible_properties(None)
 
     def edit_property_value(self, event: tk.Event) -> None:
-        tree = self.proptree.tree
+        tree = self.tree.tree
         item_id = tree.identify_row(event.y)
 
         # Dismiss when the table header is selected
@@ -283,7 +316,7 @@ class PropertyTree(ttk.Frame):
         self.update_values()
 
     def update_values(self, values: Optional[List[float]] = None) -> None:
-        tree = self.proptree.tree
+        tree = self.tree.tree
         if values is None:
             for item_id in self.visible_items:
                 node = self.properties[item_id]
@@ -294,7 +327,7 @@ class PropertyTree(ttk.Frame):
 
     def get_selected_elements(self) -> List[FGPropertyNode]:
         selected_prop: List[FGPropertyNode] = []
-        tree = self.proptree.tree
+        tree = self.tree.tree
 
         def enumerate_children(parent_id: str) -> None:
             children = tree.get_children(parent_id)
@@ -309,22 +342,8 @@ class PropertyTree(ttk.Frame):
 
         return selected_prop
 
-    def update_visible_properties(self, _: tk.Event) -> None:
-        self.visible_items = []
-        tree = self.proptree.tree
-
-        def enumerate_children(parent_id: str) -> None:
-            children = tree.get_children(parent_id)
-            if children:
-                if tree.item(parent_id, "open"):
-                    for item in children:
-                        enumerate_children(item)
-            elif tree.bbox(parent_id):
-                self.visible_items.append(parent_id)
-
-        for item in tree.get_children():
-            enumerate_children(item)
-
+    def update_visible_properties(self, event: tk.Event) -> None:
+        super().update_visible_properties(event)
         self.update_values()
 
     def get_visible_properties(self) -> List[FGPropertyNode]:
