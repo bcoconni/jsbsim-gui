@@ -19,7 +19,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NS, VERTICAL
 from tkinter.messagebox import showerror
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
 
 from jsbsim import FGPropertyNode
 
@@ -63,7 +63,7 @@ class HierarchicalTree(ttk.Frame):
         sequence: Optional[str],
         func: Callable[[tk.Event], None],
         add: Union[bool, Literal["", "+"], None] = None,
-    ):
+    ) -> None:
         self.yscrollbar.bind(sequence, func, add)
         self.tree.bind(sequence, func, add)
 
@@ -123,7 +123,7 @@ class HierarchicalTree(ttk.Frame):
             return True
         return False
 
-    def collapse(self, parent_id: str = ""):
+    def collapse(self, parent_id: str = "") -> None:
         tree = self.tree
         for child_id in tree.get_children(parent_id):
             self.collapse(child_id)
@@ -204,7 +204,7 @@ class PropertyTree(ttk.Frame):
 
     def get_unified_property_names(
         self, properties: List[FGPropertyNode]
-    ) -> List[FGPropertyNode]:
+    ) -> Iterator[str]:
         have_common_root = True
         unified_property_names = []
         for node in properties:
@@ -219,9 +219,9 @@ class PropertyTree(ttk.Frame):
         else:
             offset = 1  # Remove the leading slash
 
-        return [name[offset:] for name in unified_property_names]
+        return map(lambda name: name[offset:], unified_property_names)
 
-    def collapse(self, parent_id: str = ""):
+    def collapse(self, parent_id: str = "") -> None:
         self.proptree.collapse(parent_id)
         self.update_visible_properties(None)
 
@@ -293,7 +293,7 @@ class PropertyTree(ttk.Frame):
                 tree.set(item_id, "value", value)
 
     def get_selected_elements(self) -> List[FGPropertyNode]:
-        selected_prop = []
+        selected_prop: List[FGPropertyNode] = []
         tree = self.proptree.tree
 
         def enumerate_children(parent_id: str) -> None:
