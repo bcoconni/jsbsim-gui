@@ -17,7 +17,7 @@
 
 import tkinter as tk
 from tkinter import ttk
-from tkinter.constants import BROWSE, EW, NS, NSEW, VERTICAL
+from tkinter.constants import BROWSE, EW, NSEW, VERTICAL
 from tkinter.messagebox import showerror
 from typing import Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
 

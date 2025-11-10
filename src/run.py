@@ -78,7 +78,7 @@ class DragNDropManager(ABC):
 
 class DnDProperties(DragNDropManager):
     def __init__(self, source: PropertyTree, target: tk.Widget):
-        super().__init__(source.proptree.tree, target)
+        super().__init__(source.tree.tree, target)
         self.property_tree = source
         self.property_list: list[FGPropertyNode] = []
 
@@ -86,11 +86,14 @@ class DnDProperties(DragNDropManager):
         self.property_list = self.property_tree.get_selected_elements()
         if self.property_list:
             widget_preview = ttk.Frame(master, borderwidth=1)
-            for idx, prop in enumerate(self.property_list):
+            property_names = self.property_tree.get_unified_property_names(
+                self.property_list
+            )
+            for idx, name in enumerate(property_names):
                 if idx < 3:
                     propname = ttk.Label(
                         widget_preview,
-                        text=self.property_tree.get_relative_name(prop),
+                        text=name,
                         justify=tk.LEFT,
                     )
                     propname.pack(anchor=tk.W)
