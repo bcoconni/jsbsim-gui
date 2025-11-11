@@ -133,21 +133,25 @@ class Controller:
         with console.redirect_stdout():
             self.fdm = jsbsim.FGFDMExec(root_dir)
 
-    def load_script(self, filename: str) -> None:
+    def load_script(self, filename: str) -> bool:
         # TODO Validate the script before loading
         self.filename = filename
         script_name = os.path.relpath(filename, self.fdm.get_root_dir())
         with self._console.redirect_stdout():
-            self.fdm.load_script(script_name)
-            self.property_history = PropertyHistory(self.get_property_list())
+            success = self.fdm.load_script(script_name)
+            if success:
+                self.property_history = PropertyHistory(self.get_property_list())
+            return success
 
-    def load_aircraft(self, filename: str) -> None:
+    def load_aircraft(self, filename: str) -> bool:
         # TODO Validate the aircraft definition before loading
         self.filename = filename
         aircraft_name = os.path.splitext(os.path.basename(filename))[0]
         with self._console.redirect_stdout():
-            self.fdm.load_model(aircraft_name, True)
-            self.property_history = PropertyHistory(self.get_property_list())
+            success = self.fdm.load_model(aircraft_name, True)
+            if success:
+                self.property_history = PropertyHistory(self.get_property_list())
+            return success
 
     def run_ic(self) -> bool:
         with self._console.redirect_stdout():

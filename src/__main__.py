@@ -29,7 +29,17 @@ if __name__ == "__main__":
         metavar="<path>",
         help="specifies the JSBSim root directory (where aircraft/, engine/, etc. reside)",
     )
+    parser.add_argument(
+        "--model", metavar="<aircraft_name>", help="load an aircraft model"
+    )
+    parser.add_argument("--script", metavar="<script_name>", help="load a script")
     args = parser.parse_args()
 
     app = App(args.root)
+
+    if args.model:
+        app.load_model_from_cmdline(args.model)
+    elif args.script:
+        app.load_script_from_cmdline(args.script)
+
     app.mainloop()

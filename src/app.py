@@ -67,21 +67,27 @@ class MenuBar(tk.Menu):
         )
         if filename:
             root = et.parse(filename).getroot()
+            success = False
             if root.tag == "runscript":
                 use_el = root.find("use")
                 aircraft_name = use_el.attrib["aircraft"]
-                self.master.open_file(filename, aircraft_name, Controller.load_script)
+                success = self.master.open_file(
+                    filename, aircraft_name, Controller.load_script
+                )
             elif root.tag == "fdm_config":
                 aircraft_name = os.path.splitext(os.path.basename(filename))[0]
-                self.master.open_file(filename, aircraft_name, Controller.load_aircraft)
+                success = self.master.open_file(
+                    filename, aircraft_name, Controller.load_aircraft
+                )
+
+            if success:
+                self.entryconfig("View", state=tk.NORMAL)
             else:
                 name = os.path.relpath(filename, self.root_dir)
                 showerror(
                     "Error",
                     message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
                 )
-                return
-            self.entryconfig("View", state=tk.NORMAL)
 
     def set_root_dir(self) -> None:
         directory = fd.askdirectory(
@@ -99,16 +105,11 @@ class App(tk.Tk):
         self._console: Optional[ConsoleStdoutRedirect] = None
         self._controller: Optional[Controller] = None
         self._statusbar: Optional[ttk.Label] = None
+        self.main = None
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
 
-        with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
-            resized_image = Image.new("RGB", size=(600, image.height), color="white")
-            resized_image.paste(image, ((600 - image.width) // 2, 0))
-            logo_image = ImageTk.PhotoImage(resized_image)
-            self.main = ttk.Label(self, image=logo_image)
-            self.main.image = logo_image
-            self.main.grid()
+        self._display_logo()
 
         if root_dir:
             self.root_dir = root_dir
@@ -122,17 +123,54 @@ class App(tk.Tk):
             try:
                 self.root_dir = Controller.get_default_root_dir()
             except IOError as e:
-                showerror("Error", message=e)
+                showerror("Error", message=str(e))
                 self.destroy()
                 return
 
+        self.root_dir = os.path.realpath(self.root_dir)
         self.menubar = MenuBar(self, self.root_dir)
         self.config(menu=self.menubar)
 
+    def _display_logo(self) -> None:
+        with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
+            resized_image = Image.new("RGB", size=(600, image.height), color="white")
+            resized_image.paste(image, ((600 - image.width) // 2, 0))
+            logo_image = ImageTk.PhotoImage(resized_image)
+            self.main = ttk.Label(self, image=logo_image)
+            self.main.image = logo_image
+            self.main.grid()
+
+    def load_model_from_cmdline(self, model_name: str) -> None:
+        filename = os.path.join(
+            self.root_dir, "aircraft", model_name, model_name + ".xml"
+        )
+        success = self.open_file(filename, model_name, Controller.load_aircraft)
+        if success:
+            self.menubar.entryconfig("View", state=tk.NORMAL)
+            return
+
+        showerror("Error", message=f'"{model_name}" is not an aircraft model')
+
+    def load_script_from_cmdline(self, script_name: str) -> None:
+        filename = os.path.join(self.root_dir, script_name)
+        try:
+            success = self.open_file(filename, script_name, Controller.load_script)
+            if success:
+                self.menubar.entryconfig("View", state=tk.NORMAL)
+                return
+
+            error_msg = f'"{script_name}" is not a script file'
+        except FileNotFoundError:
+            error_msg = f"Could not find file: {filename}"
+
+        showerror("Error", message=error_msg)
+
     def run(self) -> None:
+        assert self.main
         w = self.main.winfo_width()
         h = self.main.winfo_height()
         self.main.destroy()
+        self.main = None
         self.main = Run(self, self._controller, self._statusbar, width=w, height=h)
         self.main.grid_propagate(0)
 
@@ -143,7 +181,9 @@ class App(tk.Tk):
         self.menubar.entryconfig("Trim", state=tk.NORMAL)
 
     def edit(self) -> None:
+        assert self.main
         self.main.destroy()
+        self.main = None
 
         # Open the file in a text widget
         self.main = SourceEditor(self, self._controller)
@@ -158,20 +198,25 @@ class App(tk.Tk):
         self,
         filename: str,
         aircraft_name: str,
-        load_file: Callable[[Controller, str], None],
-    ) -> None:
+        load_file: Callable[[Controller, str], bool],
+    ) -> bool:
         self.resizable(True, True)
-        # Remove the logo
         self.title(f"JSBSim {Controller.get_version()} - {aircraft_name}")
 
         if not self._console:
             self._console = ConsoleStdoutRedirect(self, height=10)
-            self._console.grid(column=0, row=1, sticky=EW)
 
         if not self._statusbar:
             self._statusbar = ttk.Label(self, text="Ready", relief=tk.RAISED)
-            self._statusbar.grid(column=0, row=2, sticky=EW)
 
         self._controller = Controller(self.root_dir, self._console)
-        load_file(self._controller, filename)
-        self.edit()
+        success = load_file(self._controller, filename)
+
+        if success:
+            self._console.grid(column=0, row=1, sticky=EW)
+            self._statusbar.grid(column=0, row=2, sticky=EW)
+            self.edit()
+        else:
+            self._controller = None  # Delete the FGFDMExec instance.
+
+        return success
