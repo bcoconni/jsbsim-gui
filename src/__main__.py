@@ -41,5 +41,7 @@ if __name__ == "__main__":
         app.load_model_from_cmdline(args.model)
     elif args.script:
         app.load_script_from_cmdline(args.script)
+    else:
+        app.display_logo()
 
     app.mainloop()

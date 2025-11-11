@@ -109,29 +109,27 @@ class App(tk.Tk):
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
 
-        self._display_logo()
-
         if root_dir:
             self.root_dir = root_dir
             if not os.path.exists(self.root_dir):
+                self.display_logo()
                 showerror(
                     "Error", message=f'The directory "{self.root_dir}" does not exist'
                 )
-                self.destroy()
-                return
+                exit(1)
         else:
             try:
                 self.root_dir = Controller.get_default_root_dir()
             except IOError as e:
+                self.display_logo()
                 showerror("Error", message=str(e))
-                self.destroy()
-                return
+                exit(1)
 
         self.root_dir = os.path.realpath(self.root_dir)
         self.menubar = MenuBar(self, self.root_dir)
         self.config(menu=self.menubar)
 
-    def _display_logo(self) -> None:
+    def display_logo(self) -> None:
         with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
             resized_image = Image.new("RGB", size=(600, image.height), color="white")
             resized_image.paste(image, ((600 - image.width) // 2, 0))
@@ -149,6 +147,7 @@ class App(tk.Tk):
             self.menubar.entryconfig("View", state=tk.NORMAL)
             return
 
+        self.display_logo()
         showerror("Error", message=f'"{model_name}" is not an aircraft model')
 
     def load_script_from_cmdline(self, script_name: str) -> None:
@@ -163,6 +162,7 @@ class App(tk.Tk):
         except FileNotFoundError:
             error_msg = f"Could not find file: {filename}"
 
+        self.display_logo()
         showerror("Error", message=error_msg)
 
     def run(self) -> None:
@@ -170,7 +170,6 @@ class App(tk.Tk):
         w = self.main.winfo_width()
         h = self.main.winfo_height()
         self.main.destroy()
-        self.main = None
         self.main = Run(self, self._controller, self._statusbar, width=w, height=h)
         self.main.grid_propagate(0)
 
@@ -181,9 +180,8 @@ class App(tk.Tk):
         self.menubar.entryconfig("Trim", state=tk.NORMAL)
 
     def edit(self) -> None:
-        assert self.main
-        self.main.destroy()
-        self.main = None
+        if self.main:
+            self.main.destroy()
 
         # Open the file in a text widget
         self.main = SourceEditor(self, self._controller)
