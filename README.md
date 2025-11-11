@@ -18,7 +18,7 @@ This project is in its early stages of development. While the core functionality
 
 ### Prerequisites
 
-* Python 3.8+
+* Python 3.10+
 
 ### Installation
 
