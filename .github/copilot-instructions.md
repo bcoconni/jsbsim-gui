@@ -59,6 +59,8 @@ Logo path is hardcoded to `logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp` 
 ### Code Quality Standards
 - **Formatting**: All Python code MUST be formatted with [Black](https://black.readthedocs.io/). Run `black .` before committing.
 - **Type Hints**: Use Python typing annotations for all functions/methods to catch type errors early. Check minimum supported Python version (3.10+) for typing compatibility—avoid newer typing features like `X | Y` union syntax.
+- **No Docstrings**: This is an application, NOT a library. NEVER use docstrings (""" ... """). Instead, use clear, descriptive function and variable names that make the code self-documenting.
+- **Code Clarity**: Favor readable, straightforward code over convoluted, astute, or "clever" solutions. Simple code that's easy to understand beats smart code that's hard to maintain.
 - **Standard Library First**: Strongly prefer `import tkinter`, `import xml.etree`, `import os`, etc. over adding new PyPI dependencies.
 
 ### Property Path Handling
