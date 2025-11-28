@@ -17,6 +17,7 @@
 
 import os
 import tkinter as tk
+from dataclasses import dataclass
 from tkinter import ttk
 from tkinter.constants import BROWSE, NONE, NS, NSEW
 from typing import Callable, Dict, List, Literal, Optional, Union
@@ -24,6 +25,12 @@ from typing import Callable, Dict, List, Literal, Optional, Union
 from .controller import Controller, XMLNode
 from .hierarchical_tree import FileTree, HierarchicalTree, PropertyTree, SearchableTree
 from .textview import XMLSourceCodeView
+
+
+@dataclass
+class FileState:
+    content: str
+    is_modified: bool
 
 
 class LabeledWidget(ttk.Frame):
@@ -88,6 +95,7 @@ class SourceEditor(ttk.Frame):
     ):
         super().__init__(master)
         self.root_dir = controller.get_root_dir()
+        self.file_states: Dict[str, FileState] = {}
         left_frame = ttk.Frame(self)
 
         xml_trees = controller.get_xml_trees()
@@ -98,21 +106,35 @@ class SourceEditor(ttk.Frame):
                     input_files.append(node.filepath)
 
         notebook = ttk.Notebook(left_frame)
-        fileview = FileTree(notebook, input_files)
-        fileview.bind_selection(self.open_source_file)
+        self.fileview = FileTree(notebook, input_files)
+        self.fileview.bind_selection(self.open_source_file)
         xmlview = XMLTree(notebook, xml_trees)
         xmlview.bind_selection(self.move_to)
-        notebook.add(fileview, text="Project Files")
+        notebook.add(self.fileview, text="Project Files")
         notebook.add(xmlview, text="XML")
 
-        with open(controller.filename, "r", encoding="utf-8") as f:
-            file_relpath = controller.get_relative_path(controller.filename)
-            self.codeview = LabeledWidget(self, file_relpath)
-            self.codeview.set_widget(
-                XMLSourceCodeView(
-                    self.codeview, f.read(), width=80, height=30, wrap=NONE
+        for filepath in input_files:
+            with open(
+                os.path.join(self.root_dir, filepath), "r", encoding="utf-8"
+            ) as f:
+                content = f.read()
+                self.file_states[filepath] = FileState(
+                    content=content, is_modified=False
                 )
-            )
+
+        file_relpath = controller.get_relative_path(controller.filename)
+        self.current_file = file_relpath
+        self.codeview = LabeledWidget(self, file_relpath)
+        editor = XMLSourceCodeView(
+            self.codeview,
+            self.file_states[file_relpath].content,
+            width=80,
+            height=30,
+            wrap=NONE,
+        )
+        self.codeview.set_widget(editor)
+
+        self.modified_event_id = editor.text.bind("<<Modified>>", self.on_text_modified)
 
         property_view = LabeledWidget(left_frame, "Property Explorer")
         property_view.set_widget(
@@ -135,12 +157,39 @@ class SourceEditor(ttk.Frame):
 
     def open_source_file(self, filename: str) -> None:
         editor = self.codeview.widget
-        if editor:
-            with open(os.path.join(self.root_dir, filename), "r") as f:
-                self.codeview.set_label(filename)
-                editor.new_content(f.read())
+        if filename != self.current_file:
+            current_content = editor.text.get("1.0", "end-1c")
+            self.file_states[self.current_file].content = current_content
+
+            # Avoid calling `self.on_text_modified` as new content will be loaded in the editor.
+            editor.text.unbind("<<Modified>>", self.modified_event_id)
+
+            self.codeview.set_label(filename)
+            editor.new_content(self.file_states[filename].content)
+
+            self.modified_event_id = editor.text.bind(
+                "<<Modified>>", self.on_text_modified
+            )
+
+            self.current_file = filename
+            self.update_title_bar_state()
 
     def move_to(self, filename: str, column: int, line: int) -> None:
         self.open_source_file(filename)
         editor: XMLSourceCodeView = self.codeview.widget
         editor.text.see(f"{line}.{column}")
+
+    def on_text_modified(self, _event: tk.Event) -> None:
+        editor = self.codeview.widget
+        current_file_state = self.file_states[self.current_file]
+
+        if editor.text.edit_modified() and not current_file_state.is_modified:
+            current_file_state.is_modified = True
+            self.fileview.highlight_file(self.current_file)
+            self.update_title_bar_state()
+
+    def update_title_bar_state(self) -> None:
+        any_modified = any(
+            file_state.is_modified for file_state in self.file_states.values()
+        )
+        self.master.mark_title_modified(any_modified)

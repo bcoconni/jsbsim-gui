@@ -192,6 +192,15 @@ class App(tk.Tk):
         self.grid_rowconfigure(0, weight=1)
         self.menubar.entryconfig("Trim", state=tk.DISABLED)
 
+    def mark_title_modified(self, is_modified: bool) -> None:
+        current_title = self.title()
+        if current_title.endswith("*"):
+            current_title = current_title[:-1]
+        if is_modified:
+            self.title(current_title + "*")
+        else:
+            self.title(current_title)
+
     def open_file(
         self,
         filename: str,

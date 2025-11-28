@@ -130,6 +130,18 @@ class HierarchicalTree(ttk.Frame):
             tree.item(child_id, open=False)
         tree.see(tree.get_children()[0])
 
+    def get_id_from_path(self, path: str) -> Optional[str]:
+        parent_id = ""
+        for name in path.split("/"):
+            for child_id in self.tree.get_children(parent_id):
+                if name == self.tree.item(child_id, "text"):
+                    parent_id = child_id
+                    break
+            else:
+                return None
+
+        return parent_id
+
 
 class CellEntry(ttk.Entry):
     def __init__(
@@ -266,14 +278,8 @@ class PropertyTree(SearchableTree):
         tree = self.tree.tree
         property_names = self.get_unified_property_names(properties)
         for node, pname in zip(properties, property_names):
-            parent_id = ""
-            for name in pname.split("/"):
-                for child_id in tree.get_children(parent_id):
-                    if name == tree.item(child_id, "text"):
-                        parent_id = child_id
-                        break
-                else:
-                    assert tree.item(child_id, "text") == name
+            parent_id = self.tree.get_id_from_path(pname)
+            assert parent_id is not None
             tree.set(parent_id, "value", node.get_double_value())
             self.properties[parent_id] = node
 
@@ -354,6 +360,7 @@ class FileTree(HierarchicalTree):
     def __init__(self, master: tk.Widget, elements: List[str]):
         super().__init__(master, elements, [])
         self.tree.configure(show="tree", selectmode=BROWSE)
+        self.tree.tag_configure("modified", foreground="red")
 
     def bind_selection(
         self,
@@ -366,3 +373,11 @@ class FileTree(HierarchicalTree):
                 func(selection[0])
 
         self.tree.bind("<<TreeviewSelect>>", bind_func, add)
+
+    def highlight_file(self, filepath: str) -> None:
+        item_id = self.get_id_from_path(filepath)
+        self.tree.item(item_id, tags=("modified",))
+
+    def clear_highlight(self, filepath: str) -> None:
+        item_id = self.get_id_from_path(filepath)
+        self.tree.item(item_id, tags=())

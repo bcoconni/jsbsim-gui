@@ -79,6 +79,7 @@ class TextView(ttk.Frame):
     def new_content(self, contents: str) -> None:
         self.text.delete("1.0", END)
         self.text.insert("1.0", contents)
+        self.text.edit_modified(False)
 
 
 class SourceCodeView(TextView):
