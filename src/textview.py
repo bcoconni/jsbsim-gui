@@ -233,7 +233,10 @@ class XMLSourceCodeView(SourceCodeView):
     def new_content(self, contents: str) -> None:
         super().new_content(contents)
         self.parser = self.new_parser()
-        self.parser.Parse(contents)
+        try:
+            self.parser.Parse(contents)
+        except expat.ExpatError:
+            pass
 
 
 class Console(TextView):

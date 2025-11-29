@@ -16,13 +16,14 @@
 
 import os
 import platform
+import xml.etree.ElementTree as et
 from typing import Dict, Iterator, List, Optional
 from xml.parsers import expat
 
 import jsbsim
 import numpy as np
-from jsbsim._jsbsim import _append_xml as append_xml
 from jsbsim import FGPropertyNode
+from jsbsim._jsbsim import _append_xml as append_xml
 
 from .property_history import PropertyHistory
 from .textview import ConsoleStdoutRedirect
@@ -276,3 +277,21 @@ class Controller:
             except jsbsim.TrimFailureError:
                 return False
             return True
+
+    def reload(self) -> bool:
+        old_fdm = self.fdm
+        root_dir = self.fdm.get_root_dir()
+        success = False
+
+        with self._console.redirect_stdout():
+            self.fdm = jsbsim.FGFDMExec(root_dir)
+
+        root = et.parse(self.filename).getroot()
+        if root.tag == "runscript":
+            success = self.load_script(self.filename)
+        elif root.tag == "fdm_config":
+            success = self.load_aircraft(self.filename)
+
+        if not success:
+            self.fdm = old_fdm
+        return success

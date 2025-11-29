@@ -16,12 +16,13 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import os
+import sys
 import tkinter as tk
 import xml.etree.ElementTree as et
 from tkinter import filedialog as fd
 from tkinter import ttk
 from tkinter.constants import EW, NSEW
-from tkinter.messagebox import showerror
+from tkinter.messagebox import askyesnocancel, showerror
 from typing import Callable, Optional
 
 from PIL import Image, ImageTk
@@ -37,11 +38,22 @@ class MenuBar(tk.Menu):
         super().__init__(master)
         self.root_dir = root_dir
 
-        file_menu = tk.Menu(self, tearoff=False)
-        file_menu.add_command(label="Root...", command=self.set_root_dir)
-        file_menu.add_command(label="Open...", command=self.select_script_file)
-        file_menu.add_command(label="Exit", command=master.destroy)
-        self.add_cascade(label="File", menu=file_menu)
+        self.file_menu = tk.Menu(self, tearoff=False)
+        self.file_menu.add_command(label="Root...", command=self.set_root_dir)
+        self.file_menu.add_command(label="Open...", command=self.select_script_file)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(
+            label="Save",
+            accelerator="Ctrl+S",
+            command=master.save_file,
+            state=tk.DISABLED,
+        )
+        self.file_menu.add_command(
+            label="Save All", command=master.save_all, state=tk.DISABLED
+        )
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Exit", command=master.on_closing)
+        self.add_cascade(label="File", menu=self.file_menu)
 
         view_menu = tk.Menu(self, tearoff=False)
         view_menu.add_command(label="Edit", command=self.master.edit)
@@ -98,6 +110,11 @@ class MenuBar(tk.Menu):
             self.root_dir = directory
             self.master.root_dir = directory
 
+    def update_save_menu_state(self, enable: bool) -> None:
+        state = tk.NORMAL if enable else tk.DISABLED
+        self.file_menu.entryconfig("Save", state=state)
+        self.file_menu.entryconfig("Save All", state=state)
+
 
 class App(tk.Tk):
     def __init__(self, root_dir: Optional[str] = None):
@@ -105,6 +122,7 @@ class App(tk.Tk):
         self._console: Optional[ConsoleStdoutRedirect] = None
         self._controller: Optional[Controller] = None
         self._statusbar: Optional[ttk.Label] = None
+        self.menubar: Optional[MenuBar] = None
         self.main = None
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
@@ -116,20 +134,41 @@ class App(tk.Tk):
                 showerror(
                     "Error", message=f'The directory "{self.root_dir}" does not exist'
                 )
-                exit(1)
+                sys.exit(1)
         else:
             try:
                 self.root_dir = Controller.get_default_root_dir()
             except IOError as e:
                 self.display_logo()
                 showerror("Error", message=str(e))
-                exit(1)
+                sys.exit(1)
 
         self.root_dir = os.path.realpath(self.root_dir)
         self.menubar = MenuBar(self, self.root_dir)
         self.config(menu=self.menubar)
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def on_closing(self) -> None:
+        if not self._prompt_save_if_modified(
+            "You have unsaved changes. Do you want to save them before exiting?"
+        ):
+            return
+        self.destroy()
+
+    def _prompt_save_if_modified(self, message: str) -> bool:
+        if isinstance(self.main, SourceEditor) and self.main.has_modified_files():
+            result = askyesnocancel("Unsaved Changes", message=message)
+            if result is None:
+                return False
+            elif result:
+                if not self.main.save_all():
+                    return False
+        return True
 
     def display_logo(self) -> None:
+        if self.menubar:
+            self.menubar.update_save_menu_state(False)
+
         with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
             resized_image = Image.new("RGB", size=(600, image.height), color="white")
             resized_image.paste(image, ((600 - image.width) // 2, 0))
@@ -167,9 +206,27 @@ class App(tk.Tk):
 
     def run(self) -> None:
         assert self.main
+
+        has_modified_files = (
+            isinstance(self.main, SourceEditor) and self.main.has_modified_files()
+        )
+
+        if not self._prompt_save_if_modified(
+            "You have unsaved changes. Do you want to save them before switching to run view?"
+        ):
+            return
+
+        if has_modified_files and not self._controller.reload():
+            showerror(
+                "Reload Error",
+                message="Failed to reload the model. Please check the console for errors.",
+            )
+            return
+
         w = self.main.winfo_width()
         h = self.main.winfo_height()
         self.main.destroy()
+        self.menubar.update_save_menu_state(False)
         self.main = Run(self, self._controller, self._statusbar, width=w, height=h)
         self.main.grid_propagate(0)
 
@@ -185,6 +242,7 @@ class App(tk.Tk):
 
         # Open the file in a text widget
         self.main = SourceEditor(self, self._controller)
+        self.menubar.update_save_menu_state(True)
 
         # Window layout
         self.main.grid(column=0, row=0, sticky=NSEW)
@@ -200,6 +258,14 @@ class App(tk.Tk):
             self.title(current_title + "*")
         else:
             self.title(current_title)
+
+    def save_file(self) -> None:
+        if isinstance(self.main, SourceEditor):
+            self.main.save_file()
+
+    def save_all(self) -> None:
+        if isinstance(self.main, SourceEditor):
+            self.main.save_all()
 
     def open_file(
         self,
