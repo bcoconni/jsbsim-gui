@@ -176,6 +176,12 @@ class Controller:
             return path.replace("\\", "/")
         return path
 
+    def get_relative_name(self, name: str) -> str:
+        root = self.get_property_root().get_fully_qualified_name()
+        if name.startswith(root + "/"):
+            return name[len(root) + 1 :]
+        return name
+
     def get_xml_trees(self) -> List[XMLNode]:
         aircraft_path = self.fdm.get_aircraft_path()
         root = XMLNodeBuilder(self.get_relative_path(self.filename), self.filename).root

@@ -140,7 +140,7 @@ class PropertyOccurrencesTree(LabeledWidget):
         close_callback: Callable[[], None],
     ):
         display_property = property_name.replace("[0]", "")
-        super().__init__(master, f"Occurrences of: {display_property}")
+        super().__init__(master, f"Occurrences of {display_property}")
 
         close_button = ttk.Button(
             self.header_frame, text="✕", width=3, command=close_callback
@@ -288,6 +288,7 @@ class SourceEditor(ttk.Frame):
         if not occurrences:
             return
 
+        property_path = self.controller.get_relative_name(property_path)
         self.show_occurrence_panel(property_path, occurrences)
 
     def show_occurrence_panel(
