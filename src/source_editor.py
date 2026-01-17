@@ -86,14 +86,14 @@ class XMLTree(SearchableTree):
 
 
 def search_property_occurrences(
-    property_variants: List[str], file_states: Dict[str, FileState]
-) -> Dict[str, List[Tuple[int, int]]]:
-    results: Dict[str, List[Tuple[int, int]]] = {}
+    property_variants: List[str], file_states: List[FileState]
+) -> Dict[FileState, List[Tuple[int, int]]]:
+    results: Dict[FileState, List[Tuple[int, int]]] = {}
 
     dummy_frame = tk.Frame()
     dummy_editor = XMLSourceCodeView(dummy_frame)
 
-    for filepath, file_state in file_states.items():
+    for file_state in file_states:
         file_occurrences = []
 
         dummy_editor.new_content(file_state.content)
@@ -125,7 +125,7 @@ def search_property_occurrences(
                     break
 
         if file_occurrences:
-            results[filepath] = sorted(file_occurrences)
+            results[file_state] = sorted(file_occurrences)
 
     dummy_frame.destroy()
     return results
@@ -136,7 +136,7 @@ class PropertyOccurrencesTree(LabeledWidget):
         self,
         master: tk.Widget,
         property_name: str,
-        occurrences: Dict[str, List[Tuple[int, int, str]]],
+        occurrences: Dict[FileState, List[Tuple[int, int]]],
         close_callback: Callable[[], None],
     ):
         display_property = property_name.replace("[0]", "")
@@ -150,28 +150,33 @@ class PropertyOccurrencesTree(LabeledWidget):
         self.occurrence_data: Dict[str, Tuple[str, int, int]] = {}
 
         input_files = []
-        for filepath in occurrences.keys():
-            if filepath not in input_files:
-                input_files.append(filepath)
+        for file_state in occurrences.keys():
+            if file_state.filepath not in input_files:
+                input_files.append(file_state.filepath)
 
-        tree_widget = HierarchicalTree(self, input_files, ["line"], True)
+        tree_widget = HierarchicalTree(self, input_files, ["content"], True)
         self.set_widget(tree_widget)
 
         tree_widget.tree.configure(show="tree headings", selectmode=BROWSE)
-        tree_widget.tree.heading("#0", text="File")
-        tree_widget.tree.heading("line", text="Line")
+        tree_widget.tree.heading("#0", text="Location")
+        tree_widget.tree.heading("content", text="Content")
 
-        for filepath, file_occurrences in occurrences.items():
-            file_id = tree_widget.get_id_from_path(filepath)
+        for file_state, file_occurrences in occurrences.items():
+            file_id = tree_widget.get_id_from_path(file_state.filepath)
+            lines = file_state.content.split("\n")
 
             for line, column in file_occurrences:
                 occurrence_id = tree_widget.tree.insert(
                     file_id,
                     tk.END,
-                    text="",
-                    values=(str(line),),
+                    text=str(line),
+                    values=(lines[line - 1].strip(),),
                 )
-                self.occurrence_data[occurrence_id] = (filepath, line, column)
+                self.occurrence_data[occurrence_id] = (
+                    file_state.filepath,
+                    line,
+                    column,
+                )
 
     def bind_selection(
         self,
@@ -179,14 +184,12 @@ class PropertyOccurrencesTree(LabeledWidget):
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
         def bind_func(_: tk.Event) -> None:
-            tree_widget: HierarchicalTree = self.widget
-            selection = tree_widget.tree.selection()
+            selection = self.widget.tree.selection()
             if selection and selection[0] in self.occurrence_data:
                 filepath, line, column = self.occurrence_data[selection[0]]
                 func(filepath, line, column)
 
-        tree_widget: HierarchicalTree = self.widget
-        tree_widget.tree.bind("<<TreeviewSelect>>", bind_func, add)
+        self.widget.tree.bind("<<TreeviewSelect>>", bind_func, add)
 
 
 class SourceEditor(ttk.Frame):
@@ -284,7 +287,9 @@ class SourceEditor(ttk.Frame):
         if not variants:
             return
 
-        occurrences = search_property_occurrences(variants, self.file_states)
+        occurrences = search_property_occurrences(
+            variants, list(self.file_states.values())
+        )
         if not occurrences:
             return
 
@@ -292,7 +297,9 @@ class SourceEditor(ttk.Frame):
         self.show_occurrence_panel(property_path, occurrences)
 
     def show_occurrence_panel(
-        self, property_name: str, occurrences: Dict[str, List[Tuple[int, int, str]]]
+        self,
+        property_name: str,
+        occurrences: Dict[FileState, List[Tuple[int, int]]],
     ) -> None:
         self.property_view.grid_remove()
 
