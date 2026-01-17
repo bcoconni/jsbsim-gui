@@ -34,8 +34,9 @@ class LabeledWidget(ttk.Frame):
         self.widget: Optional[tk.Widget] = None
         self.header_frame = ttk.Frame(self)
         self.header_frame.grid(column=0, row=0, sticky="ew", pady=5, padx=5)
-        self.label = ttk.Label(self.header_frame, text=label)
-        self.label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.label = ttk.Label(self.header_frame, text=label, anchor="center")
+        self.label.grid(column=0, row=0, sticky="ew")
+        self.header_frame.columnconfigure(0, weight=1)
 
     def set_widget(self, widget: tk.Widget) -> None:
         self.widget = widget
@@ -132,7 +133,7 @@ class PropertyOccurrencesTree(LabeledWidget):
         close_button = ttk.Button(
             self.header_frame, text="✕", width=3, command=close_callback
         )
-        close_button.pack(side=tk.RIGHT)
+        close_button.grid(column=1, row=0)
 
         self.occurrence_data: Dict[str, Tuple[str, int, int]] = {}
 
