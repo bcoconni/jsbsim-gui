@@ -314,14 +314,14 @@ class Controller:
 
         for prop in properties:
             full_path = prop.get_fully_qualified_name()
-            path_without_indices = full_path.replace("[0]", "")
+            normalized_path = full_path.replace("[0]", "")
 
-            if path_without_indices == search_path or path_without_indices.startswith(
+            if normalized_path == search_path or normalized_path.startswith(
                 search_path + "/"
             ):
-                if path_without_indices.startswith(root_name + "/"):
-                    variants.add(path_without_indices[len(root_name) + 1 :])
-                else:
-                    variants.add(path_without_indices)
+                variants.add(normalized_path)
+                # Also add the relative path
+                if normalized_path.startswith(root_name + "/"):
+                    variants.add(normalized_path[len(root_name) + 1 :])
 
         return list(variants)

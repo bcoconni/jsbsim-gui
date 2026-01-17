@@ -107,7 +107,19 @@ def search_property_occurrences(
 
         for line, column, text in all_regions:
             for variant in property_variants:
-                pattern = r"(^|[\s/])" + re.escape(variant) + r"($|[\s/\[])"
+                # Build pattern that allows optional [0] indices in property names
+                pattern_parts = []
+                for part in variant.split("/"):
+                    escaped_part = re.escape(part)
+                    # If part is empty (from leading slash in absolute paths) or has a
+                    # non-zero index, match it exactly.
+                    # Otherwise allow optional [0] after the part.
+                    if not part or "[" in part:
+                        pattern_parts.append(escaped_part)
+                    else:
+                        pattern_parts.append(escaped_part + r"(?:\[0\])?")
+
+                pattern = r"(^|[\s/])" + "/".join(pattern_parts) + r"($|[\s/\[])"
                 if re.search(pattern, text):
                     file_occurrences.append((line, column))
                     break
