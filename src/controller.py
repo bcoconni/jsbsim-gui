@@ -198,6 +198,9 @@ class Controller:
                 XMLNodeBuilder(self.get_relative_path(fullpath), fullpath).root
             )
             xml_trees.append(root)
+        elif root.name == "fdm_config":
+            aircraft_name = os.path.splitext(os.path.basename(self.filename))[0]
+            aircraft_path = os.path.join(aircraft_path, aircraft_name)
 
         engine_path = self.fdm.get_engine_path()
         systems_path = self.fdm.get_systems_path()
