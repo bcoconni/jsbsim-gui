@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023 Bertrand Coconnier
+# Copyright (c) 2023-2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -35,7 +35,7 @@ from tkinter.constants import (
     NSEW,
     VERTICAL,
 )
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from xml.parsers import expat
 
 
@@ -171,6 +171,7 @@ class XMLSourceCodeView(SourceCodeView):
         self.text.tag_configure("XML_comment", foreground="#00aaaa")
         self.text.tag_configure("XML_attr_name", foreground="#00aa00")
         self.text.tag_configure("XML_attr_value", foreground="#aaaa00")
+        self.text.tag_configure("XML_data", foreground="#000000")
 
         self.parser = self.new_parser()
         if contents:
@@ -178,10 +179,12 @@ class XMLSourceCodeView(SourceCodeView):
 
     def new_parser(self) -> expat.XMLParserType:
         parser = expat.ParserCreate()
+        parser.buffer_text = True
         parser.StartElementHandler = self.start_element
         parser.EndElementHandler = self.end_element
         parser.CommentHandler = self.comments
         parser.XmlDeclHandler = self.xmldecl
+        parser.DefaultHandler = self.character_data
         return parser
 
     def start_element(self, name: str, attrs: Dict[str, str]) -> None:
@@ -211,17 +214,25 @@ class XMLSourceCodeView(SourceCodeView):
         end = start + len(name)
         self.text.tag_add("XML_tag", f"{line}.{start}", f"{line}.{end}")
 
-    def comments(self, data: str) -> None:
-        data_lines = data.split("\n")
+    def _get_multilines_start_end(self, data: str) -> Tuple[int, int, int, int]:
         line1 = self.parser.CurrentLineNumber
         start = self.parser.CurrentColumnNumber
-        comment_lines = len(data_lines)
-        if comment_lines > 1:
-            line2 = line1 + comment_lines - 1
-            end = len(data_lines[-1]) + 3  # len("-->") == 3
+        data_lines = data.split("\n")
+        nlines = len(data_lines)
+        end = len(data_lines[-1])
+        if nlines > 1:
+            line2 = line1 + nlines - 1
         else:
             line2 = line1
-            end = start + len(data_lines[-1]) + 7  # len("<!--") + len("-->") == 7
+            end += start
+        return start, line1, end, line2
+
+    def comments(self, data: str) -> None:
+        start, line1, end, line2 = self._get_multilines_start_end(data)
+        if line1 == line2:
+            end += 7  # len("<!--") + len("-->") == 7
+        else:
+            end += 3  # len("-->") == 3
         self.text.tag_add("XML_comment", f"{line1}.{start}", f"{line2}.{end}")
 
     def xmldecl(self, version: str, encoding: Optional[str], _: int) -> None:
@@ -230,6 +241,10 @@ class XMLSourceCodeView(SourceCodeView):
             attrs["encoding"] = encoding
         self.start_element("?xml", attrs)
 
+    def character_data(self, data: str) -> None:
+        start, line1, end, line2 = self._get_multilines_start_end(data)
+        self.text.tag_add("XML_data", f"{line1}.{start}", f"{line2}.{end}")
+
     def new_content(self, contents: str) -> None:
         super().new_content(contents)
         self.parser = self.new_parser()
@@ -237,6 +252,19 @@ class XMLSourceCodeView(SourceCodeView):
             self.parser.Parse(contents)
         except expat.ExpatError:
             pass
+
+    def extract_tagged_regions(self, tag_name: str) -> List[Tuple[int, int, str]]:
+        tagged_regions = []
+        ranges = self.text.tag_ranges(tag_name)
+        for i in range(0, len(ranges), 2):
+            start_index = str(ranges[i])
+            end_index = str(ranges[i + 1])
+
+            line, column = map(int, start_index.split("."))
+            text = self.text.get(start_index, end_index)
+            tagged_regions.append((line, column, text))
+
+        return tagged_regions
 
 
 class Console(TextView):

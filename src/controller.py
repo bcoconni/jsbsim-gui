@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023-2024 Bertrand Coconnier
+# Copyright (c) 2023-2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -295,3 +295,33 @@ class Controller:
         if not success:
             self.fdm = old_fdm
         return success
+
+    def expand_property_with_children(self, property_path: str) -> List[str]:
+        property_root = self.get_property_root()
+        if not property_root:
+            return []
+
+        root_name = property_root.get_fully_qualified_name()
+
+        if not property_path.startswith("/"):
+            normalized_path = root_name + "/" + property_path
+        else:
+            normalized_path = property_path
+
+        search_path = normalized_path.replace("[0]", "")
+        properties = self.get_property_list()
+        variants = set()
+
+        for prop in properties:
+            full_path = prop.get_fully_qualified_name()
+            path_without_indices = full_path.replace("[0]", "")
+
+            if path_without_indices == search_path or path_without_indices.startswith(
+                search_path + "/"
+            ):
+                if path_without_indices.startswith(root_name + "/"):
+                    variants.add(path_without_indices[len(root_name) + 1 :])
+                else:
+                    variants.add(path_without_indices)
+
+        return list(variants)
