@@ -262,7 +262,7 @@ class SourceEditor(ttk.Frame):
         property_tree = PropertyTree(
             self.property_view,
             controller.get_property_list(),
-            controller.get_property_root().get_fully_qualified_name(),
+            controller.get_property_root(),
         )
         self.property_view.set_widget(property_tree)
 

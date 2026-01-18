@@ -221,8 +221,8 @@ class SearchableTree(ttk.Frame):
             children = tree.get_children(parent_id)
             if children:
                 if tree.item(parent_id, "open"):
-                    for item in children:
-                        enumerate_children(item)
+                    for child_id in children:
+                        enumerate_children(child_id)
             elif tree.bbox(parent_id):
                 self.visible_items.append(parent_id)
 
@@ -232,9 +232,9 @@ class SearchableTree(ttk.Frame):
 
 class PropertyTree(SearchableTree):
     def __init__(
-        self, master: tk.Widget, properties: List[FGPropertyNode], property_root: str
+        self, master: tk.Widget, properties: List[FGPropertyNode], root: FGPropertyNode
     ):
-        self.property_root: str = property_root
+        self.property_root: str = root.get_fully_qualified_name()
         super().__init__(
             master,
             lambda parent: HierarchicalTree(
@@ -248,6 +248,7 @@ class PropertyTree(SearchableTree):
         tree.heading("#0", text="Property")
         tree.heading("value", text="Value")
         self.initialize_values(properties)
+        self.bind_ids_to_nodes("", root)
         self.tree.tree.bind("<Double-Button-1>", self.edit_property_value)
         self.tree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
 
@@ -281,7 +282,15 @@ class PropertyTree(SearchableTree):
             parent_id = self.tree.get_id_from_path(pname)
             assert parent_id is not None
             tree.set(parent_id, "value", node.get_double_value())
-            self.properties[parent_id] = node
+
+    def bind_ids_to_nodes(self, parent_id: str, root: FGPropertyNode) -> None:
+        tree = self.tree.tree
+        for child_id in tree.get_children(parent_id):
+            name = tree.item(child_id, "text")
+            node = root.get_node(name)
+            assert node is not None
+            self.properties[child_id] = node
+            self.bind_ids_to_nodes(child_id, node)
 
     def search(self, event: tk.Event) -> None:
         super().search(event)

@@ -121,7 +121,7 @@ class Run(ttk.Frame):
             PropertyTree(
                 self.property_view,
                 controller.get_property_list(),
-                controller.get_property_root().get_fully_qualified_name(),
+                controller.get_property_root(),
             )
         )
         self.property_view.widget.grid(sticky=NS)
