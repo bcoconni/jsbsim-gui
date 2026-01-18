@@ -67,6 +67,12 @@ class HierarchicalTree(ttk.Frame):
             self.tree.delete(item)
         self._hidden_items = []
 
+    def move_to_top(self) -> None:
+        children = self.tree.get_children()
+        if children:
+            self.tree.see(children[0])
+            self.tree.yview_moveto(0)
+
     def bind(
         self,
         sequence: Optional[str],
@@ -217,6 +223,7 @@ class SearchableTree(ttk.Frame):
             self.tree.filter(pattern)
 
         self.update_visible_properties(None)
+        self.tree.move_to_top()
 
     def update_visible_properties(self, _: tk.Event) -> None:
         self.visible_items = []
