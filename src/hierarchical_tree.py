@@ -158,7 +158,18 @@ class HierarchicalTree(ttk.Frame):
         return parent_id
 
 
-class CellEntry(ttk.Entry):
+class TextBox(ttk.Entry):
+    def __init__(self, master: tk.Widget, **kw):
+        super().__init__(master, **kw)
+        self.bind("<Control-a>", self.select_all)
+
+    def select_all(self, *_) -> str:
+        self.selection_range(0, tk.END)
+        # Return break to interrupt the default key binding.
+        return "break"
+
+
+class CellEntry(TextBox):
     def __init__(
         self, master: tk.Widget, content: str, update_value: Callable[[str], None], **kw
     ):
@@ -170,18 +181,12 @@ class CellEntry(ttk.Entry):
         self.focus_force()
         self.bind("<Return>", self.set_value)
         self.bind("<KP_Enter>", self.set_value)
-        self.bind("<Control-a>", self.select_all)
         self.bind("<Escape>", lambda _: self.destroy())
         self.bind("<FocusOut>", lambda _: self.destroy())
 
     def set_value(self, _) -> None:
         self.update_value(self.get())
         self.destroy()
-
-    def select_all(self, *_) -> str:
-        self.selection_range(0, tk.END)
-        # Return break to interrupt the default key binding.
-        return "break"
 
 
 class SearchableTree(ttk.Frame):
@@ -195,7 +200,7 @@ class SearchableTree(ttk.Frame):
         search_frame.grid(column=0, row=0, sticky=EW)
         search_label = ttk.Label(search_frame, text="Search:")
         search_label.grid(column=0, row=0, padx=10)
-        self.search_box = ttk.Entry(search_frame)
+        self.search_box = TextBox(search_frame)
         self.search_box.grid(column=1, row=0, sticky=EW)
         self.tree = create_tree(self)
         self.tree.grid(column=0, row=1, columnspan=3, sticky=NSEW)
