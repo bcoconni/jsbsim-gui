@@ -64,12 +64,7 @@ class XMLTree(SearchableTree):
                 else:
                     parent_id = ""
 
-                node_id = tree.insert(
-                    parent_id,
-                    tk.END,
-                    text=node.name,
-                    open=False,
-                )
+                node_id = tree.insert(parent_id, tk.END, text=node.name, open=False)
                 self.nodes[node_id] = node
                 node_ids[node] = node_id
 
@@ -144,15 +139,8 @@ def search_property_occurrences(
 
 
 class PropertyOccurrencesTree(LabeledWidget):
-    def __init__(
-        self,
-        master: tk.Widget,
-        property_name: str,
-        occurrences: Dict[FileState, List[Tuple[int, int]]],
-        close_callback: Callable[[], None],
-    ):
-        display_property = property_name.replace("[0]", "")
-        super().__init__(master, f"Occurrences of {display_property}")
+    def __init__(self, master: tk.Widget, close_callback: Callable[[], None]):
+        super().__init__(master, "")
 
         close_button = ttk.Button(
             self.header_frame, text="✕", width=3, command=close_callback
@@ -161,34 +149,39 @@ class PropertyOccurrencesTree(LabeledWidget):
 
         self.occurrence_data: Dict[str, Tuple[FileState, int, int]] = {}
 
-        input_files = []
-        for file_state in occurrences.keys():
-            if file_state.filepath not in input_files:
-                input_files.append(file_state.filepath)
-
-        tree_widget = HierarchicalTree(self, input_files, ["content"], True)
+        tree_widget = HierarchicalTree(self, [], ["content"], True)
         self.set_widget(tree_widget)
 
         tree_widget.tree.configure(show="tree headings", selectmode=BROWSE)
         tree_widget.tree.heading("#0", text="Location")
         tree_widget.tree.heading("content", text="Content")
 
+    def set_occurrences(
+        self, property_name: str, occurrences: Dict[FileState, List[Tuple[int, int]]]
+    ) -> None:
+        tree: HierarchicalTree = self.widget
+        self.occurrence_data = {}
+        input_files: List[str] = []
+        display_property = property_name.replace("[0]", "")
+
+        self.set_label(f"Occurrences of {display_property}")
+        tree.clear()
+
+        for file_state in occurrences.keys():
+            if file_state.filepath not in input_files:
+                input_files.append(file_state.filepath)
+
+        tree.create_tree_nodes(input_files)
+
         for file_state, file_occurrences in occurrences.items():
-            file_id = tree_widget.get_id_from_path(file_state.filepath)
+            file_id = tree.get_id_from_path(file_state.filepath)
             lines = file_state.content.split("\n")
 
             for line, column in file_occurrences:
-                occurrence_id = tree_widget.tree.insert(
-                    file_id,
-                    tk.END,
-                    text=str(line),
-                    values=(lines[line - 1].strip(),),
+                occurrence_id = tree.tree.insert(
+                    file_id, tk.END, text=str(line), values=(lines[line - 1].strip(),)
                 )
-                self.occurrence_data[occurrence_id] = (
-                    file_state,
-                    line,
-                    column,
-                )
+                self.occurrence_data[occurrence_id] = (file_state, line, column)
 
     def bind_selection(
         self,
@@ -205,11 +198,7 @@ class PropertyOccurrencesTree(LabeledWidget):
 
 
 class SourceEditor(ttk.Frame):
-    def __init__(
-        self,
-        master: tk.Widget,
-        controller: Controller,
-    ):
+    def __init__(self, master: tk.Widget, controller: Controller):
         super().__init__(master)
         self.root_dir = controller.get_root_dir()
         self.controller = controller
@@ -247,11 +236,7 @@ class SourceEditor(ttk.Frame):
         self.current_file = self.file_states[file_relpath]
         self.codeview = LabeledWidget(self, file_relpath)
         editor = XMLSourceCodeView(
-            self.codeview,
-            self.current_file.content,
-            width=80,
-            height=30,
-            wrap=NONE,
+            self.codeview, self.current_file.content, width=80, height=30, wrap=NONE
         )
         self.codeview.set_widget(editor)
 
@@ -270,7 +255,16 @@ class SourceEditor(ttk.Frame):
             "<ButtonRelease-3>", self.on_property_selected, add="+"
         )
 
-        self.occurrence_view: Optional[PropertyOccurrencesTree] = None
+        self.occurrence_view = PropertyOccurrencesTree(
+            left_frame, self.hide_occurrence_panel
+        )
+        self.occurrence_view.bind_selection(
+            lambda file_state, line, column: self.move_to(
+                file_state, True, column, line
+            )
+        )
+        self.occurrence_view.grid(column=0, row=1, sticky=NS)
+        self.occurrence_view.grid_remove()
 
         # Window layout
         self.codeview.grid(column=1, row=0, sticky=NSEW)
@@ -309,31 +303,14 @@ class SourceEditor(ttk.Frame):
         self.show_occurrence_panel(property_path, occurrences)
 
     def show_occurrence_panel(
-        self,
-        property_name: str,
-        occurrences: Dict[FileState, List[Tuple[int, int]]],
+        self, property_name: str, occurrences: Dict[FileState, List[Tuple[int, int]]]
     ) -> None:
         self.property_view.grid_remove()
-
-        if self.occurrence_view:
-            self.occurrence_view.destroy()
-
-        self.occurrence_view = PropertyOccurrencesTree(
-            self.left_frame, property_name, occurrences, self.hide_occurrence_panel
-        )
-        self.occurrence_view.bind_selection(
-            lambda file_state, line, column: self.move_to(
-                file_state, True, column, line
-            )
-        )
+        self.occurrence_view.set_occurrences(property_name, occurrences)
         self.occurrence_view.grid(column=0, row=1, sticky=NS)
 
     def hide_occurrence_panel(self) -> None:
-        if self.occurrence_view:
-            self.occurrence_view.grid_remove()
-            self.occurrence_view.destroy()
-            self.occurrence_view = None
-
+        self.occurrence_view.grid_remove()
         self.property_view.grid(column=0, row=1, sticky=NS)
 
     def open_source_file(self, file_state: FileState) -> None:

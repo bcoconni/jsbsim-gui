@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023-2024 Bertrand Coconnier
+# Copyright (c) 2023-2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -28,7 +28,7 @@ class HierarchicalTree(ttk.Frame):
     def __init__(
         self,
         master: tk.Widget,
-        elements: List[str],
+        nodes: List[str],
         columns_id: List[str],
         is_open: bool = True,
     ):
@@ -36,10 +36,19 @@ class HierarchicalTree(ttk.Frame):
         self.tree = ttk.Treeview(self, columns=columns_id)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._hidden_items: List[Tuple[str, str, int]] = []
+        self._num_columns = len(columns_id)
 
-        for elm in sorted(elements):
+        self.create_tree_nodes(nodes, is_open)
+
+        # Vertical scrollbar
+        self._yscrollbar = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
+        self._yscrollbar.pack(side=tk.LEFT, fill=tk.Y)
+        self.tree["yscrollcommand"] = self._yscrollbar.set
+
+    def create_tree_nodes(self, nodes: List[str], is_open: bool = True) -> None:
+        for node in sorted(nodes):
             parent_id = ""
-            for name in elm.split("/"):
+            for name in node.split("/"):
                 for child_id in self.tree.get_children(parent_id):
                     if name == self.tree.item(child_id, "text"):
                         parent_id = child_id
@@ -49,14 +58,14 @@ class HierarchicalTree(ttk.Frame):
                         parent_id,
                         tk.END,
                         text=name,
-                        values=[""] * len(columns_id),
+                        values=[""] * self._num_columns,
                         open=is_open,
                     )
 
-        # Vertical scrollbar
-        self.yscrollbar = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
-        self.yscrollbar.pack(side=tk.LEFT, fill=tk.Y)
-        self.tree["yscrollcommand"] = self.yscrollbar.set
+    def clear(self) -> None:
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        self._hidden_items = []
 
     def bind(
         self,
@@ -64,7 +73,7 @@ class HierarchicalTree(ttk.Frame):
         func: Callable[[tk.Event], None],
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
-        self.yscrollbar.bind(sequence, func, add)
+        self._yscrollbar.bind(sequence, func, add)
         self.tree.bind(sequence, func, add)
 
     def get_selected_elements(self) -> List[str]:
@@ -145,11 +154,7 @@ class HierarchicalTree(ttk.Frame):
 
 class CellEntry(ttk.Entry):
     def __init__(
-        self,
-        master: tk.Widget,
-        content: str,
-        update_value: Callable[[str], None],
-        **kw,
+        self, master: tk.Widget, content: str, update_value: Callable[[str], None], **kw
     ):
         super().__init__(master, **kw)
         self.update_value = update_value
