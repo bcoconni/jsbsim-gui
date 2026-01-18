@@ -105,27 +105,27 @@ def search_property_occurrences(
 
         all_regions = data_regions + attr_regions
 
-        for line, column, text in all_regions:
-            lines = text.split("\n")
-            for variant in property_variants:
-                # Build pattern that allows optional [0] indices in property names
-                pattern_parts = []
-                for part in variant.split("/"):
-                    escaped_part = re.escape(part)
-                    # If part is empty (from leading slash in absolute paths) or has a
-                    # non-zero index, match it exactly.
-                    # Otherwise allow optional [0] after the part.
-                    if not part or "[" in part:
-                        pattern_parts.append(escaped_part)
-                    else:
-                        pattern_parts.append(escaped_part + r"(?:\[0\])?")
+        for variant in property_variants:
+            # Build pattern that allows optional [0] indices in property names
+            pattern_parts = []
+            for part in variant.split("/"):
+                escaped_part = re.escape(part)
+                # If part is empty (from leading slash in absolute paths) or has a
+                # non-zero index, match it exactly.
+                # Otherwise allow optional [0] after the part.
+                if not part or "[" in part:
+                    pattern_parts.append(escaped_part)
+                else:
+                    pattern_parts.append(escaped_part + r"(?:\[0\])?")
 
-                pattern = r"(?:^|[\s/])(" + "/".join(pattern_parts) + r")(?:$|[\s/\[])"
+            pattern = r"(?:^|[\s/])(" + "/".join(pattern_parts) + r")(?:$|[\s/\[])"
+
+            for line, column, text in all_regions:
                 property_match = re.search(pattern, text)
                 if property_match:
                     property_column = property_match.start(1)
                     property_line = line
-                    for l in lines:
+                    for l in text.split("\n"):
                         length = len(l)
                         if length < property_column:
                             property_column -= length + 1  # Including '\n
@@ -159,7 +159,7 @@ class PropertyOccurrencesTree(LabeledWidget):
         )
         close_button.grid(column=1, row=0)
 
-        self.occurrence_data: Dict[str, Tuple[str, int, int]] = {}
+        self.occurrence_data: Dict[str, Tuple[FileState, int, int]] = {}
 
         input_files = []
         for file_state in occurrences.keys():
@@ -185,21 +185,21 @@ class PropertyOccurrencesTree(LabeledWidget):
                     values=(lines[line - 1].strip(),),
                 )
                 self.occurrence_data[occurrence_id] = (
-                    file_state.filepath,
+                    file_state,
                     line,
                     column,
                 )
 
     def bind_selection(
         self,
-        func: Callable[[str, int, int], None],
+        func: Callable[[FileState, int, int], None],
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
         def bind_func(_: tk.Event) -> None:
             selection = self.widget.tree.selection()
             if selection and selection[0] in self.occurrence_data:
-                filepath, line, column = self.occurrence_data[selection[0]]
-                func(filepath, line, column)
+                file_state, line, column = self.occurrence_data[selection[0]]
+                func(file_state, line, column)
 
         self.widget.tree.bind("<<TreeviewSelect>>", bind_func, add)
 
@@ -322,8 +322,8 @@ class SourceEditor(ttk.Frame):
             self.left_frame, property_name, occurrences, self.hide_occurrence_panel
         )
         self.occurrence_view.bind_selection(
-            lambda filepath, line, column: self.move_to(
-                self.file_states[filepath], True, column, line
+            lambda file_state, line, column: self.move_to(
+                file_state, True, column, line
             )
         )
         self.occurrence_view.grid(column=0, row=1, sticky=NS)
