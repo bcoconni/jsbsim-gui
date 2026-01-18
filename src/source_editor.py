@@ -106,6 +106,7 @@ def search_property_occurrences(
         all_regions = data_regions + attr_regions
 
         for line, column, text in all_regions:
+            lines = text.split("\n")
             for variant in property_variants:
                 # Build pattern that allows optional [0] indices in property names
                 pattern_parts = []
@@ -119,10 +120,21 @@ def search_property_occurrences(
                     else:
                         pattern_parts.append(escaped_part + r"(?:\[0\])?")
 
-                pattern = r"(^|[\s/])" + "/".join(pattern_parts) + r"($|[\s/\[])"
-                if re.search(pattern, text):
-                    file_occurrences.append((line, column))
-                    break
+                pattern = r"(?:^|[\s/])(" + "/".join(pattern_parts) + r")(?:$|[\s/\[])"
+                property_match = re.search(pattern, text)
+                if property_match:
+                    property_column = property_match.start(1)
+                    property_line = line
+                    for l in lines:
+                        length = len(l)
+                        if length < property_column:
+                            property_column -= length + 1  # Including '\n
+                            property_line += 1
+                        else:
+                            break
+                    if property_line == line:
+                        property_column += column
+                    file_occurrences.append((property_line, property_column))
 
         if file_occurrences:
             results[file_state] = sorted(file_occurrences)
