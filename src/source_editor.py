@@ -19,7 +19,7 @@ import os
 import re
 import tkinter as tk
 from tkinter import ttk
-from tkinter.constants import BROWSE, NONE, NS, NSEW
+from tkinter.constants import BROWSE, INSERT, NONE, NS, NSEW
 from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from .controller import Controller, XMLNode
@@ -230,7 +230,13 @@ class SourceEditor(ttk.Frame):
             with open(
                 os.path.join(self.root_dir, filepath), "r", encoding="utf-8"
             ) as f:
-                self.file_states[filepath] = FileState(filepath, f.read())
+                contents = f.read()
+                # Source files are having a trailing carriage return (CR) that shall not
+                # be displayed.
+                if contents and contents[-1] == "\n":
+                    contents = contents[:-1]  # Remove the last trailing CR
+
+                self.file_states[filepath] = FileState(filepath, contents)
 
         file_relpath = controller.get_relative_path(controller.filename)
         self.current_file = self.file_states[file_relpath]
@@ -240,7 +246,7 @@ class SourceEditor(ttk.Frame):
         )
         self.codeview.set_widget(editor)
 
-        self.modified_event_id = editor.text.bind("<<Modified>>", self.on_text_modified)
+        editor.bind_modified_text(self.on_text_modified)
         self.bind("<Control-s>", lambda e: self.save_file())
 
         self.property_view = LabeledWidget(left_frame, "Property Explorer")
@@ -317,17 +323,8 @@ class SourceEditor(ttk.Frame):
         editor: XMLSourceCodeView = self.codeview.widget
         if file_state is not self.current_file:
             self.current_file.content = editor.text.get("1.0", "end-1c")
-
-            # Avoid calling `self.on_text_modified` as new content will be loaded in the editor.
-            editor.text.unbind("<<Modified>>", self.modified_event_id)
-
             self.codeview.set_label(file_state.filepath)
             editor.new_content(file_state.content)
-
-            self.modified_event_id = editor.text.bind(
-                "<<Modified>>", self.on_text_modified
-            )
-
             self.current_file = file_state
             self.update_title_bar_state()
 
@@ -336,16 +333,13 @@ class SourceEditor(ttk.Frame):
     ) -> None:
         self.open_source_file(file_state)
         editor: XMLSourceCodeView = self.codeview.widget
-        editor.text.mark_unset("insert")
-        editor.text.mark_set("insert", f"{line}.{column}")
-        editor.text.see("insert")
+        editor.text.mark_set(INSERT, f"{line}.{column}")
+        editor.text.see(INSERT)
         if focus:
             editor.text.focus()
 
-    def on_text_modified(self, _event: tk.Event) -> None:
-        editor: XMLSourceCodeView = self.codeview.widget
-
-        if editor.text.edit_modified() and not self.current_file.is_modified:
+    def on_text_modified(self, modified: bool) -> None:
+        if modified and not self.current_file.is_modified:
             self.current_file.is_modified = True
             self.fileview.highlight_file(self.current_file.filepath)
             self.update_title_bar_state()

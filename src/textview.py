@@ -35,7 +35,7 @@ from tkinter.constants import (
     NSEW,
     VERTICAL,
 )
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 from xml.parsers import expat
 
 
@@ -86,49 +86,77 @@ class SourceCodeView(TextView):
     """Display text with line numbers"""
 
     def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
-        super().__init__(master, frame_column=1, borderwidth=0, relief=FLAT, **kw)
+        # Override parameters defined upstream
+        kw["borderwidth"] = 0
+        kw["relief"] = FLAT
+        super().__init__(master, frame_column=1, **kw)
+        self.modified_text_callbacks: List[Callable[[bool], None]] = []
 
         self.line_numbers = tk.Text(
-            self, width=1, bg="#eeeeee", borderwidth=0, relief=FLAT
+            self, width=1, bg="#eeeeee", borderwidth=0, relief=FLAT, wrap=NONE
         )
         # Even when empty, the first line is where the cursor is so we need a number
         self.line_numbers.insert("1.0", "1")
         self.line_numbers.grid(column=0, row=0, sticky=NS)
-        self.line_numbers["yscrollcommand"] = self.move_text
+        self.line_numbers.bind("<Button-1>", self.goto_line)
+        self.line_numbers.bind("<MouseWheel>", self.on_line_numbers_scroll)
+        self.line_numbers.bind("<Button-4>", self.on_line_numbers_scroll)
+        self.line_numbers.bind("<Button-5>", self.on_line_numbers_scroll)
+        self.line_numbers.configure(state=DISABLED)
 
         self.text["yscrollcommand"] = self.move_line_numbers
+        self.yscrollbar.configure(command=self.yview)
+        self.modified_event_id = self.text.bind("<<Modified>>", self.on_text_modified)
 
         if contents:
             self.new_content(contents)
 
-        self.line_numbers.bind("<Button-1>", self.goto_line)
-        self.text.bind("<KeyRelease>", self.update_line_numbers)
+    def bind_modified_text(
+        self, func: Callable[[bool], None], add: bool = False
+    ) -> None:
+        if add:
+            self.modified_text_callbacks.append(func)
+        else:
+            self.modified_text_callbacks = [func]
 
-    def move_text(self, first: float, last: float) -> None:
-        self.yscrollbar.set(first, last)
-        self.text.yview(MOVETO, first)
+    def on_text_modified(self, _event: tk.Event) -> None:
+        modified = self.text.edit_modified()
+        for func in self.modified_text_callbacks:
+            func(modified)
+
+        self.update_line_numbers()
+        self.text.edit_modified(False)
 
     def move_line_numbers(self, first: float, last: float) -> None:
         self.yscrollbar.set(first, last)
         self.line_numbers.yview(MOVETO, first)
 
-    def yview(self, *args) -> Tuple[float, float]:
+    def yview(self, *args) -> None:
+        self.line_numbers.yview(*args)
         self.text.yview(*args)
-        return self.line_numbers.yview(*args)
 
     def new_content(self, contents: str) -> None:
-        # Source files are having a trailing carriage return (CR) that we do not want
-        # to display.
-        if contents[-1] == "\n":
-            contents = contents[:-1]  # Remove the last trailing CR
+        # Avoid calling `self.on_text_modified` as new content will be loaded in the editor.
+        self.text.unbind("<<Modified>>", self.modified_event_id)
         super().new_content(contents)
-        self.update_line_numbers(None)
+        self.update_line_numbers()
+        self.modified_event_id = self.text.bind("<<Modified>>", self.on_text_modified)
 
     def goto_line(self, event: tk.Event) -> None:
-        line = self.line_numbers.index(f"@{event.x},{event.y} linestart")
-        self.text.see(f"{line}")
+        position = self.line_numbers.index(f"@{event.x},{event.y} linestart")
+        self.text.mark_set(tk.INSERT, f"{position}")
+        self.text.see(tk.INSERT)
+        self.text.focus()
 
-    def update_line_numbers(self, _) -> None:
+    def on_line_numbers_scroll(self, event: tk.Event) -> str:
+        if event.num == 4 or event.delta > 0:
+            self.text.yview_scroll(-3, "units")
+        elif event.num == 5 or event.delta < 0:
+            self.text.yview_scroll(3, "units")
+
+        return "break"
+
+    def update_line_numbers(self) -> None:
         num_text_lines = int(self.text.index(END).split(".", maxsplit=1)[0])
         num_line_numbers = int(self.line_numbers.index(END).split(".", maxsplit=1)[0])
         self.line_numbers.configure(state=NORMAL)
@@ -151,6 +179,8 @@ class SourceCodeView(TextView):
         if num_text_lines < num_line_numbers:
             self.line_numbers.delete(f"{num_text_lines}.0", END)
         elif num_text_lines > num_line_numbers:
+            if num_line_numbers > 1:
+                self.line_numbers.insert(END, "\n")
             self.line_numbers.insert(
                 END,
                 "\n".join(
