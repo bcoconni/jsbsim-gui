@@ -332,8 +332,15 @@ class SourceEditor(ttk.Frame):
         self, file_state: FileState, focus: bool, column: int, line: int
     ) -> None:
         self.open_source_file(file_state)
+        assert isinstance(self.codeview.widget, XMLSourceCodeView)
         editor: XMLSourceCodeView = self.codeview.widget
         editor.move_cursor(f"{line}.{column}", focus)
+
+        file_tree = self.fileview
+        file_id = file_tree.get_id_from_path(file_state.filepath)
+        assert file_id is not None
+        file_tree.tree.see(file_id)
+        file_tree.tree.selection_set([file_id])
 
     def on_text_modified(self, modified: bool) -> None:
         if modified and not self.current_file.is_modified:
