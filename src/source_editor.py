@@ -322,7 +322,7 @@ class SourceEditor(ttk.Frame):
     def open_source_file(self, file_state: FileState) -> None:
         editor: XMLSourceCodeView = self.codeview.widget
         if file_state is not self.current_file:
-            self.current_file.content = editor.text.get("1.0", "end-1c")
+            self.current_file.content = editor.get_content()
             self.codeview.set_label(file_state.filepath)
             editor.new_content(file_state.content)
             self.current_file = file_state
@@ -333,10 +333,7 @@ class SourceEditor(ttk.Frame):
     ) -> None:
         self.open_source_file(file_state)
         editor: XMLSourceCodeView = self.codeview.widget
-        editor.text.mark_set(INSERT, f"{line}.{column}")
-        editor.text.see(INSERT)
-        if focus:
-            editor.text.focus()
+        editor.move_cursor(f"{line}.{column}", focus)
 
     def on_text_modified(self, modified: bool) -> None:
         if modified and not self.current_file.is_modified:
@@ -363,7 +360,7 @@ class SourceEditor(ttk.Frame):
             return True
 
         editor: XMLSourceCodeView = self.codeview.widget
-        self.current_file.content = editor.text.get("1.0", "end-1c")
+        self.current_file.content = editor.get_content()
 
         error = self.current_file.validate_xml()
         if error:
@@ -384,7 +381,7 @@ class SourceEditor(ttk.Frame):
 
         if self.current_file.is_modified:
             editor: XMLSourceCodeView = self.codeview.widget
-            self.current_file.content = editor.text.get("1.0", "end-1c")
+            self.current_file.content = editor.get_content()
 
         for file_state in modified_files:
             error = file_state.validate_xml()
