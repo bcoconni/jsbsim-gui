@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023-2024 Bertrand Coconnier
+# Copyright (c) 2023-2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -168,40 +168,56 @@ class PlotsView(ttk.Frame):
             pos1 = m.transform((bbox.x1, bbox.y1))
             return pos1 - pos0
 
-        if event.inaxes:
-            dt = self.controller.dt
-            step_id = int(event.xdata / dt)
-            x0 = step_id * dt
-            if event.xdata - x0 > dt / 2:
+        if event.inaxes and event.xdata:
+            ax0 = axes[0]
+            data0: np.ndarray = ax0.lines[0].get_xdata(True)
+            ndata = data0.size
+            if ndata < 2:
+                return
+
+            tmin = data0[0]
+            tmax = data0[-1]
+            dt = (tmax - tmin) / ndata
+            step_id = int((event.xdata - tmin) / dt)
+            x0 = tmin + step_id * dt
+            if step_id < ndata - 1 and event.xdata - x0 > dt / 2:
                 step_id += 1
                 x0 += dt
             self.t_hover = x0
+            pinfo0 = self.plots[0][0]
 
             if self.pan:
-                ax0 = axes[0]
-                data0 = ax0.lines[0].get_xdata()
-                if len(data0) < 2:
-                    return
-
-                tmin = data0[0]
-                tmax = data0[-1]
                 xmin, xmax = ax0.get_xbound()
                 width = xmax - xmin
                 dx = event.xdata - self.pan_xref
                 xmin -= dx
                 xmax -= dx
                 pan_offset = 0.0
-                if xmin < tmin:
-                    pan_offset = tmin - xmin
-                    xmin = tmin
+                if xmin < 0.0:
+                    pan_offset = -xmin
+                    xmin = 0.0
                     xmax = xmin + width
+
+                dt = self.controller.dt
+                t = pinfo0.get_time(0, -1, dt)
+                tmax = t[-1]
                 if xmax > tmax:
                     pan_offset = tmax - xmax
                     xmax = tmax
                     xmin = xmax - width
 
-                for ax in axes:
+                # Make sure the first and last data elements are displayed *outside*
+                # the plot
+                min_idx = math.floor(xmin / dt)
+                max_idx = min(math.ceil(xmax / dt), round(tmax / dt))
+                t = pinfo0.get_time(min_idx, max_idx, dt)
+
+                for ax, plots in zip(axes, self.plots):
                     ax.set_xlim(xmin, xmax)
+                    for line, pinfo in zip(ax.lines[:-1], plots):
+                        ydata = pinfo.get_data(min_idx, max_idx)
+                        line.set_xdata(t)
+                        line.set_ydata(ydata)
                     ax.lines[-1].set_visible(False)
                     for text in ax.texts:
                         text.set_visible(False)
@@ -210,7 +226,6 @@ class PlotsView(ttk.Frame):
                 self.reset_and_redraw()
                 return
 
-            ax0 = axes[0]
             text0 = ax0.texts[-1]
             text0.set_text(f"t={x0:.3f}s")
             text0.set_visible(True)
@@ -224,7 +239,7 @@ class PlotsView(ttk.Frame):
                 vline.set_xdata([event.xdata, event.xdata])
 
                 for line_id, line in enumerate(ax.lines[:-1]):
-                    ydata = line.get_ydata()
+                    ydata: np.ndarray = line.get_ydata()
                     if len(ydata) > 1:
                         text = ax.texts[line_id]
                         y0 = ydata[step_id]
@@ -274,19 +289,28 @@ class PlotsView(ttk.Frame):
     def on_scroll(self, event: MouseEvent):
         ax0 = event.inaxes
 
-        if ax0:
+        if ax0 and event.xdata:
             xmin, xmax = ax0.get_xbound()
             dxl = event.xdata - xmin
             dxr = xmax - event.xdata
             factor = math.pow(1.5, -event.step)
-            data0 = ax0.lines[0].get_xdata()
-            tmin = data0[0]
-            tmax = data0[-1]
-            xl = max(event.xdata - dxl * factor, tmin)
+            pinfo0 = self.plots[0][0]
+            dt = self.controller.dt
+            t = pinfo0.get_time(0, -1, dt)
+            tmax = t[-1]
+            xl = max(event.xdata - dxl * factor, 0.0)
             xr = min(event.xdata + dxr * factor, tmax)
+            # Make sure the first and last data elements are displayed *outside* the plot
+            min_idx = math.floor(xl / dt)
+            max_idx = min(math.ceil(xr / dt), round(tmax / dt))
+            t = pinfo0.get_time(min_idx, max_idx, dt)
 
-            for ax in event.canvas.figure.axes:
+            for ax, plots in zip(event.canvas.figure.axes, self.plots):
                 ax.set_xlim(xl, xr)
+                for line, pinfo in zip(ax.lines[:-1], plots):
+                    ydata = pinfo.get_data(min_idx, max_idx)
+                    line.set_xdata(t)
+                    line.set_ydata(ydata)
 
             self.reset_and_redraw()
 
@@ -336,27 +360,24 @@ class PlotsView(ttk.Frame):
             )
             self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        nplots = len(self.plots)
         pinfo0 = self.plots[0][0]
-        values = self.controller.get_property_log(pinfo0.node)
+        pinfo0.load_data(self.controller)
         dt = self.controller.dt
-        t = np.arange(0, len(values)) * dt
+        t = pinfo0.get_time(0, -1, dt)
         w = self.winfo_width()
         h = self.winfo_height()
+        nplots = len(self.plots)
         figure = self.canvas.figure
         figure.set_size_inches(w / self.dpi, h / self.dpi)
         figure.subplots(nplots, 1, sharex=True)
+
         for plot_id, plots in enumerate(self.plots):
             ax = figure.axes[plot_id]
             # Plot the property history
             for idx, pinfo in enumerate(plots):
+                pinfo.load_data(self.controller)
                 color = f"C{idx%10}"
-                ax.plot(
-                    t,
-                    self.controller.get_property_log(pinfo.node),
-                    label=pinfo.name,
-                    color=color,
-                )
+                ax.plot(t, pinfo.get_data(0, -1), label=pinfo.name, color=color)
                 value_text = ax.text(
                     0.0,
                     0.0,
@@ -394,18 +415,18 @@ class PlotsView(ttk.Frame):
     def update_plots(self):
         if self.plots:
             pinfo0 = self.plots[0][0]
-            values = self.controller.get_property_log(pinfo0.node)
-            ncol = len(values)
+            pinfo0.load_data(self.controller)
+            t = pinfo0.get_time(0, -1, self.controller.dt)
             axes = self.canvas.figure.axes
+            t_data = axes[0].lines[0].get_xdata(True)
 
-            if ncol > len(axes[0].lines[0].get_xdata()):
-                t = np.arange(0, ncol) * self.controller.dt
-
+            if not t_data.size or t[-1] > t_data[-1]:
                 # Iterate over the plots and update the data
                 for axe, plots in zip(axes, self.plots):
                     for line, pinfo in zip(axe.lines[:-1], plots):
+                        pinfo.load_data(self.controller)
                         line.set_xdata(t)
-                        line.set_ydata(self.controller.get_property_log(pinfo.node))
+                        line.set_ydata(pinfo.get_data(0, -1))
                     axe.set_xlim(t[0], t[-1])
                     axe.relim(True)
                     axe.autoscale_view(scalex=False, scaley=True)
