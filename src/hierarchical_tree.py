@@ -252,10 +252,13 @@ class PropertyTree(SearchableTree):
         self, master: tk.Widget, properties: List[FGPropertyNode], root: FGPropertyNode
     ):
         self.property_root: str = root.get_fully_qualified_name()
+        common_root, unified_property_names = self.get_unified_property_names(
+            root, properties
+        )
         super().__init__(
             master,
             lambda parent: HierarchicalTree(
-                parent, self.get_unified_property_names(properties), ["value"], False
+                parent, list(unified_property_names), ["value"], False
             ),
         )
         self.properties: Dict[str, FGPropertyNode] = {}
@@ -264,14 +267,14 @@ class PropertyTree(SearchableTree):
         tree.configure(displaycolumns=("value",))  # Hide the node columns
         tree.heading("#0", text="Property")
         tree.heading("value", text="Value")
-        self.initialize_values(properties)
-        self.bind_ids_to_nodes("", root)
+        self.initialize_values(properties, unified_property_names)
+        self.bind_ids_to_nodes("", common_root)
         self.tree.tree.bind("<Double-Button-1>", self.edit_property_value)
         self.tree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
 
     def get_unified_property_names(
-        self, properties: List[FGPropertyNode]
-    ) -> Iterator[str]:
+        self, root: FGPropertyNode, properties: List[FGPropertyNode]
+    ) -> Tuple[FGPropertyNode, Iterator[str]]:
         have_common_root = True
         unified_property_names = []
         for node in properties:
@@ -283,18 +286,22 @@ class PropertyTree(SearchableTree):
         if have_common_root:
             # Remove the root name and its trailing slash
             offset = len(self.property_root) + 1
+            common_root = root
         else:
             offset = 1  # Remove the leading slash
+            common_root = root.get_node("/")
+            assert common_root is not None
 
-        return map(lambda name: name[offset:], unified_property_names)
+        return common_root, map(lambda name: name[offset:], unified_property_names)
 
     def collapse(self, parent_id: str = "") -> None:
         super().collapse(parent_id)
         self.update_visible_properties(None)
 
-    def initialize_values(self, properties: List[FGPropertyNode]) -> None:
+    def initialize_values(
+        self, properties: List[FGPropertyNode], property_names: Iterator[str]
+    ) -> None:
         tree = self.tree.tree
-        property_names = self.get_unified_property_names(properties)
         for node, pname in zip(properties, property_names):
             parent_id = self.tree.get_id_from_path(pname)
             assert parent_id is not None

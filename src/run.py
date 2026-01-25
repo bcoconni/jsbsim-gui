@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023-2024 Bertrand Coconnier
+# Copyright (c) 2023-2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -77,17 +77,18 @@ class DragNDropManager(ABC):
 
 
 class DnDProperties(DragNDropManager):
-    def __init__(self, source: PropertyTree, target: tk.Widget):
+    def __init__(self, source: PropertyTree, root: FGPropertyNode, target: tk.Widget):
         super().__init__(source.tree.tree, target)
         self.property_tree = source
         self.property_list: list[FGPropertyNode] = []
+        self._property_root = root
 
-    def create_source_widget(self, master: tk.Widget) -> tk.Widget:
+    def create_source_widget(self, master: tk.Widget) -> Optional[tk.Widget]:
         self.property_list = self.property_tree.get_selected_elements()
         if self.property_list:
             widget_preview = ttk.Frame(master, borderwidth=1)
-            property_names = self.property_tree.get_unified_property_names(
-                self.property_list
+            _, property_names = self.property_tree.get_unified_property_names(
+                self._property_root, self.property_list
             )
             for idx, name in enumerate(property_names):
                 if idx < 3:
@@ -117,12 +118,10 @@ class Run(ttk.Frame):
     ):
         super().__init__(master, **kw)
         self.property_view = LabeledWidget(self, "Property Explorer")
+        root = controller.get_property_root()
+        assert root is not None
         self.property_view.set_widget(
-            PropertyTree(
-                self.property_view,
-                controller.get_property_list(),
-                controller.get_property_root(),
-            )
+            PropertyTree(self.property_view, controller.get_property_list(), root)
         )
         self.property_view.widget.grid(sticky=NS)
         self.property_view.grid(column=0, row=0, sticky=NS)
@@ -159,7 +158,9 @@ class Run(ttk.Frame):
         self.plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
         self.plots_view.bind_motion_handler(self.update_properties)
 
-        self.dnd_properties = DnDProperties(self.property_view.widget, self.plots_view)
+        self.dnd_properties = DnDProperties(
+            self.property_view.widget, root, self.plots_view
+        )
 
         # Window Layout
         plotsview_pos = self.plots_view.grid_info()
