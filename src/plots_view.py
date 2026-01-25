@@ -20,9 +20,10 @@ import tkinter as tk
 from tkinter import font, ttk
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import matplotlib as mpl
+import matplotlib.artist
 import numpy as np
 from jsbsim import FGPropertyNode
+from matplotlib.axes import Axes
 from matplotlib.backend_bases import (
     FigureCanvasBase,
     KeyEvent,
@@ -33,9 +34,121 @@ from matplotlib.backend_bases import (
 )
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
+from matplotlib.transforms import Transform
 
 from .controller import Controller
 from .plotinfo_list import PlotInfoList
+
+
+class Label:
+    def __init__(self, figure: Figure, ax: Axes, line: Optional[Line2D], color: str):
+        self._figure = figure
+        self._ax = ax
+        self._line = line
+        self._text = figure.text(
+            0.0, 0.0, "0.0", color=color, visible=False, animated=True
+        )
+
+        if line is not None:
+            self._text.set_backgroundcolor("white")
+            patch = self._text.get_bbox_patch()
+            assert patch is not None
+            patch.set(edgecolor=color)
+
+    def text_bbox_size(self) -> Tuple[float, float]:
+        patch = self._text.get_bbox_patch()
+        if patch:
+            bbox = patch.get_bbox()
+        else:
+            bbox = self._text.get_window_extent()
+        m = self._ax.transData.inverted()
+        pos0 = m.transform((bbox.x0, bbox.y0))
+        pos1 = m.transform((bbox.x1, bbox.y1))
+        return pos1 - pos0
+
+    def data_to_figure_coords(
+        self, data_x: float, data_y: float, m_figure: Transform
+    ) -> Tuple[float, float]:
+        display_coords = self._ax.transData.transform((data_x, data_y))
+        figure_coords = m_figure.transform(display_coords)
+        return tuple(figure_coords)
+
+    def update_time_position(self, time_step_id: int, m_figure: Transform) -> None:
+        xdata: np.ndarray = self._ax.lines[0].get_xdata(True)
+        if xdata.size > 1:
+            x0 = xdata[time_step_id]
+            self._text.set_text(f"t={x0:.3f}s")
+            self._text.set_visible(True)
+            w = self.text_bbox_size()[0]
+            ymin, ymax = self._ax.get_ybound()
+            pos_x, pos_y = self.data_to_figure_coords(
+                x0 - w / 2, ymax + 0.05 * (ymax - ymin), m_figure
+            )
+            self._text.set_position((pos_x, pos_y))
+
+    def update_position(self, time_step_id: int, m_figure: Transform) -> None:
+        m_display = self._ax.transData
+        assert self._line is not None
+        ydata: np.ndarray = self._line.get_ydata(True)
+        if ydata.size > 1:
+            xdata: np.ndarray = self._line.get_xdata(True)
+            x0 = xdata[time_step_id]
+            y0 = ydata[time_step_id]
+            if np.isnan(y0):
+                self._text.set_visible(False)
+                return
+            self._text.set_text(f"{y0:.5f}")
+            self._text.set_visible(True)
+            patch = self._text.get_bbox_patch()
+            assert patch is not None
+            text_width = patch.get_width()
+            text_height = patch.get_height()
+            v: np.ndarray = patch.get_verts()
+            box_width = v[1, 0] - v[0, 0]
+            box_height = v[2, 1] - v[1, 1]
+            padx = 0.5 * (box_width - text_width)
+            pady = 0.5 * (box_height - text_height)
+            pos_data = m_display.transform((x0, y0))
+            pos_text = pos_data + [2.0 * padx, 2.5 * pady]
+            pos_figure = m_figure.transform(pos_text)
+            self._text.set_position(tuple(pos_figure))
+
+    def hide(self) -> None:
+        self._text.set_visible(False)
+
+    def draw(self) -> None:
+        self._figure.draw_artist(self._text)
+
+
+class LabelManager:
+    def __init__(self, figure: Figure):
+        self._figure = figure
+        self._labels: List[Label] = []
+
+    def create_labels(self, axes: List[Axes]) -> None:
+        time_label = Label(self._figure, axes[0], None, color="0.0")
+        self._labels = [time_label]
+
+        for ax in axes:
+            for idx, line in enumerate(ax.lines[:-1]):
+                label = Label(self._figure, ax, line, color=f"C{idx%10}")
+                self._labels.append(label)
+
+    def update_positions(self, time_step_id: int) -> None:
+        m_figure = self._figure.transFigure.inverted()
+        self._labels[0].update_time_position(time_step_id, m_figure)
+
+        for label in self._labels[1:]:
+            label.update_position(time_step_id, m_figure)
+
+    def hide_labels(self) -> None:
+        for label in self._labels:
+            label.hide()
+
+    def draw_labels(self) -> None:
+        for label in self._labels:
+            label.draw()
 
 
 class SelectedLine:
@@ -52,7 +165,7 @@ class SelectedLine:
         self.line_id = line_id
         line = self.figure.axes[ax_id].lines[line_id]
         for prop in self.pick_props:
-            self.orig_props[prop] = mpl.artist.get(line, prop)
+            self.orig_props[prop] = matplotlib.artist.get(line, prop)
         line.set(**self.pick_props)
 
     def deselect(self) -> None:
@@ -67,7 +180,7 @@ class SelectedLine:
         return None
 
 
-def get_axes_at_coordinates(canvas: FigureCanvasBase) -> Optional[mpl.axes.Axes]:
+def get_axes_at_coordinates(canvas: FigureCanvasBase) -> Optional[Axes]:
     tk_canvas = canvas.get_tk_widget()
     x, y = tk_canvas.winfo_pointerxy()
     x -= tk_canvas.winfo_rootx()
@@ -99,6 +212,7 @@ class PlotsView(ttk.Frame):
         self.plots: List[PlotInfoList] = []
         self.bbox = None
         self.selected_line: Optional[SelectedLine] = None
+        self.label_manager: Optional[LabelManager] = None
         self.pan: bool = False
         self.pan_xref: float = 0.0
         self.t_hover: Optional[float] = None
@@ -110,9 +224,8 @@ class PlotsView(ttk.Frame):
     def on_leave_figure(self, event: LocationEvent):
         for ax in event.canvas.figure.axes:
             ax.lines[-1].set_visible(False)
-            for text in ax.texts:
-                text.set_visible(False)
 
+        self.label_manager.hide_labels()
         self.t_hover = None
         self.on_draw(event)
         event.canvas.blit(event.canvas.figure.bbox)
@@ -154,19 +267,6 @@ class PlotsView(ttk.Frame):
     def on_move(self, event: MouseEvent):
         canvas = event.canvas
         axes = canvas.figure.axes
-
-        def text_bbox_size(
-            text: mpl.text.Text, axe: mpl.axes.Axes
-        ) -> Tuple[float, float]:
-            patch = text.get_bbox_patch()
-            if patch:
-                bbox = patch.get_bbox()
-            else:
-                bbox = text.get_window_extent()
-            m = axe.transData.inverted()
-            pos0 = m.transform((bbox.x0, bbox.y0))
-            pos1 = m.transform((bbox.x1, bbox.y1))
-            return pos1 - pos0
 
         if event.inaxes and event.xdata:
             ax0 = axes[0]
@@ -219,53 +319,23 @@ class PlotsView(ttk.Frame):
                         line.set_xdata(t)
                         line.set_ydata(ydata)
                     ax.lines[-1].set_visible(False)
-                    for text in ax.texts:
-                        text.set_visible(False)
 
+                self.label_manager.hide_labels()
                 self.pan_xref += pan_offset
                 self.reset_and_redraw()
                 return
 
-            text0 = ax0.texts[-1]
-            text0.set_text(f"t={x0:.3f}s")
-            text0.set_visible(True)
-            w = text_bbox_size(text0, ax0)[0]
-            ymin, ymax = ax0.get_ybound()
-            text0.set_position((x0 - w / 2, ymax + 0.05 * (ymax - ymin)))
+            self.label_manager.update_positions(step_id)
 
             for ax in axes:
                 vline = ax.lines[-1]
                 vline.set_visible(True)
                 vline.set_xdata([event.xdata, event.xdata])
-
-                for line_id, line in enumerate(ax.lines[:-1]):
-                    ydata: np.ndarray = line.get_ydata()
-                    if ydata.size > 1:
-                        text = ax.texts[line_id]
-                        y0 = ydata[step_id]
-                        if np.isnan(y0):
-                            text.set_visible(False)
-                            continue
-                        text.set_text(f"{y0:.5f}")
-                        text.set_visible(True)
-                        patch = text.get_bbox_patch()
-                        text_width = patch.get_width()
-                        text_height = patch.get_height()
-                        v = patch.get_verts()
-                        box_width = v[1, 0] - v[0, 0]
-                        box_height = v[2, 1] - v[1, 1]
-                        padx = 0.5 * (box_width - text_width)
-                        pady = 0.5 * (box_height - text_height)
-                        pos_data = text.get_transform().transform((x0, y0))
-                        pos_text = pos_data + [2.0 * padx, 2.5 * pady]
-                        m = text.get_transform().inverted()
-                        text.set_position(tuple(m.transform(pos_text)))
         else:
             self.t_hover = None
             for ax in axes:
                 ax.lines[-1].set_visible(False)
-                for text in ax.texts:
-                    text.set_visible(False)
+            self.label_manager.hide_labels()
 
         for handler in self.motion_handlers:
             handler(event)
@@ -283,8 +353,8 @@ class PlotsView(ttk.Frame):
 
         for ax in canvas.figure.axes:
             ax.draw_artist(ax.lines[-1])
-            for text in ax.texts:
-                ax.draw_artist(text)
+
+        self.label_manager.draw_labels()
 
     def on_scroll(self, event: MouseEvent):
         ax0 = event.inaxes
@@ -378,17 +448,6 @@ class PlotsView(ttk.Frame):
                 pinfo.load_data(self.controller)
                 color = f"C{idx%10}"
                 ax.plot(t, pinfo.get_data(0, -1), label=pinfo.name, color=color)
-                value_text = ax.text(
-                    0.0,
-                    0.0,
-                    "0.0",
-                    color=color,
-                    backgroundcolor="white",
-                    visible=False,
-                    animated=True,
-                )
-                patch_text = value_text.get_bbox_patch()
-                patch_text.set(edgecolor=color)
             # Cross hair
             ax.axvline(color="0.0", linewidth=0.5, visible=False, animated=True)
             # Figure decorations
@@ -405,7 +464,9 @@ class PlotsView(ttk.Frame):
 
             if plot_id == nplots - 1:
                 ax.set_xlabel("Time (s)")
-        figure.axes[0].text(0.0, 0.0, "0.0", color="0.0", visible=False, animated=True)
+
+        self.label_manager = LabelManager(figure)
+        self.label_manager.create_labels(figure.axes)
         figure.align_ylabels(figure.axes)
         self.reset_and_redraw()
 
