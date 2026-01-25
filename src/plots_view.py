@@ -102,9 +102,9 @@ class PlotsView(ttk.Frame):
         self.pan: bool = False
         self.pan_xref: float = 0.0
         self.t_hover: Optional[float] = None
-        self.motion_handlers: List[Callable[[tk.Event], None]] = []
+        self.motion_handlers: List[Callable[[MouseEvent], None]] = []
 
-    def bind_motion_handler(self, handler: Callable[[tk.Event], None]) -> None:
+    def bind_motion_handler(self, handler: Callable[[MouseEvent], None]) -> None:
         self.motion_handlers.append(handler)
 
     def on_leave_figure(self, event: LocationEvent):
@@ -127,7 +127,7 @@ class PlotsView(ttk.Frame):
                                 self.selected_line.select(ax_id, line_id)
                                 self.reset_and_redraw()
                                 return
-            elif event.button == MouseButton.RIGHT:
+            elif event.button == MouseButton.RIGHT and event.xdata:
                 self.pan = True
                 self.pan_xref = event.xdata
                 self.config(cursor="sb_h_double_arrow")
@@ -240,7 +240,7 @@ class PlotsView(ttk.Frame):
 
                 for line_id, line in enumerate(ax.lines[:-1]):
                     ydata: np.ndarray = line.get_ydata()
-                    if len(ydata) > 1:
+                    if ydata.size > 1:
                         text = ax.texts[line_id]
                         y0 = ydata[step_id]
                         if np.isnan(y0):
@@ -398,7 +398,7 @@ class PlotsView(ttk.Frame):
                 ax.set_ylabel(plots[0].name)
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
-            if len(t) > 1:
+            if t.size > 1:
                 ax.set_xlim(t[0], t[-1])
             else:
                 ax.set_xlim(0, dt)
@@ -406,6 +406,7 @@ class PlotsView(ttk.Frame):
             if plot_id == nplots - 1:
                 ax.set_xlabel("Time (s)")
         figure.axes[0].text(0.0, 0.0, "0.0", color="0.0", visible=False, animated=True)
+        figure.align_ylabels(figure.axes)
         self.reset_and_redraw()
 
     def reset_and_redraw(self):
