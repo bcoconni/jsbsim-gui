@@ -26,7 +26,7 @@ from jsbsim import FGPropertyNode
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import (
     DrawEvent,
-    FigureCanvasBase,
+    Event,
     KeyEvent,
     LocationEvent,
     MouseButton,
@@ -181,16 +181,6 @@ class SelectedLine:
         return None
 
 
-def get_axes_at_coordinates(canvas: FigureCanvasBase) -> Optional[Axes]:
-    tk_canvas = canvas.get_tk_widget()
-    x, y = tk_canvas.winfo_pointerxy()
-    x -= tk_canvas.winfo_rootx()
-    # Matplotlib y-axis is inverted: (0,0) is the bottom left corner while in
-    # tkinter (0,0) is the top left corner
-    y = tk_canvas.winfo_height() - (y - tk_canvas.winfo_rooty())
-    return canvas.inaxes((x, y))
-
-
 class PlotsView(ttk.Frame):
     def __init__(self, master: tk.Widget, controller: Controller, **kw):
         super().__init__(master, **kw)
@@ -229,7 +219,6 @@ class PlotsView(ttk.Frame):
         self.label_manager.hide_labels()
         self.t_hover = None
         self.on_draw(event)
-        event.canvas.blit(event.canvas.figure.bbox)
 
     def on_button_press(self, event: MouseEvent):
         if event.inaxes:
@@ -343,15 +332,15 @@ class PlotsView(ttk.Frame):
             handler(event)
 
         self.on_draw(event)
-        canvas.blit(canvas.figure.bbox)
 
-    def on_draw(self, event):
-        canvas = event.canvas
+    def on_draw(self, event: Event):
         assert self.label_manager
+        canvas = event.canvas
+        is_draw_event = isinstance(event, DrawEvent)
 
         if self.bbox:
             canvas.restore_region(self.bbox)
-        elif isinstance(event, DrawEvent):
+        elif is_draw_event:
             self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
         else:
             return
@@ -360,6 +349,9 @@ class PlotsView(ttk.Frame):
             ax.draw_artist(ax.lines[-1])
 
         self.label_manager.draw_labels()
+
+        if not is_draw_event:
+            canvas.blit(canvas.figure.bbox)
 
     def on_scroll(self, event: MouseEvent):
         ax0 = event.inaxes
@@ -393,12 +385,22 @@ class PlotsView(ttk.Frame):
         if self.canvas:
             self.reset_and_redraw()
 
+    def _get_mouse_coords_in_canvas(self) -> Tuple[int, int]:
+        assert self.canvas
+        tk_widget = self.canvas.get_tk_widget()
+        x, y = tk_widget.winfo_pointerxy()
+        x -= tk_widget.winfo_rootx()
+        # Matplotlib y-axis is inverted: (0,0) is the bottom left corner while in
+        # tkinter (0,0) is the top left corner
+        y = tk_widget.winfo_height() - (y - tk_widget.winfo_rooty())
+        return x, y
+
     def add_properties(self, properties: List[FGPropertyNode]):
         # Check if the properties are dropped on a subplot
         canvas = self.canvas
         target_ax_id: Optional[int] = None
         if canvas:
-            target_ax = get_axes_at_coordinates(canvas)
+            target_ax = canvas.inaxes(self._get_mouse_coords_in_canvas())
             if target_ax:
                 for ax_id, ax in enumerate(canvas.figure.axes):
                     if ax == target_ax:
@@ -485,11 +487,15 @@ class PlotsView(ttk.Frame):
             pinfo0 = self.plots[0][0]
             pinfo0.load_data(self.controller)
             t = pinfo0.get_time(0, -1, self.controller.dt)
+            assert self.canvas
             axes = self.canvas.figure.axes
             t_data = axes[0].lines[0].get_xdata(True)
 
             if not t_data.size or t[-1] > t_data[-1]:
-                # Iterate over the plots and update the data
+                self.bbox = None
+                mouse_xy = self._get_mouse_coords_in_canvas()
+                inaxes = self.canvas.inaxes(mouse_xy)
+
                 for axe, plots in zip(axes, self.plots):
                     for line, pinfo in zip(axe.lines[:-1], plots):
                         pinfo.load_data(self.controller)
@@ -498,6 +504,21 @@ class PlotsView(ttk.Frame):
                     axe.set_xlim(t[0], t[-1])
                     axe.relim(True)
                     axe.autoscale_view(scalex=False, scaley=True)
-                    axe.lines[-1].set_visible(False)
-                self.label_manager.hide_labels()
+                    axe.lines[-1].set_visible(inaxes is not None)  # Cross hair
+
+                if inaxes:
+                    # Force displaying the cross hair and the labels when the mouse is
+                    # hovering over a plot.
+                    mouse_event = MouseEvent(
+                        "update_plots_event", self.canvas, *mouse_xy
+                    )
+                    data_pos = inaxes.transData.inverted().transform(mouse_xy)
+                    mouse_event.xdata = data_pos[0]
+                    mouse_event.ydata = data_pos[1]
+                    mouse_event.inaxes = inaxes
+                    self.on_move(mouse_event)
+                else:
+                    assert self.label_manager
+                    self.label_manager.hide_labels()
+
                 self.reset_and_redraw()
