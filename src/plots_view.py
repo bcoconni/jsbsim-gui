@@ -25,6 +25,7 @@ import numpy as np
 from jsbsim import FGPropertyNode
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import (
+    DrawEvent,
     FigureCanvasBase,
     KeyEvent,
     LocationEvent,
@@ -267,6 +268,7 @@ class PlotsView(ttk.Frame):
     def on_move(self, event: MouseEvent):
         canvas = event.canvas
         axes = canvas.figure.axes
+        assert self.label_manager
 
         if event.inaxes and event.xdata:
             ax0 = axes[0]
@@ -345,11 +347,14 @@ class PlotsView(ttk.Frame):
 
     def on_draw(self, event):
         canvas = event.canvas
+        assert self.label_manager
 
         if self.bbox:
             canvas.restore_region(self.bbox)
-        else:
+        elif isinstance(event, DrawEvent):
             self.bbox = canvas.copy_from_bbox(canvas.figure.bbox)
+        else:
+            return
 
         for ax in canvas.figure.axes:
             ax.draw_artist(ax.lines[-1])
@@ -472,6 +477,7 @@ class PlotsView(ttk.Frame):
 
     def reset_and_redraw(self):
         self.bbox = None
+        assert self.canvas
         self.canvas.draw_idle()
 
     def update_plots(self):
@@ -492,4 +498,6 @@ class PlotsView(ttk.Frame):
                     axe.set_xlim(t[0], t[-1])
                     axe.relim(True)
                     axe.autoscale_view(scalex=False, scaley=True)
+                    axe.lines[-1].set_visible(False)
+                self.label_manager.hide_labels()
                 self.reset_and_redraw()
