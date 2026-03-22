@@ -15,13 +15,25 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import re
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW, VERTICAL
 from tkinter.messagebox import showerror
-from typing import Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from jsbsim import FGPropertyNode
+
+
+def _natural_sort_key(path: str) -> List[Tuple[str, int]]:
+    result = []
+    for component in path.split("/"):
+        m = re.match(r"^(.*)\[(\d+)\]$", component)
+        if m:
+            result.append((m.group(1), int(m.group(2))))
+        else:
+            result.append((component, -1))
+    return result
 
 
 class HierarchicalTree(ttk.Frame):
@@ -46,7 +58,7 @@ class HierarchicalTree(ttk.Frame):
         self.tree["yscrollcommand"] = self._yscrollbar.set
 
     def create_tree_nodes(self, nodes: List[str], is_open: bool = True) -> None:
-        for node in sorted(nodes):
+        for node in nodes:
             parent_id = ""
             for name in node.split("/"):
                 for child_id in self.tree.get_children(parent_id):
@@ -230,7 +242,7 @@ class SearchableTree(ttk.Frame):
         self.update_visible_properties(None)
         self.tree.move_to_top()
 
-    def update_visible_properties(self, _: tk.Event) -> None:
+    def update_visible_properties(self, _: Optional[tk.Event]) -> None:
         self.visible_items = []
         tree = self.tree.tree
 
@@ -252,14 +264,12 @@ class PropertyTree(SearchableTree):
         self, master: tk.Widget, properties: List[FGPropertyNode], root: FGPropertyNode
     ):
         self.property_root: str = root.get_fully_qualified_name()
-        common_root, unified_property_names = self.get_unified_property_names(
-            root, properties
-        )
+        common_root, property_pairs = self.get_unified_property_names(root, properties)
+        sorted_properties = [pair[0] for pair in property_pairs]
+        sorted_names = [pair[1] for pair in property_pairs]
         super().__init__(
             master,
-            lambda parent: HierarchicalTree(
-                parent, list(unified_property_names), ["value"], False
-            ),
+            lambda parent: HierarchicalTree(parent, sorted_names, ["value"], False),
         )
         self.properties: Dict[str, FGPropertyNode] = {}
 
@@ -267,19 +277,30 @@ class PropertyTree(SearchableTree):
         tree.configure(displaycolumns=("value",))  # Hide the node columns
         tree.heading("#0", text="Property")
         tree.heading("value", text="Value")
-        self.initialize_values(properties, unified_property_names)
+        self.initialize_values(sorted_properties, sorted_names)
+        self._rename_indexed_nodes()
         self.bind_ids_to_nodes("", common_root)
         self.tree.tree.bind("<Double-Button-1>", self.edit_property_value)
         self.tree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
 
+    def _rename_indexed_nodes(self, parent_id: str = "") -> None:
+        tree = self.tree.tree
+        children = tree.get_children(parent_id)
+        nchildren = len(children)
+        for i, child_id in enumerate(children):
+            name = tree.item(child_id, "text")
+            if i + 1 < nchildren and tree.item(children[i + 1], "text") == f"{name}[1]":
+                tree.item(child_id, text=f"{name}[0]")
+            self._rename_indexed_nodes(child_id)
+
     def get_unified_property_names(
         self, root: FGPropertyNode, properties: List[FGPropertyNode]
-    ) -> Tuple[FGPropertyNode, Iterator[str]]:
+    ) -> Tuple[FGPropertyNode, List[Tuple[FGPropertyNode, str]]]:
         have_common_root = True
-        unified_property_names = []
+        raw_names = []
         for node in properties:
             name = node.get_fully_qualified_name()
-            unified_property_names.append(name)
+            raw_names.append(name)
             if have_common_root and not name.startswith(self.property_root):
                 have_common_root = False
 
@@ -292,14 +313,19 @@ class PropertyTree(SearchableTree):
             common_root = root.get_node("/")
             assert common_root is not None
 
-        return common_root, map(lambda name: name[offset:], unified_property_names)
+        stripped_names = [name[offset:] for name in raw_names]
+        pairs = sorted(
+            zip(properties, stripped_names),
+            key=lambda pair: _natural_sort_key(pair[1]),
+        )
+        return common_root, list(pairs)
 
     def collapse(self, parent_id: str = "") -> None:
         super().collapse(parent_id)
         self.update_visible_properties(None)
 
     def initialize_values(
-        self, properties: List[FGPropertyNode], property_names: Iterator[str]
+        self, properties: List[FGPropertyNode], property_names: List[str]
     ) -> None:
         tree = self.tree.tree
         for node, pname in zip(properties, property_names):
@@ -381,7 +407,7 @@ class PropertyTree(SearchableTree):
 
         return selected_prop
 
-    def update_visible_properties(self, event: tk.Event) -> None:
+    def update_visible_properties(self, event: Optional[tk.Event]) -> None:
         super().update_visible_properties(event)
         self.update_values()
 
@@ -391,7 +417,7 @@ class PropertyTree(SearchableTree):
 
 class FileTree(HierarchicalTree):
     def __init__(self, master: tk.Widget, elements: List[str]):
-        super().__init__(master, elements, [])
+        super().__init__(master, sorted(elements), [])
         self.tree.configure(show="tree", selectmode=BROWSE)
         self.tree.tag_configure("modified", foreground="red")
 
@@ -409,8 +435,10 @@ class FileTree(HierarchicalTree):
 
     def highlight_file(self, filepath: str) -> None:
         item_id = self.get_id_from_path(filepath)
+        assert item_id
         self.tree.item(item_id, tags=("modified",))
 
     def clear_highlight(self, filepath: str) -> None:
         item_id = self.get_id_from_path(filepath)
+        assert item_id
         self.tree.item(item_id, tags=())
