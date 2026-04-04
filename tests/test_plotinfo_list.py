@@ -19,7 +19,7 @@ import unittest
 
 from jsbsim import FGPropertyManager
 
-from src.plotinfo_list import PlotInfoList, PlotInfo
+from jsbsim_gui.plotinfo_list import PlotInfoList, PlotInfo
 
 
 class TestPlotInfoList(unittest.TestCase):

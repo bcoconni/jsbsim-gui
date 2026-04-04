@@ -25,8 +25,8 @@ A Tkinter-based GUI for [JSBSim](https://github.com/JSBSim-Team/jsbsim) flight d
 
 ### Running the Application
 ```bash
-python -m src              # Entry point is src/__main__.py
-python -m src --root /path/to/jsbsim/data  # Override JSBSim root directory
+python -m jsbsim_gui              # Entry point is jsbsim_gui/__main__.py
+python -m jsbsim_gui --root /path/to/jsbsim/data  # Override JSBSim root directory
 ```
 
 By default, the app uses JSBSim's data directory from the Python library installation. For testing, aircraft/engines/scripts included with JSBSim's Python package are used—no separate data files required.

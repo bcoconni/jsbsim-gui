@@ -19,7 +19,7 @@ import argparse
 from .app import App
 from .controller import Controller
 
-if __name__ == "__main__":
+def run():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
         "--version", action="version", version=f"JSBSim UI {Controller.get_version()}"
@@ -45,3 +45,6 @@ if __name__ == "__main__":
         app.display_logo()
 
     app.mainloop()
+
+if __name__ == "__main__":
+    run()

@@ -20,7 +20,7 @@ import unittest
 import numpy as np
 from jsbsim import FGPropertyManager
 
-from src.property_history import PropertyHistory
+from jsbsim_gui.property_history import PropertyHistory
 
 
 class TestPropertyHistory(unittest.TestCase):

@@ -39,7 +39,7 @@ pip install -r requirements.txt
 ### Run the application
 
 ```bash
-python -m src
+python -m jsbsim_gui
 ```
 
 ## Contributions Welcome
