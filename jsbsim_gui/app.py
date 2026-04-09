@@ -30,7 +30,7 @@ from PIL import Image, ImageTk
 from .controller import Controller
 from .run import Run
 from .source_editor import SourceEditor
-from .textview import ConsoleStdoutRedirect
+from .textview import Console
 
 
 class MenuBar(tk.Menu):
@@ -119,7 +119,7 @@ class MenuBar(tk.Menu):
 class App(tk.Tk):
     def __init__(self, root_dir: Optional[str] = None):
         super().__init__()
-        self._console: Optional[ConsoleStdoutRedirect] = None
+        self._console: Optional[Console] = None
         self._controller: Optional[Controller] = None
         self._statusbar: Optional[ttk.Label] = None
         self.menubar: Optional[MenuBar] = None
@@ -153,6 +153,9 @@ class App(tk.Tk):
             "You have unsaved changes. Do you want to save them before exiting?"
         ):
             return
+        if self._controller:
+            self._controller.close()
+            self._controller = None
         self.destroy()
 
     def _prompt_save_if_modified(self, message: str) -> bool:
@@ -277,10 +280,13 @@ class App(tk.Tk):
         self.title(f"JSBSim {Controller.get_version()} - {aircraft_name}")
 
         if not self._console:
-            self._console = ConsoleStdoutRedirect(self, height=10)
+            self._console = Console(self, height=10)
 
         if not self._statusbar:
             self._statusbar = ttk.Label(self, text="Ready", relief=tk.RAISED)
+
+        if self._controller:
+            self._controller.close()
 
         self._controller = Controller(self.root_dir, self._console)
         success = load_file(self._controller, filename)
@@ -290,6 +296,7 @@ class App(tk.Tk):
             self._statusbar.grid(column=0, row=2, sticky=EW)
             self.edit()
         else:
+            self._controller.close()
             self._controller = None  # Delete the FGFDMExec instance.
 
         return success

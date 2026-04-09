@@ -17,7 +17,7 @@
 import os
 import platform
 import xml.etree.ElementTree as et
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional, Protocol
 from xml.parsers import expat
 
 import jsbsim
@@ -26,7 +26,36 @@ from jsbsim import FGPropertyNode
 from jsbsim._jsbsim import _append_xml as append_xml
 
 from .property_history import PropertyHistory
-from .textview import ConsoleStdoutRedirect
+
+
+class ConsoleWriter(Protocol):
+    def write(self, contents: str) -> None: ...
+
+
+class JSBSimConsoleLogger(jsbsim.FGLogger):
+    def __init__(self, console: ConsoleWriter):
+        super().__init__()
+        self._console = console
+        self._parts: List[str] = []
+
+    def set_level(self, _level: jsbsim.LogLevel) -> None:
+        self._parts.clear()
+
+    def file_location(self, _filename: str, _line: int) -> None:
+        pass
+
+    def message(self, message: str) -> None:
+        self._parts.append(message)
+
+    def format(self, _format: jsbsim.LogFormat) -> None:
+        pass
+
+    def flush(self) -> None:
+        if not self._parts:
+            return
+
+        self._console.write("".join(self._parts))
+        self._parts.clear()
 
 
 class XMLNode:
@@ -126,46 +155,52 @@ class Controller:
     def get_default_root_dir() -> str:
         return jsbsim.get_default_root_dir()
 
-    def __init__(self, root_dir: str, console: ConsoleStdoutRedirect):
+    def __init__(self, root_dir: str, console: ConsoleWriter):
         self._console = console
+        self._logger = JSBSimConsoleLogger(console)
         self.dt = 1.0 / 120.0
         self.filename = ""
         self.property_history = PropertyHistory([])
-        with console.redirect_stdout():
-            self.fdm = jsbsim.FGFDMExec(root_dir)
+        jsbsim.set_logger(self._logger)
+        self._logger_registered = True
+        self.fdm = jsbsim.FGFDMExec(root_dir)
+
+    def __del__(self):
+        self.close()
+
+    def close(self) -> None:
+        if self._logger_registered:
+            jsbsim.set_logger(jsbsim.DefaultLogger())
+            self._logger_registered = False
 
     def load_script(self, filename: str) -> bool:
         # TODO Validate the script before loading
         self.filename = filename
         script_name = os.path.relpath(filename, self.fdm.get_root_dir())
-        with self._console.redirect_stdout():
-            success = self.fdm.load_script(script_name)
-            if success:
-                self.property_history = PropertyHistory(self.get_property_list())
-            return success
+        success = self.fdm.load_script(script_name)
+        if success:
+            self.property_history = PropertyHistory(self.get_property_list())
+        return success
 
     def load_aircraft(self, filename: str) -> bool:
         # TODO Validate the aircraft definition before loading
         self.filename = filename
         aircraft_name = os.path.splitext(os.path.basename(filename))[0]
-        with self._console.redirect_stdout():
-            success = self.fdm.load_model(aircraft_name, True)
-            if success:
-                self.property_history = PropertyHistory(self.get_property_list())
-            return success
+        success = self.fdm.load_model(aircraft_name, True)
+        if success:
+            self.property_history = PropertyHistory(self.get_property_list())
+        return success
 
     def run_ic(self) -> bool:
-        with self._console.redirect_stdout():
-            ret = self.fdm.run_ic()
-            self.dt = self.fdm.get_delta_t()
-            self.property_history.record()
-            return ret
+        ret = self.fdm.run_ic()
+        self.dt = self.fdm.get_delta_t()
+        self.property_history.record()
+        return ret
 
     def run(self) -> bool:
-        with self._console.redirect_stdout():
-            ret = self.fdm.run()
-            self.property_history.record()
-            return ret
+        ret = self.fdm.run()
+        self.property_history.record()
+        return ret
 
     def get_root_dir(self) -> str:
         return os.path.realpath(self.fdm.get_root_dir())
@@ -280,20 +315,18 @@ class Controller:
             return [prop.get_double_value() for prop in properties]
 
     def trim(self, mode: int) -> bool:
-        with self._console.redirect_stdout():
-            try:
-                self.fdm["simulation/do_simple_trim"] = mode
-            except jsbsim.TrimFailureError:
-                return False
-            return True
+        try:
+            self.fdm["simulation/do_simple_trim"] = mode
+        except jsbsim.TrimFailureError:
+            return False
+        return True
 
     def reload(self) -> bool:
         old_fdm = self.fdm
         root_dir = self.fdm.get_root_dir()
         success = False
 
-        with self._console.redirect_stdout():
-            self.fdm = jsbsim.FGFDMExec(root_dir)
+        self.fdm = jsbsim.FGFDMExec(root_dir)
 
         root = et.parse(self.filename).getroot()
         if root.tag == "runscript":
