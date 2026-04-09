@@ -345,3 +345,32 @@ class Console(TextView):
 
         self._text.see("end")
         self._text.configure(state=DISABLED)
+
+
+class ProblemsConsole(Console):
+    def __init__(
+        self,
+        master: tk.Widget,
+        contents: Optional[str],
+        on_problem_count_update: Callable[[int], None],
+        **kw,
+    ):
+        super().__init__(master, contents, **kw)
+        self._problem_count = 0
+        self._on_problem_count_update = on_problem_count_update
+
+    def _increment_problem_count(self):
+        if self._problem_count:
+            super().write("\n")
+        self._problem_count += 1
+        self._on_problem_count_update(self._problem_count)
+
+    def write(self, contents: str) -> None:
+        if contents:
+            self._increment_problem_count()
+            super().write(contents)
+
+    def write_formatted(self, segments: List[Tuple[str, FrozenSet[str]]]) -> None:
+        if segments:
+            self._increment_problem_count()
+            super().write_formatted(segments)

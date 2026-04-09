@@ -30,7 +30,7 @@ from PIL import Image, ImageTk
 from .controller import Controller
 from .run import Run
 from .source_editor import SourceEditor
-from .textview import Console
+from .textview import Console, ProblemsConsole
 
 
 class MenuBar(tk.Menu):
@@ -119,7 +119,8 @@ class MenuBar(tk.Menu):
 class App(tk.Tk):
     def __init__(self, root_dir: Optional[str] = None):
         super().__init__()
-        self._console: Optional[Console] = None
+        self._console_notebook: Optional[ttk.Notebook] = None
+        self._problems_console: Optional[ProblemsConsole] = None
         self._controller: Optional[Controller] = None
         self._statusbar: Optional[ttk.Label] = None
         self.menubar: Optional[MenuBar] = None
@@ -270,6 +271,27 @@ class App(tk.Tk):
         if isinstance(self.main, SourceEditor):
             self.main.save_all()
 
+    def _update_problems_tab_title(self, count: int) -> None:
+        if count > 0:
+            console = self._problems_console
+            self._console_notebook.tab(console, text=f"Problems ({count})")
+            self._console_notebook.select(console)
+
+    def _build_console_notebook(self) -> Console:
+        if self._console_notebook:
+            self._console_notebook.destroy()
+        self._console_notebook = ttk.Notebook(self)
+        output_console = Console(self._console_notebook, height=10)
+        self._problems_console = ProblemsConsole(
+            self._console_notebook,
+            None,
+            height=10,
+            on_problem_count_update=self._update_problems_tab_title,
+        )
+        self._console_notebook.add(output_console, text="Output")
+        self._console_notebook.add(self._problems_console, text="Problems")
+        return output_console
+
     def open_file(
         self,
         filename: str,
@@ -279,8 +301,7 @@ class App(tk.Tk):
         self.resizable(True, True)
         self.title(f"JSBSim {Controller.get_version()} - {aircraft_name}")
 
-        if not self._console:
-            self._console = Console(self, height=10)
+        output_console = self._build_console_notebook()
 
         if not self._statusbar:
             self._statusbar = ttk.Label(self, text="Ready", relief=tk.RAISED)
@@ -288,11 +309,13 @@ class App(tk.Tk):
         if self._controller:
             self._controller.close()
 
-        self._controller = Controller(self.root_dir, self._console)
+        self._controller = Controller(
+            self.root_dir, output_console, self._problems_console
+        )
         success = load_file(self._controller, filename)
 
         if success:
-            self._console.grid(column=0, row=1, sticky=EW)
+            self._console_notebook.grid(column=0, row=1, sticky=EW)
             self._statusbar.grid(column=0, row=2, sticky=EW)
             self.edit()
         else:

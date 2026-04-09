@@ -17,12 +17,12 @@
 import os
 import platform
 import xml.etree.ElementTree as et
-from typing import Dict, FrozenSet, Iterator, List, Optional, Protocol, Tuple
+from typing import Callable, Dict, FrozenSet, Iterator, List, Optional, Protocol, Tuple
 from xml.parsers import expat
 
 import jsbsim
 import numpy as np
-from jsbsim import FGPropertyNode, LogFormat
+from jsbsim import FGPropertyNode, LogFormat, LogLevel
 from jsbsim._jsbsim import _append_xml as append_xml
 
 from .property_history import PropertyHistory
@@ -34,22 +34,44 @@ class ConsoleWriter(Protocol):
 
 
 class ConsoleLogger(jsbsim.FGLogger):
-    def __init__(self, console: ConsoleWriter):
+    def __init__(
+        self,
+        output_console: ConsoleWriter,
+        problems_console: ConsoleWriter,
+        get_relative_path: Callable[[str], str],
+    ):
         super().__init__()
-        self._console = console
+        self._output_console = output_console
+        self._problems_console = problems_console
+        self._get_relative_path = get_relative_path
         self._segments: List[Tuple[str, FrozenSet[str]]] = []
         self._active_color: Optional[str] = None
         self._active_bold: bool = False
         self._active_underline: bool = False
 
-    def set_level(self, _level: jsbsim.LogLevel) -> None:
+    def set_level(self, level: jsbsim.LogLevel) -> None:
+        super().set_level(level)
         self._segments.clear()
+        if level in (LogLevel.WARN, LogLevel.ERROR, LogLevel.FATAL):
+            self._active_color = "log_red"
+            self._active_bold = True
+            if level == LogLevel.WARN:
+                self._active_color = "log_cyan"
+                self.message("WARNING: ")
+            elif level == LogLevel.ERROR:
+                self.message("ERROR: ")
+            else:
+                self.message("FATAL: ")
+
         self._active_color = None
         self._active_bold = False
         self._active_underline = False
 
     def file_location(self, filename: str, line: int) -> None:
-        self.message(f"In {filename}: line {line}\n")
+        underline = self._active_underline
+        self._active_underline = True
+        self.message(f"In {self._get_relative_path(filename)}: line {line}\n")
+        self._active_underline = underline
 
     def message(self, text: str) -> None:
         tags = set()
@@ -97,12 +119,17 @@ class ConsoleLogger(jsbsim.FGLogger):
         if not self._segments:
             return
 
+        if self.log_level in (LogLevel.WARN, LogLevel.ERROR, LogLevel.FATAL):
+            console = self._problems_console
+        else:
+            console = self._output_console
+
         has_style = any(tags for _, tags in self._segments)
         if has_style:
-            self._console.write_formatted(self._segments)
+            console.write_formatted(self._segments)
         else:
             text = "".join(seg_text for seg_text, _ in self._segments)
-            self._console.write(text)
+            console.write(text)
         self._segments.clear()
 
 
@@ -203,9 +230,15 @@ class Controller:
     def get_default_root_dir() -> str:
         return jsbsim.get_default_root_dir()
 
-    def __init__(self, root_dir: str, console: ConsoleWriter):
-        self._console = console
-        self._logger = ConsoleLogger(console)
+    def __init__(
+        self,
+        root_dir: str,
+        output_console: ConsoleWriter,
+        problems_console: ConsoleWriter,
+    ):
+        self._logger = ConsoleLogger(
+            output_console, problems_console, self.get_relative_path
+        )
         self.dt = 1.0 / 120.0
         self.filename = ""
         self.property_history = PropertyHistory([])

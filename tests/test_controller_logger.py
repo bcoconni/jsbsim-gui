@@ -48,8 +48,8 @@ class DummyFormattedConsole:
 
 class TestJSBSimConsoleLogger(unittest.TestCase):
     def test_flush_assembles_fragmented_messages(self):
-        console = DummyConsole()
-        logger = ConsoleLogger(console)
+        console = DummyFormattedConsole()
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.file_location("f.xml", 42)
@@ -58,11 +58,11 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
         logger.format(next(iter(jsbsim.LogFormat)))
         logger.flush()
 
-        self.assertEqual(console.contents, ["In f.xml: line 42\nalpha beta"])
+        self.assertEqual(len(console.write_formatted_calls), 1)
 
     def test_flush_no_message_is_noop(self):
         console = DummyConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.flush()
@@ -72,7 +72,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
     def test_set_logger_and_restore_default(self):
         original_logger = jsbsim.get_logger()
         console = DummyConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         try:
             jsbsim.set_logger(logger)
@@ -93,7 +93,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
     def test_color_format_routes_to_write_formatted(self):
         console = DummyFormattedConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.format(jsbsim.LogFormat.RED)
@@ -110,7 +110,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
     def test_format_reset_produces_plain_write(self):
         console = DummyFormattedConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.format(jsbsim.LogFormat.RED)
@@ -125,7 +125,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
     def test_format_normal_clears_bold_but_not_color(self):
         console = DummyFormattedConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.format(jsbsim.LogFormat.RED)
@@ -141,7 +141,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
     def test_format_default_clears_color_but_not_bold(self):
         console = DummyFormattedConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.format(jsbsim.LogFormat.BLUE)
@@ -157,7 +157,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
     def test_color_persists_across_messages_in_same_flush(self):
         console = DummyFormattedConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.format(jsbsim.LogFormat.GREEN)
@@ -172,7 +172,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
     def test_mixed_plain_and_colored_segments(self):
         console = DummyFormattedConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.message("plain ")
@@ -196,7 +196,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
     def test_set_level_resets_format_state(self):
         console = DummyFormattedConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.format(jsbsim.LogFormat.RED)
@@ -209,7 +209,7 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
     def test_underline_on_off_independent_of_color(self):
         console = DummyFormattedConsole()
-        logger = ConsoleLogger(console)
+        logger = ConsoleLogger(console, console, lambda s: s)
 
         logger.set_level(next(iter(jsbsim.LogLevel)))
         logger.format(jsbsim.LogFormat.CYAN)
@@ -230,3 +230,49 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
         self.assertIn("log_underline", tags0)
         self.assertIn("log_cyan", tags1)
         self.assertNotIn("log_underline", tags1)
+
+    def test_ordinary_level_routes_to_output_console(self):
+        output_console = DummyConsole()
+        problems_console = DummyFormattedConsole()
+        logger = ConsoleLogger(output_console, problems_console, lambda s: s)
+
+        logger.set_level(jsbsim.LogLevel.INFO)
+        logger.message("ordinary")
+        logger.flush()
+
+        self.assertEqual(output_console.contents, ["ordinary"])
+        self.assertEqual(problems_console.write_calls, [])
+        self.assertEqual(problems_console.write_formatted_calls, [])
+
+    def test_warn_routes_to_problems_console(self):
+        output_console = DummyFormattedConsole()
+        problems_console = DummyFormattedConsole()
+        logger = ConsoleLogger(output_console, problems_console, lambda s: s)
+
+        logger.set_level(jsbsim.LogLevel.WARN)
+        logger.message("warning")
+        logger.flush()
+
+        self.assertEqual(output_console.write_calls, [])
+        self.assertEqual(output_console.write_formatted_calls, [])
+        self.assertEqual(len(problems_console.write_formatted_calls), 1)
+        self.assertGreater(len(problems_console.write_formatted_calls[0]), 0)
+
+    def test_error_and_fatal_route_to_problems_console(self):
+        output_console = DummyFormattedConsole()
+        problems_console = DummyFormattedConsole()
+        logger = ConsoleLogger(output_console, problems_console, lambda s: s)
+
+        logger.set_level(jsbsim.LogLevel.ERROR)
+        logger.message("error")
+        logger.flush()
+
+        logger.set_level(jsbsim.LogLevel.FATAL)
+        logger.format(jsbsim.LogFormat.RED)
+        logger.message("fatal")
+        logger.flush()
+
+        self.assertEqual(output_console.write_calls, [])
+        self.assertEqual(len(problems_console.write_formatted_calls), 2)
+        self.assertGreater(len(problems_console.write_formatted_calls[0]), 0)
+        self.assertGreater(len(problems_console.write_formatted_calls[1]), 0)
