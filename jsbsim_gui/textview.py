@@ -16,7 +16,6 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import tkinter as tk
-import tkinter.font as tkfont
 from tkinter import ttk
 from tkinter.constants import (
     DISABLED,
@@ -31,7 +30,7 @@ from tkinter.constants import (
     NSEW,
     VERTICAL,
 )
-from typing import Callable, Dict, FrozenSet, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 from xml.parsers import expat
 
 
@@ -304,73 +303,3 @@ class XMLSourceCodeView(SourceCodeView):
             tagged_regions.append((line, column, text))
 
         return tagged_regions
-
-
-class Console(TextView):
-    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
-        super().__init__(master, contents, **kw)
-        # Set the text to read only
-        self._text.configure(state=DISABLED)
-        self._text.tag_configure("log_red", foreground="#cc0000")
-        self._text.tag_configure("log_blue", foreground="#0000cc")
-        self._text.tag_configure("log_cyan", foreground="#007080")
-        self._text.tag_configure("log_green", foreground="#007000")
-        base_font = tkfont.Font(font=self._text.cget("font"))
-        self._text.tag_configure(
-            "log_bold",
-            font=tkfont.Font(
-                family=base_font.actual("family"),
-                size=base_font.actual("size"),
-                weight="bold",
-            ),
-        )
-        self._text.tag_configure("log_underline", underline=True)
-
-    def write(self, contents: str) -> None:
-        self._text.configure(state=NORMAL)
-        self._text.insert(END, contents)
-        self._text.see(END)
-        self._text.configure(state=DISABLED)
-
-    def write_formatted(self, segments: List[Tuple[str, FrozenSet[str]]]) -> None:
-        self._text.configure(state=NORMAL)
-
-        for seg_text, tags in segments:
-            base = self._text.index("end-1c")
-            self._text.insert("end", seg_text)
-            end = self._text.index("end-1c")
-            if tags:
-                for tag in tags:
-                    self._text.tag_add(tag, f"{base}", f"{end}")
-
-        self._text.see("end")
-        self._text.configure(state=DISABLED)
-
-
-class ProblemsConsole(Console):
-    def __init__(
-        self,
-        master: tk.Widget,
-        contents: Optional[str],
-        on_problem_count_update: Callable[[int], None],
-        **kw,
-    ):
-        super().__init__(master, contents, **kw)
-        self._problem_count = 0
-        self._on_problem_count_update = on_problem_count_update
-
-    def _increment_problem_count(self):
-        if self._problem_count:
-            super().write("\n")
-        self._problem_count += 1
-        self._on_problem_count_update(self._problem_count)
-
-    def write(self, contents: str) -> None:
-        if contents:
-            self._increment_problem_count()
-            super().write(contents)
-
-    def write_formatted(self, segments: List[Tuple[str, FrozenSet[str]]]) -> None:
-        if segments:
-            self._increment_problem_count()
-            super().write_formatted(segments)

@@ -17,120 +17,16 @@
 import os
 import platform
 import xml.etree.ElementTree as et
-from typing import Callable, Dict, FrozenSet, Iterator, List, Optional, Protocol, Tuple
+from typing import Dict, Iterator, List, Optional
 from xml.parsers import expat
 
 import jsbsim
 import numpy as np
-from jsbsim import FGPropertyNode, LogFormat, LogLevel
+from jsbsim import FGPropertyNode
 from jsbsim._jsbsim import _append_xml as append_xml
 
+from .consoles_panel import ConsolesPanel
 from .property_history import PropertyHistory
-
-
-class ConsoleWriter(Protocol):
-    def write(self, contents: str) -> None: ...
-    def write_formatted(self, segments: List[Tuple[str, FrozenSet[str]]]) -> None: ...
-
-
-class ConsoleLogger(jsbsim.FGLogger):
-    def __init__(
-        self,
-        output_console: ConsoleWriter,
-        problems_console: ConsoleWriter,
-        get_relative_path: Callable[[str], str],
-    ):
-        super().__init__()
-        self._output_console = output_console
-        self._problems_console = problems_console
-        self._get_relative_path = get_relative_path
-        self._segments: List[Tuple[str, FrozenSet[str]]] = []
-        self._active_color: Optional[str] = None
-        self._active_bold: bool = False
-        self._active_underline: bool = False
-
-    def set_level(self, level: jsbsim.LogLevel) -> None:
-        super().set_level(level)
-        self._segments.clear()
-        if level in (LogLevel.WARN, LogLevel.ERROR, LogLevel.FATAL):
-            self._active_color = "log_red"
-            self._active_bold = True
-            if level == LogLevel.WARN:
-                self._active_color = "log_cyan"
-                self.message("WARNING: ")
-            elif level == LogLevel.ERROR:
-                self.message("ERROR: ")
-            else:
-                self.message("FATAL: ")
-
-        self._active_color = None
-        self._active_bold = False
-        self._active_underline = False
-
-    def file_location(self, filename: str, line: int) -> None:
-        underline = self._active_underline
-        self._active_underline = True
-        self.message(f"In {self._get_relative_path(filename)}: line {line}\n")
-        self._active_underline = underline
-
-    def message(self, text: str) -> None:
-        tags = set()
-        if self._active_color:
-            tags.add(self._active_color)
-        if self._active_bold:
-            tags.add("log_bold")
-        if self._active_underline:
-            tags.add("log_underline")
-        tags = frozenset(tags)
-
-        if self._segments:
-            prev_text, prev_tags = self._segments[-1]
-            if tags == prev_tags:
-                self._segments[-1] = (prev_text + text, prev_tags)
-                return
-
-        self._segments.append((text, tags))
-
-    def format(self, fmt: LogFormat) -> None:
-        if fmt == LogFormat.RESET:
-            self._active_color = None
-            self._active_bold = False
-            self._active_underline = False
-        elif fmt == LogFormat.BOLD:
-            self._active_bold = True
-        elif fmt == LogFormat.NORMAL:
-            self._active_bold = False
-        elif fmt == LogFormat.UNDERLINE_ON:
-            self._active_underline = True
-        elif fmt == LogFormat.UNDERLINE_OFF:
-            self._active_underline = False
-        elif fmt == LogFormat.RED:
-            self._active_color = "log_red"
-        elif fmt == LogFormat.BLUE:
-            self._active_color = "log_blue"
-        elif fmt == LogFormat.CYAN:
-            self._active_color = "log_cyan"
-        elif fmt == LogFormat.GREEN:
-            self._active_color = "log_green"
-        elif fmt == LogFormat.DEFAULT:
-            self._active_color = None
-
-    def flush(self) -> None:
-        if not self._segments:
-            return
-
-        if self.log_level in (LogLevel.WARN, LogLevel.ERROR, LogLevel.FATAL):
-            console = self._problems_console
-        else:
-            console = self._output_console
-
-        has_style = any(tags for _, tags in self._segments)
-        if has_style:
-            console.write_formatted(self._segments)
-        else:
-            text = "".join(seg_text for seg_text, _ in self._segments)
-            console.write(text)
-        self._segments.clear()
 
 
 class XMLNode:
@@ -230,15 +126,8 @@ class Controller:
     def get_default_root_dir() -> str:
         return jsbsim.get_default_root_dir()
 
-    def __init__(
-        self,
-        root_dir: str,
-        output_console: ConsoleWriter,
-        problems_console: ConsoleWriter,
-    ):
-        self._logger = ConsoleLogger(
-            output_console, problems_console, self.get_relative_path
-        )
+    def __init__(self, root_dir: str, consoles_panel: ConsolesPanel):
+        self._logger = consoles_panel.get_console_logger(self.get_relative_path)
         self.dt = 1.0 / 120.0
         self.filename = ""
         self.property_history = PropertyHistory([])
