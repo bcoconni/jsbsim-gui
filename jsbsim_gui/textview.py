@@ -16,6 +16,7 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import ttk
 from tkinter.constants import (
     DISABLED,
@@ -30,7 +31,7 @@ from tkinter.constants import (
     NSEW,
     VERTICAL,
 )
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, FrozenSet, List, Optional, Tuple
 from xml.parsers import expat
 
 
@@ -310,9 +311,37 @@ class Console(TextView):
         super().__init__(master, contents, **kw)
         # Set the text to read only
         self._text.configure(state=DISABLED)
+        self._text.tag_configure("log_red", foreground="#cc0000")
+        self._text.tag_configure("log_blue", foreground="#0000cc")
+        self._text.tag_configure("log_cyan", foreground="#007080")
+        self._text.tag_configure("log_green", foreground="#007000")
+        base_font = tkfont.Font(font=self._text.cget("font"))
+        self._text.tag_configure(
+            "log_bold",
+            font=tkfont.Font(
+                family=base_font.actual("family"),
+                size=base_font.actual("size"),
+                weight="bold",
+            ),
+        )
+        self._text.tag_configure("log_underline", underline=True)
 
     def write(self, contents: str) -> None:
         self._text.configure(state=NORMAL)
         self._text.insert(END, contents)
         self._text.see(END)
+        self._text.configure(state=DISABLED)
+
+    def write_formatted(self, segments: List[Tuple[str, FrozenSet[str]]]) -> None:
+        self._text.configure(state=NORMAL)
+
+        for seg_text, tags in segments:
+            base = self._text.index("end-1c")
+            self._text.insert("end", seg_text)
+            end = self._text.index("end-1c")
+            if tags:
+                for tag in tags:
+                    self._text.tag_add(tag, f"{base}", f"{end}")
+
+        self._text.see("end")
         self._text.configure(state=DISABLED)

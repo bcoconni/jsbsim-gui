@@ -17,12 +17,12 @@
 import os
 import platform
 import xml.etree.ElementTree as et
-from typing import Dict, Iterator, List, Optional, Protocol
+from typing import Dict, FrozenSet, Iterator, List, Optional, Protocol, Tuple
 from xml.parsers import expat
 
 import jsbsim
 import numpy as np
-from jsbsim import FGPropertyNode
+from jsbsim import FGPropertyNode, LogFormat
 from jsbsim._jsbsim import _append_xml as append_xml
 
 from .property_history import PropertyHistory
@@ -30,32 +30,80 @@ from .property_history import PropertyHistory
 
 class ConsoleWriter(Protocol):
     def write(self, contents: str) -> None: ...
+    def write_formatted(self, segments: List[Tuple[str, FrozenSet[str]]]) -> None: ...
 
 
-class JSBSimConsoleLogger(jsbsim.FGLogger):
+class ConsoleLogger(jsbsim.FGLogger):
     def __init__(self, console: ConsoleWriter):
         super().__init__()
         self._console = console
-        self._parts: List[str] = []
+        self._segments: List[Tuple[str, FrozenSet[str]]] = []
+        self._active_color: Optional[str] = None
+        self._active_bold: bool = False
+        self._active_underline: bool = False
 
     def set_level(self, _level: jsbsim.LogLevel) -> None:
-        self._parts.clear()
+        self._segments.clear()
+        self._active_color = None
+        self._active_bold = False
+        self._active_underline = False
 
-    def file_location(self, _filename: str, _line: int) -> None:
-        pass
+    def file_location(self, filename: str, line: int) -> None:
+        self.message(f"In {filename}: line {line}\n")
 
-    def message(self, message: str) -> None:
-        self._parts.append(message)
+    def message(self, text: str) -> None:
+        tags = set()
+        if self._active_color:
+            tags.add(self._active_color)
+        if self._active_bold:
+            tags.add("log_bold")
+        if self._active_underline:
+            tags.add("log_underline")
+        tags = frozenset(tags)
 
-    def format(self, _format: jsbsim.LogFormat) -> None:
-        pass
+        if self._segments:
+            prev_text, prev_tags = self._segments[-1]
+            if tags == prev_tags:
+                self._segments[-1] = (prev_text + text, prev_tags)
+                return
+
+        self._segments.append((text, tags))
+
+    def format(self, fmt: LogFormat) -> None:
+        if fmt == LogFormat.RESET:
+            self._active_color = None
+            self._active_bold = False
+            self._active_underline = False
+        elif fmt == LogFormat.BOLD:
+            self._active_bold = True
+        elif fmt == LogFormat.NORMAL:
+            self._active_bold = False
+        elif fmt == LogFormat.UNDERLINE_ON:
+            self._active_underline = True
+        elif fmt == LogFormat.UNDERLINE_OFF:
+            self._active_underline = False
+        elif fmt == LogFormat.RED:
+            self._active_color = "log_red"
+        elif fmt == LogFormat.BLUE:
+            self._active_color = "log_blue"
+        elif fmt == LogFormat.CYAN:
+            self._active_color = "log_cyan"
+        elif fmt == LogFormat.GREEN:
+            self._active_color = "log_green"
+        elif fmt == LogFormat.DEFAULT:
+            self._active_color = None
 
     def flush(self) -> None:
-        if not self._parts:
+        if not self._segments:
             return
 
-        self._console.write("".join(self._parts))
-        self._parts.clear()
+        has_style = any(tags for _, tags in self._segments)
+        if has_style:
+            self._console.write_formatted(self._segments)
+        else:
+            text = "".join(seg_text for seg_text, _ in self._segments)
+            self._console.write(text)
+        self._segments.clear()
 
 
 class XMLNode:
@@ -157,7 +205,7 @@ class Controller:
 
     def __init__(self, root_dir: str, console: ConsoleWriter):
         self._console = console
-        self._logger = JSBSimConsoleLogger(console)
+        self._logger = ConsoleLogger(console)
         self.dt = 1.0 / 120.0
         self.filename = ""
         self.property_history = PropertyHistory([])
