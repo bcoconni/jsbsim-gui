@@ -95,7 +95,7 @@ class SourceCodeView(TextView):
         # Override parameters defined upstream
         kw["borderwidth"] = 0
         kw["relief"] = FLAT
-        super().__init__(master, frame_column=1, **kw)
+        super().__init__(master, frame_column=1, undo=True, **kw)
         self._modified_text_callbacks: List[Callable[[bool], None]] = []
 
         self._line_numbers = tk.Text(
