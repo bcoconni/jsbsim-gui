@@ -85,7 +85,7 @@ class TextView(ttk.Frame):
         self._text.mark_set(tk.INSERT, f"{position}")
         self._text.see(tk.INSERT)
         if focus:
-            self._text.focus()
+            self.after_idle(self._text.focus_set)
 
 
 class SourceCodeView(TextView):
