@@ -290,7 +290,7 @@ class App(tk.Tk):
         if self._consoles_panel:
             self._consoles_panel.destroy()
         self._consoles_panel = ConsolesPanel(
-            self, on_file_link_click=self._on_file_link_click
+            self, on_file_link_click=self._on_file_link_click, height=10
         )
 
         if not self._statusbar:

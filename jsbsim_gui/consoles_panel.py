@@ -231,18 +231,18 @@ class ConsoleLogger(FGLogger):
 
 class ConsolesPanel(ttk.Notebook):
     def __init__(
-        self, master: tk.Widget, on_file_link_click: Callable[[str, int], None]
+        self, master: tk.Widget, on_file_link_click: Callable[[str, int], None], **kw
     ):
         super().__init__(master)
         self._output_console = Console(
-            self, height=10, on_file_link_click=on_file_link_click
+            self, on_file_link_click=on_file_link_click, **kw
         )
         self._problems_console = ConsoleWithMessagesCounter(
             self,
             None,
-            height=10,
             on_count_update=self._update_problems_tab_title,
             on_file_link_click=on_file_link_click,
+            **kw,
         )
         self.add(self._output_console, text="Output")
         self.add(self._problems_console, text="Problems")
