@@ -15,22 +15,48 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import copy
+import enum
 import tkinter as tk
 import tkinter.font as tkfont
 from dataclasses import dataclass
 from tkinter import ttk
 from tkinter.constants import DISABLED, END, NORMAL
-from typing import Callable, FrozenSet, List, Optional, Tuple
+from typing import Callable, ClassVar, List, Optional, Tuple
 
 from jsbsim import FGLogger, LogFormat, LogLevel
 
 from .textview import TextView
 
 
+class LogColor(str, enum.Enum):
+    RED = "log_red"
+    BLUE = "log_blue"
+    CYAN = "log_cyan"
+    GREEN = "log_green"
+
+
+@dataclass
+class LogTags:
+    color: Optional[LogColor] = None
+    underline: bool = False
+    bold: bool = False
+    BOLD: ClassVar[str] = "log_bold"  # pylint: disable=invalid-name
+    UNDERLINE: ClassVar[str] = "log_underline"  # pylint: disable=invalid-name
+
+    def __iter__(self):
+        if self.color is not None:
+            yield self.color
+        if self.underline:
+            yield self.UNDERLINE
+        if self.bold:
+            yield self.BOLD
+
+
 @dataclass
 class LogSegment:
     text: str
-    tags: FrozenSet[str]
+    tags: LogTags
     file_link: Optional[Tuple[str, int]] = None
 
 
@@ -48,20 +74,18 @@ class Console(TextView):
         self._file_link_counter: int = 0
         # Set the text to read only
         self._text.configure(state=DISABLED)
-        self._text.tag_configure("log_red", foreground="#cc0000")
-        self._text.tag_configure("log_blue", foreground="#0000cc")
-        self._text.tag_configure("log_cyan", foreground="#007080")
-        self._text.tag_configure("log_green", foreground="#007000")
+        self._text.tag_configure(LogColor.RED, foreground="#cc0000")
+        self._text.tag_configure(LogColor.BLUE, foreground="#0000cc")
+        self._text.tag_configure(LogColor.CYAN, foreground="#007080")
+        self._text.tag_configure(LogColor.GREEN, foreground="#007000")
         base_font = tkfont.Font(font=self._text.cget("font"))
-        self._text.tag_configure(
-            "log_bold",
-            font=tkfont.Font(
-                family=base_font.actual("family"),
-                size=base_font.actual("size"),
-                weight="bold",
-            ),
+        bold_font = tkfont.Font(
+            family=base_font.actual("family"),
+            size=base_font.actual("size"),
+            weight="bold",
         )
-        self._text.tag_configure("log_underline", underline=True)
+        self._text.tag_configure(LogTags.BOLD, font=bold_font)
+        self._text.tag_configure(LogTags.UNDERLINE, underline=True)
 
     def write(self, contents: str) -> None:
         self._text.configure(state=NORMAL)
@@ -82,7 +106,6 @@ class Console(TextView):
                 fl_tag = f"_fl_{self._file_link_counter}"
                 self._file_link_counter += 1
                 self._text.tag_add(fl_tag, base, end)
-                self._text.tag_add("log_underline", base, end)
                 self._text.tag_bind(
                     fl_tag,
                     "<Button-1>",
@@ -135,74 +158,59 @@ class ConsoleLogger(FGLogger):
         self._problems_console = problems_console
         self._get_file_relative_path = get_file_relative_path
         self._segments: List[LogSegment] = []
-        self._active_color: Optional[str] = None
-        self._active_bold: bool = False
-        self._active_underline: bool = False
+        self._tags = LogTags()
 
     def set_level(self, level: LogLevel) -> None:
         super().set_level(level)
         self._segments.clear()
         if level in (LogLevel.WARN, LogLevel.ERROR, LogLevel.FATAL):
-            self._active_color = "log_red"
-            self._active_bold = True
+            self._tags = LogTags(LogColor.RED, bold=True, underline=False)
             if level == LogLevel.WARN:
-                self._active_color = "log_cyan"
+                self._tags.color = LogColor.CYAN
                 self.message("WARNING: ")
             elif level == LogLevel.ERROR:
                 self.message("ERROR: ")
             else:
                 self.message("FATAL: ")
-
-        self._active_color = None
-        self._active_bold = False
-        self._active_underline = False
+        self._tags = LogTags()
 
     def file_location(self, filename: str, line: int) -> None:
         rel_path = self._get_file_relative_path(filename)
-        self.message(f"In {rel_path}: line {line}\n")
-        self._segments[-1].file_link = (rel_path, line)
+        text = f"In {rel_path}: line {line}\n"
+        tags = LogTags(self._tags.color, bold=self._tags.bold, underline=True)
+        self._segments.append(LogSegment(text, tags, (rel_path, line)))
 
     def message(self, text: str) -> None:
-        tags = set()
-        if self._active_color:
-            tags.add(self._active_color)
-        if self._active_bold:
-            tags.add("log_bold")
-        if self._active_underline:
-            tags.add("log_underline")
-        tags = frozenset(tags)
-
         if self._segments:
             prev = self._segments[-1]
-            if prev.file_link is None and tags == prev.tags:
+            if prev.file_link is None and self._tags == prev.tags:
                 prev.text += text
                 return
 
-        self._segments.append(LogSegment(text, tags))
+        self._segments.append(LogSegment(text, copy.copy(self._tags)))
 
     def format(self, fmt: LogFormat) -> None:
         if fmt == LogFormat.RESET:
-            self._active_color = None
-            self._active_bold = False
-            self._active_underline = False
+            self._tags = LogTags()
         elif fmt == LogFormat.BOLD:
-            self._active_bold = True
+            self._tags.bold = True
         elif fmt == LogFormat.NORMAL:
-            self._active_bold = False
+            self._tags.bold = False
+            self._tags.underline = False
         elif fmt == LogFormat.UNDERLINE_ON:
-            self._active_underline = True
+            self._tags.underline = True
         elif fmt == LogFormat.UNDERLINE_OFF:
-            self._active_underline = False
+            self._tags.underline = False
         elif fmt == LogFormat.RED:
-            self._active_color = "log_red"
+            self._tags.color = LogColor.RED
         elif fmt == LogFormat.BLUE:
-            self._active_color = "log_blue"
+            self._tags.color = LogColor.BLUE
         elif fmt == LogFormat.CYAN:
-            self._active_color = "log_cyan"
+            self._tags.color = LogColor.CYAN
         elif fmt == LogFormat.GREEN:
-            self._active_color = "log_green"
+            self._tags.color = LogColor.GREEN
         elif fmt == LogFormat.DEFAULT:
-            self._active_color = None
+            self._tags.color = None
 
     def flush(self) -> None:
         if not self._segments:
@@ -213,9 +221,7 @@ class ConsoleLogger(FGLogger):
         else:
             console = self._output_console
 
-        has_format = any(
-            segment.tags or segment.file_link is not None for segment in self._segments
-        )
+        has_format = any(any(s.tags) or s.file_link is not None for s in self._segments)
         if has_format:
             console.write_formatted(self._segments)
         else:

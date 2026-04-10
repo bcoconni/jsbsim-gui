@@ -20,7 +20,7 @@ import unittest
 
 import jsbsim
 
-from jsbsim_gui.controller import ConsoleLogger
+from jsbsim_gui.consoles_panel import ConsoleLogger, LogColor, LogTags
 
 
 class DummyConsole:
@@ -30,7 +30,7 @@ class DummyConsole:
     def write(self, contents: str) -> None:
         self.contents.append(contents)
 
-    def write_formatted(self, segments) -> None:
+    def write_formatted(self, _segments) -> None:
         assert False
 
 
@@ -104,9 +104,10 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
         self.assertEqual(len(console.write_formatted_calls), 1)
         segments = console.write_formatted_calls[0]
         self.assertEqual(len(segments), 1)
-        seg_text, tags = segments[0]
+        seg_text = segments[0].text
+        tags = segments[0].tags
         self.assertEqual(seg_text, "error message")
-        self.assertIn("log_red", tags)
+        self.assertIn(LogColor.RED, tags)
 
     def test_format_reset_produces_plain_write(self):
         console = DummyFormattedConsole()
@@ -135,9 +136,9 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
         logger.flush()
 
         segments = console.write_formatted_calls[0]
-        _, tags = segments[0]
-        self.assertIn("log_red", tags)
-        self.assertNotIn("log_bold", tags)
+        tags = segments[0].tags
+        self.assertIn(LogColor.RED, tags)
+        self.assertNotIn(LogTags.BOLD, tags)
 
     def test_format_default_clears_color_but_not_bold(self):
         console = DummyFormattedConsole()
@@ -151,9 +152,9 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
         logger.flush()
 
         segments = console.write_formatted_calls[0]
-        _, tags = segments[0]
-        self.assertNotIn("log_blue", tags)
-        self.assertIn("log_bold", tags)
+        tags = segments[0].tags
+        self.assertNotIn(LogColor.BLUE, tags)
+        self.assertIn(LogTags.BOLD, tags)
 
     def test_color_persists_across_messages_in_same_flush(self):
         console = DummyFormattedConsole()
@@ -166,9 +167,9 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
         logger.flush()
 
         segments = console.write_formatted_calls[0]
-        self.assertEqual("".join(seg_text for seg_text, _ in segments), "part 1part 2")
-        for _, tags in segments:
-            self.assertIn("log_green", tags)
+        self.assertEqual("".join(segment.text for segment in segments), "part 1part 2")
+        for segment in segments:
+            self.assertIn(LogColor.GREEN, segment.tags)
 
     def test_mixed_plain_and_colored_segments(self):
         console = DummyFormattedConsole()
@@ -184,15 +185,12 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
         segments = console.write_formatted_calls[0]
         self.assertEqual(
-            "".join(seg_text for seg_text, _ in segments), "plain red plain again"
+            "".join(segment.text for segment in segments), "plain red plain again"
         )
         self.assertEqual(len(segments), 3)
-        _, tags0 = segments[0]
-        _, tags1 = segments[1]
-        _, tags2 = segments[2]
-        self.assertEqual(frozenset(tags0), frozenset())
-        self.assertIn("log_red", tags1)
-        self.assertEqual(frozenset(tags2), frozenset())
+        self.assertEqual(segments[0].tags, LogTags())
+        self.assertIn(LogColor.RED, segments[1].tags)
+        self.assertEqual(segments[2].tags, LogTags())
 
     def test_set_level_resets_format_state(self):
         console = DummyFormattedConsole()
@@ -221,15 +219,15 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
 
         segments = console.write_formatted_calls[0]
         self.assertEqual(
-            "".join(seg_text for seg_text, _ in segments),
+            "".join(segment.text for segment in segments),
             "cyan underlinedcyan no underline",
         )
-        _, tags0 = segments[0]
-        _, tags1 = segments[1]
-        self.assertIn("log_cyan", tags0)
-        self.assertIn("log_underline", tags0)
-        self.assertIn("log_cyan", tags1)
-        self.assertNotIn("log_underline", tags1)
+        tags0 = segments[0].tags
+        tags1 = segments[1].tags
+        self.assertIn(LogColor.CYAN, tags0)
+        self.assertIn(LogTags.UNDERLINE, tags0)
+        self.assertIn(LogColor.CYAN, tags1)
+        self.assertNotIn(LogTags.UNDERLINE, tags1)
 
     def test_ordinary_level_routes_to_output_console(self):
         output_console = DummyConsole()
@@ -276,3 +274,35 @@ class TestJSBSimConsoleLogger(unittest.TestCase):
         self.assertEqual(len(problems_console.write_formatted_calls), 2)
         self.assertGreater(len(problems_console.write_formatted_calls[0]), 0)
         self.assertGreater(len(problems_console.write_formatted_calls[1]), 0)
+
+    def test_file_location_produces_file_link_segment(self):
+        problems_console = DummyFormattedConsole()
+        output_console = DummyFormattedConsole()
+        logger = ConsoleLogger(output_console, problems_console, lambda s: s)
+
+        logger.set_level(jsbsim.LogLevel.ERROR)
+        logger.file_location("aircraft/c172/c172.xml", 42)
+        logger.flush()
+
+        segments = problems_console.write_formatted_calls[0]
+        link_segments = [s for s in segments if s.file_link is not None]
+        self.assertEqual(len(link_segments), 1)
+        self.assertEqual(link_segments[0].file_link, ("aircraft/c172/c172.xml", 42))
+        self.assertIn(LogTags.UNDERLINE, link_segments[0].tags)
+        self.assertIn("In aircraft/c172/c172.xml: line 42", link_segments[0].text)
+
+    def test_file_location_does_not_merge_with_adjacent_segments(self):
+        problems_console = DummyFormattedConsole()
+        output_console = DummyFormattedConsole()
+        logger = ConsoleLogger(output_console, problems_console, lambda s: s)
+
+        logger.set_level(jsbsim.LogLevel.ERROR)
+        logger.message("ERROR: something went wrong\n")
+        logger.file_location("foo.xml", 7)
+        logger.message("more context\n")
+        logger.flush()
+
+        segments = problems_console.write_formatted_calls[0]
+        link_segments = [s for s in segments if s.file_link is not None]
+        self.assertEqual(len(link_segments), 1)
+        self.assertEqual(link_segments[0].file_link, ("foo.xml", 7))
