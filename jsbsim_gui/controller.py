@@ -127,12 +127,12 @@ class Controller:
         return jsbsim.get_default_root_dir()
 
     def __init__(self, root_dir: str, consoles_panel: ConsolesPanel):
-        self._logger = consoles_panel.get_console_logger(self.get_relative_path)
+        logger = consoles_panel.get_console_logger(self.get_relative_path)
+        jsbsim.set_logger(logger)
+        self._logger_registered = True
         self.dt = 1.0 / 120.0
         self.filename = ""
         self.property_history = PropertyHistory([])
-        jsbsim.set_logger(self._logger)
-        self._logger_registered = True
         self.fdm = jsbsim.FGFDMExec(root_dir)
 
     def __del__(self):

@@ -253,6 +253,14 @@ class App(tk.Tk):
         self.grid_rowconfigure(0, weight=1)
         self.menubar.entryconfig("Trim", state=tk.DISABLED)
 
+    def _on_file_link_click(self, rel_path: str, line: int) -> None:
+        if not isinstance(self.main, SourceEditor):
+            self.edit()
+        assert isinstance(self.main, SourceEditor)
+        file_state = self.main.file_states.get(rel_path)
+        if file_state is not None:
+            self.main.move_to(file_state, True, 0, line)
+
     def mark_title_modified(self, is_modified: bool) -> None:
         current_title = self.title()
         if current_title.endswith("*"):
@@ -281,7 +289,9 @@ class App(tk.Tk):
 
         if self._consoles_panel:
             self._consoles_panel.destroy()
-        self._consoles_panel = ConsolesPanel(self)
+        self._consoles_panel = ConsolesPanel(
+            self, on_file_link_click=self._on_file_link_click
+        )
 
         if not self._statusbar:
             self._statusbar = ttk.Label(self, text="Ready", relief=tk.RAISED)
