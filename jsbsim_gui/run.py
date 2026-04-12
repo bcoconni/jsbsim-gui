@@ -137,20 +137,32 @@ class Run(ttk.Frame):
         )
         self.init_button.grid(column=0, row=0, columnspan=3, sticky=EW, padx=5, pady=5)
 
+        # Trim button
+        self._trim_button = ttk.Button(
+            controls_frame, text="Trim", command=self._trim, state=tk.DISABLED
+        )
+        self._trim_button.grid(column=0, row=1, sticky=EW, padx=5)
+        self._trim_mode = tk.StringVar()
+        self._trim_options = ttk.Combobox(
+            controls_frame, textvariable=self._trim_mode, state=tk.DISABLED
+        )
+        self._trim_options["values"] = ["Full Trim", "Ground Trim"]
+        self._trim_options.current(0)
+        self._trim_options.grid(column=1, row=1, sticky=EW, padx=5)
         # Step button
         self.step_button = ttk.Button(
             controls_frame, text="Step", command=self.step, state=tk.DISABLED
         )
-        self.step_button.grid(column=0, row=1, sticky=EW, padx=5, pady=5)
-        button_pos = self.step_button.grid_info()
+        self.step_button.grid(column=0, row=2, sticky=EW, padx=5, pady=5)
+        button_pos = self._trim_button.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
 
         # Run/Pause button
         self.run_pause_button = ttk.Button(
             controls_frame, text="Run", command=self.run, state=tk.DISABLED
         )
-        self.run_pause_button.grid(column=1, row=1, sticky=EW, padx=5, pady=5)
-        button_pos = self.run_pause_button.grid_info()
+        self.run_pause_button.grid(column=1, row=2, sticky=EW, padx=5, pady=5)
+        button_pos = self._trim_options.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
         controls_frame.grid(column=0, row=1, sticky=EW)
 
@@ -171,6 +183,8 @@ class Run(ttk.Frame):
         self.controller.run_ic()
         self.property_view.widget.update_values()
         self.init_button.config(state=tk.DISABLED)
+        self._trim_button.config(state=tk.NORMAL)
+        self._trim_options.config(state="readonly")
         self.step_button.config(state=tk.NORMAL)
         self.run_pause_button.config(state=tk.NORMAL)
 
@@ -217,8 +231,8 @@ class Run(ttk.Frame):
         self.step_button.config(state=tk.DISABLED)
         self.run_pause_button.config(command=self.pause, text="Pause")
 
-    def trim(self, mode: int) -> None:
-        if not self.controller.trim(mode):
+    def _trim(self) -> None:
+        if not self.controller.trim(self._trim_options.current() + 1):
             showerror("Error", message="Trim failed")
         else:
             self.update_properties(None)
