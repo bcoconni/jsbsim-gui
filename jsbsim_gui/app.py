@@ -18,8 +18,6 @@
 import os
 import sys
 import tkinter as tk
-import xml.etree.ElementTree as et
-from tkinter import filedialog as fd
 from tkinter import ttk
 from tkinter.constants import EW, NSEW
 from tkinter.messagebox import askyesnocancel, showerror
@@ -29,81 +27,10 @@ from PIL import Image, ImageTk
 
 from .consoles_panel import ConsolesPanel
 from .controller import Controller
+from .edit_actions import EditAction
+from .menu_bar import MenuBar
 from .run import Run
 from .source_editor import SourceEditor
-
-
-class MenuBar(tk.Menu):
-    def __init__(self, master: tk.Widget, root_dir: str):
-        super().__init__(master)
-        self.root_dir = root_dir
-
-        self.file_menu = tk.Menu(self, tearoff=False)
-        self.file_menu.add_command(label="Root...", command=self.set_root_dir)
-        self.file_menu.add_command(label="Open...", command=self.select_script_file)
-        self.file_menu.add_separator()
-        self.file_menu.add_command(
-            label="Save",
-            accelerator="Ctrl+S",
-            command=master.save_file,
-            state=tk.DISABLED,
-        )
-        self.file_menu.add_command(
-            label="Save All", command=master.save_all, state=tk.DISABLED
-        )
-        self.file_menu.add_separator()
-        self.file_menu.add_command(label="Exit", command=master.on_closing)
-        self.add_cascade(label="File", menu=self.file_menu)
-
-        view_menu = tk.Menu(self, tearoff=False)
-        view_menu.add_command(label="Edit", command=self.master.edit)
-        view_menu.add_command(label="Run", command=self.master.run)
-        self.add_cascade(label="View", menu=view_menu)
-        self.entryconfig("View", state=tk.DISABLED)
-
-    def select_script_file(self) -> None:
-        filename = fd.askopenfilename(
-            title="Open a script / aircraft",
-            initialdir=self.root_dir,
-            filetypes=(("script files", "*.xml"),),
-        )
-        if filename:
-            root = et.parse(filename).getroot()
-            success = False
-            if root.tag == "runscript":
-                use_el = root.find("use")
-                aircraft_name = use_el.attrib["aircraft"]
-                success = self.master.open_file(
-                    filename, aircraft_name, Controller.load_script
-                )
-            elif root.tag == "fdm_config":
-                aircraft_name = os.path.splitext(os.path.basename(filename))[0]
-                success = self.master.open_file(
-                    filename, aircraft_name, Controller.load_aircraft
-                )
-
-            if success:
-                self.entryconfig("View", state=tk.NORMAL)
-            else:
-                name = os.path.relpath(filename, self.root_dir)
-                showerror(
-                    "Error",
-                    message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
-                )
-
-    def set_root_dir(self) -> None:
-        directory = fd.askdirectory(
-            title="Select Root Directory",
-            initialdir=self.root_dir,
-        )
-        if directory:
-            self.root_dir = directory
-            self.master.root_dir = directory
-
-    def update_save_menu_state(self, enable: bool) -> None:
-        state = tk.NORMAL if enable else tk.DISABLED
-        self.file_menu.entryconfig("Save", state=state)
-        self.file_menu.entryconfig("Save All", state=state)
 
 
 class App(tk.Tk):
@@ -265,6 +192,10 @@ class App(tk.Tk):
     def save_all(self) -> None:
         if isinstance(self.main, SourceEditor):
             self.main.save_all()
+
+    def edit_action(self, action: EditAction) -> None:
+        if isinstance(self.main, SourceEditor):
+            self.main.edit_action(action)
 
     def open_file(
         self,
