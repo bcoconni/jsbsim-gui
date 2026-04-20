@@ -48,6 +48,9 @@ class TestRoot(tk.Tk):
     def edit_action(self, action: edit_actions.EditAction) -> None:
         self.calls.append(action.name)
 
+    def open_find_window(self) -> None:
+        return None
+
 
 class TestEditMenuCommands(unittest.TestCase):
     def setUp(self):

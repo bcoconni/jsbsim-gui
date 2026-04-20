@@ -28,6 +28,7 @@ from PIL import Image, ImageTk
 from .consoles_panel import ConsolesPanel
 from .controller import Controller
 from .edit_actions import EditAction, EditableFrame
+from .find import FindWindow
 from .menu_bar import MenuBar
 from .run import Run
 from .source_editor import SourceEditor
@@ -38,6 +39,7 @@ class App(tk.Tk):
         super().__init__()
         self._consoles_panel: Optional[ConsolesPanel] = None
         self._controller: Optional[Controller] = None
+        self._find_window: Optional[FindWindow] = None
         self._statusbar: Optional[ttk.Label] = None
         self.main: Optional[EditableFrame] = None
         self.title(f"JSBSim {Controller.get_version()}")
@@ -143,6 +145,7 @@ class App(tk.Tk):
             )
             return
 
+        self._close_find_window()
         w = self.main.winfo_width()
         h = self.main.winfo_height()
         self.main.destroy()
@@ -156,6 +159,7 @@ class App(tk.Tk):
         self.grid_rowconfigure(0, weight=1)
 
     def edit(self) -> None:
+        self._close_find_window()
         if self.main:
             self.main.destroy()
 
@@ -167,6 +171,28 @@ class App(tk.Tk):
         self.main.grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+
+    def _close_find_window(self) -> None:
+        if self._find_window is not None and self._find_window.winfo_exists():
+            self._find_window.destroy()
+        self._find_window = None
+
+    def open_find_window(self) -> None:
+        if not isinstance(self.main, SourceEditor):
+            return
+
+        if self._find_window is not None and self._find_window.winfo_exists():
+            self._find_window.lift()
+            return
+
+        self._find_window = FindWindow(
+            self,
+            self._controller,
+            self.main.file_states,
+            lambda file_state, line, column: self.main.move_to(
+                file_state, True, column, line
+            ),
+        )
 
     def _on_file_link_click(self, rel_path: str, line: int) -> None:
         if not isinstance(self.main, SourceEditor):
