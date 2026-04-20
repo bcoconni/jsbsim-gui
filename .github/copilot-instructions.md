@@ -17,7 +17,6 @@ A Tkinter-based GUI for [JSBSim](https://github.com/JSBSim-Team/jsbsim) flight d
 
 ### Key Design Patterns
 1. **View Switching**: The main window (`App`) replaces `self.main` widget between logo → `SourceEditor` → `Run` modes
-2. **Console Redirection**: `ConsoleStdoutRedirect` captures JSBSim's C++ stdout using file descriptor duplication, not simple stream redirection
 3. **Drag-n-Drop**: Abstract `DragNDropManager` pattern used for property-to-plot workflow (see `DnDProperties` in `run.py`)
 4. **XML Tracking**: Custom `XMLNode` tree (built via expat parser) tracks file paths and line numbers for navigation from XML tree to source editor
 
@@ -39,7 +38,7 @@ python -m unittest tests.test_plotinfo_list  # Specific test module
 Tests use `jsbsim.FGPropertyManager` for property node mocking. No external fixtures required.
 
 ### Dependencies
-- **jsbsim** (≥1.2.1): Python bindings to JSBSim C++ library (includes aircraft/engines/scripts data for testing)
+- **jsbsim** (≥1.3.0): Python bindings to JSBSim C++ library (includes aircraft/engines/scripts data for testing)
 - **matplotlib**: Plotting with TkAgg backend
 - **PIL/Pillow**: Logo image loading (implicit dependency)
 - **Tkinter**: Ships with Python, not in requirements.txt
@@ -60,8 +59,15 @@ Logo path is hardcoded to `logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp` 
 - **Formatting**: All Python code MUST be formatted with [Black](https://black.readthedocs.io/). Run `black .` before committing.
 - **Type Hints**: Use Python typing annotations for all functions/methods to catch type errors early. Check minimum supported Python version (3.10+) for typing compatibility—avoid newer typing features like `X | Y` union syntax.
 - **No Docstrings**: This is an application, NOT a library. NEVER use docstrings (""" ... """). Instead, use clear, descriptive function and variable names that make the code self-documenting.
-- **Code Clarity**: Favor readable, straightforward code over convoluted, astute, or "clever" solutions. Simple code that's easy to understand beats smart code that's hard to maintain.
+- **Avoid Trivial Micro-functions**: Do not decompose logic into one-line or trivial functions (e.g., `def add_one(x): return x+1`) for the sake of decomposition. Only extract functions when they provide a meaningful, reusable abstraction or significantly improve the clarity of complex logic.
+- **Code Clarity**: Favor readable, straightforward code over convoluted, astute, or "clever" solutions. Simple code that's easy to understand beats smart code that's hard to maintain. Keep trivial logic inline to reduce cognitive load and prevent unnecessary jumping between small function definitions.
 - **Standard Library First**: Strongly prefer `import tkinter`, `import xml.etree`, `import os`, etc. over adding new PyPI dependencies.
+- **Final Review Protocol:** Once the entire task is complete and before providing your final response, you must execute `git diff` and use its output as a mandatory checklist to align your work with the following rules:
+  1. **Analyze & Reconcile:** Read the diff carefully. If any change is not strictly necessary or degrades readability, you must immediately revert or fix those specific lines.
+  2. **Human-Centric Review:** The primary goal is to ensure the final diff is as easy as possible for a human to review. Minimize cognitive load by keeping changes strictly scoped to the task.
+  3. **Whitespace Exception:** Ignore any changes related to 'trailing spaces' removal (handled by IDE). Do not revert these.
+  4. **Scope Enforcement:** If the diff shows that you have touched files or lines unrelated to the given task, revert those specific changes.
+  5. **Validation:** Do not consider the task finished until the `git diff` output perfectly reflects the minimal set of changes required for the given task.
 
 ### Property Path Handling
 - Always use forward slashes `/` in property paths, even on Windows (see `get_relative_path()` and `PlotInfoList`)
@@ -116,14 +122,6 @@ Include files must be resolved before building the full XML tree for navigation.
 - Chunk size is 100 (`PropertyHistory.CHUNK_SIZE`)
 - Add new properties during init—runtime addition not supported
 - Use `get_property_history()` for full time series, `get_time_snapshot()` for single timestep
-
-### Working with JSBSim Context
-Always wrap JSBSim calls with `console.redirect_stdout()`:
-```python
-with self._console.redirect_stdout():
-    self.fdm.load_script(script_name)
-```
-This ensures C++ stdout appears in the GUI console widget.
 
 ## Known Gotchas
 
