@@ -1,13 +1,13 @@
 name: Python package
 
-on: [push]
+on: [ push ]
 
 jobs:
   build:
     strategy:
       matrix:
-        python-version: ["3.10", 3.11, 3.12, 3.13, 3.14]
-        os: [ubuntu-latest]
+        python-version: [ "3.10", 3.11, 3.12, 3.13, 3.14 ]
+        os: [ ubuntu-latest ]
         include:
           - python-version: "3.10"
             os: windows-latest
@@ -27,4 +27,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Test with unittest
-        run: python -m unittest discover tests
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            sudo apt-get install -y xvfb
+            xvfb-run python -m unittest discover tests
+          else
+            python -m unittest discover tests
+          fi
