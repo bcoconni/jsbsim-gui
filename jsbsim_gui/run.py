@@ -26,6 +26,7 @@ from typing import Optional
 from jsbsim import FGPropertyNode
 
 from .controller import Controller
+from .edit_actions import EditAction, EditableFrame
 from .hierarchical_tree import PropertyTree
 from .plots_view import PlotsView
 from .source_editor import LabeledWidget
@@ -109,7 +110,7 @@ class DnDProperties(DragNDropManager):
         self.target.add_properties(self.property_list)
 
 
-class Run(ttk.Frame):
+class Run(EditableFrame):
     REALTIME_UPDATE_INTERVAL_ms = 200
     MAX_UPDATE_TIME_s = 0.95 * REALTIME_UPDATE_INTERVAL_ms / 1000
 
@@ -248,3 +249,6 @@ class Run(ttk.Frame):
             sim_time = self.controller.fdm.get_sim_time()
 
         self._status_bar.config(text=f"Simulated time: {sim_time:.3f}s")
+
+    def apply_edit_action(self, action: EditAction) -> None:
+        self.property_view.apply_edit_action(action)
