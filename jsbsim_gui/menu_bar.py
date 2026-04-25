@@ -132,4 +132,3 @@ class MenuBar(tk.Menu):
         state = tk.NORMAL if enable else tk.DISABLED
         self.file_menu.entryconfig("Save", state=state)
         self.file_menu.entryconfig("Save All", state=state)
-        self.entryconfig("Edit", state=state)

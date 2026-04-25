@@ -33,10 +33,10 @@ from tkinter.constants import (
 from typing import Callable, Dict, List, Optional, Tuple
 from xml.parsers import expat
 
-from .edit_actions import EditAction
+from .edit_actions import EditAction, EditableFrame
 
 
-class TextView(ttk.Frame):
+class TextView(EditableFrame):
     """Display text with scrollbar(s)"""
 
     def __init__(

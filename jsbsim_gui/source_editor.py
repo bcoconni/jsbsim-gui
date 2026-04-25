@@ -23,23 +23,23 @@ from tkinter.constants import BROWSE, NONE, NS, NSEW
 from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from .controller import Controller, XMLNode
-from .edit_actions import EditAction
+from .edit_actions import EditAction, EditableFrame
 from .file_state import FileState
 from .hierarchical_tree import FileTree, HierarchicalTree, PropertyTree, SearchableTree
 from .textview import XMLSourceCodeView
 
 
-class LabeledWidget(ttk.Frame):
+class LabeledWidget(EditableFrame):
     def __init__(self, master: tk.Widget, label: str):
         super().__init__(master)
-        self.widget: Optional[tk.Widget] = None
+        self.widget: Optional[EditableFrame] = None
         self.header_frame = ttk.Frame(self)
         self.header_frame.grid(column=0, row=0, sticky="ew", pady=5, padx=5)
         self.label = ttk.Label(self.header_frame, text=label, anchor="center")
         self.label.grid(column=0, row=0, sticky="ew")
         self.header_frame.columnconfigure(0, weight=1)
 
-    def set_widget(self, widget: tk.Widget) -> None:
+    def set_widget(self, widget: EditableFrame) -> None:
         self.widget = widget
         self.widget.grid(column=0, row=1, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
@@ -47,6 +47,19 @@ class LabeledWidget(ttk.Frame):
 
     def set_label(self, label: str) -> None:
         self.label.config(text=label)
+
+    def apply_edit_action(self, action: EditAction) -> None:
+        if self.widget is not None:
+            self.widget.apply_edit_action(action)
+
+
+def widget_is_descendant(
+    widget: Optional[tk.Misc], container: Optional[tk.Widget]
+) -> bool:
+    if not (widget and container):
+        return False
+
+    return str(widget).startswith(str(container))
 
 
 class XMLTree(SearchableTree):
@@ -198,7 +211,7 @@ class PropertyOccurrencesTree(LabeledWidget):
         self.widget.tree.bind("<<TreeviewSelect>>", bind_func, add)
 
 
-class SourceEditor(ttk.Frame):
+class SourceEditor(EditableFrame):
     def __init__(self, master: tk.Widget, controller: Controller):
         super().__init__(master)
         self.root_dir = controller.get_root_dir()
@@ -353,7 +366,15 @@ class SourceEditor(ttk.Frame):
         self.save_file()
         return "break"
 
-    def edit_action(self, action: EditAction) -> None:
+    def apply_edit_action(self, action: EditAction) -> None:
+        focused_widget = self.focus_get()
+        if widget_is_descendant(focused_widget, self.property_view):
+            self.property_view.apply_edit_action(action)
+            return
+        elif widget_is_descendant(focused_widget, self.fileview):
+            self.fileview.apply_edit_action(action)
+            return
+
         assert isinstance(self.codeview.widget, XMLSourceCodeView)
         editor = self.codeview.widget
         editor.focus_text()

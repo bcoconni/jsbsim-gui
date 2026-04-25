@@ -23,6 +23,7 @@ from tkinter.messagebox import showerror
 from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from jsbsim import FGPropertyNode
+from .edit_actions import EditAction, EditableFrame
 
 
 def _natural_sort_key(path: str) -> List[Tuple[str, int]]:
@@ -36,7 +37,7 @@ def _natural_sort_key(path: str) -> List[Tuple[str, int]]:
     return result
 
 
-class HierarchicalTree(ttk.Frame):
+class HierarchicalTree(EditableFrame):
     def __init__(
         self,
         master: tk.Widget,
@@ -56,6 +57,7 @@ class HierarchicalTree(ttk.Frame):
         self._yscrollbar = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
         self._yscrollbar.pack(side=tk.LEFT, fill=tk.Y)
         self.tree["yscrollcommand"] = self._yscrollbar.set
+        self.tree.bind("<Control-c>", self._copy_selected_items_to_clipboard)
 
     def create_tree_nodes(self, nodes: List[str], is_open: bool = True) -> None:
         for node in nodes:
@@ -94,7 +96,7 @@ class HierarchicalTree(ttk.Frame):
         self._yscrollbar.bind(sequence, func, add)
         self.tree.bind(sequence, func, add)
 
-    def get_selected_elements(self) -> List[str]:
+    def _get_selected_elements(self, leaf_only: bool) -> List[str]:
         selected_prop = []
         for selected_item in self.tree.selection():
             name = self.tree.item(selected_item, "text")
@@ -103,7 +105,7 @@ class HierarchicalTree(ttk.Frame):
                 name = "/".join([self.tree.item(parent, "text"), name])
                 parent = self.tree.parent(parent)
 
-            if not self.tree.get_children(selected_item):
+            if not (leaf_only and self.tree.get_children(selected_item)):
                 selected_prop.append(name)
 
         return selected_prop
@@ -169,6 +171,16 @@ class HierarchicalTree(ttk.Frame):
 
         return parent_id
 
+    def _copy_selected_items_to_clipboard(self, _event: Optional[tk.Event]) -> str:
+        self.clipboard_clear()
+        for item in self._get_selected_elements(False):
+            self.clipboard_append(item)
+        return "break"
+
+    def apply_edit_action(self, action: EditAction) -> None:
+        if action is EditAction.COPY:
+            self._copy_selected_items_to_clipboard(None)
+
 
 class TextBox(ttk.Entry):
     def __init__(self, master: tk.Widget, **kw):
@@ -201,7 +213,7 @@ class CellEntry(TextBox):
         self.destroy()
 
 
-class SearchableTree(ttk.Frame):
+class SearchableTree(EditableFrame):
     def __init__(
         self, master: tk.Widget, create_tree: Callable[[tk.Widget], HierarchicalTree]
     ):
@@ -262,6 +274,9 @@ class SearchableTree(ttk.Frame):
 
         for item in tree.get_children():
             enumerate_children(item)
+
+    def apply_edit_action(self, action: EditAction) -> None:
+        self.tree.apply_edit_action(action)
 
 
 class PropertyTree(SearchableTree):
@@ -432,7 +447,7 @@ class FileTree(HierarchicalTree):
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
         def bind_func(_: tk.Event) -> None:
-            selection = self.get_selected_elements()
+            selection = self._get_selected_elements(True)
             if selection:
                 func(selection[0])
 

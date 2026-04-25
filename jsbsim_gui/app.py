@@ -27,7 +27,7 @@ from PIL import Image, ImageTk
 
 from .consoles_panel import ConsolesPanel
 from .controller import Controller
-from .edit_actions import EditAction
+from .edit_actions import EditAction, EditableFrame
 from .menu_bar import MenuBar
 from .run import Run
 from .source_editor import SourceEditor
@@ -39,8 +39,7 @@ class App(tk.Tk):
         self._consoles_panel: Optional[ConsolesPanel] = None
         self._controller: Optional[Controller] = None
         self._statusbar: Optional[ttk.Label] = None
-        self.menubar: Optional[MenuBar] = None
-        self.main = None
+        self.main: Optional[EditableFrame] = None
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
 
@@ -86,8 +85,7 @@ class App(tk.Tk):
         return True
 
     def display_logo(self) -> None:
-        if self.menubar:
-            self.menubar.update_save_menu_state(False)
+        self.menubar.update_save_menu_state(False)
 
         with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
             resized_image = Image.new("RGB", size=(600, image.height), color="white")
@@ -103,6 +101,7 @@ class App(tk.Tk):
         )
         success = self.open_file(filename, model_name, Controller.load_aircraft)
         if success:
+            self.menubar.entryconfig("Edit", state=tk.NORMAL)
             self.menubar.entryconfig("View", state=tk.NORMAL)
             return
 
@@ -114,6 +113,7 @@ class App(tk.Tk):
         try:
             success = self.open_file(filename, script_name, Controller.load_script)
             if success:
+                self.menubar.entryconfig("Edit", state=tk.NORMAL)
                 self.menubar.entryconfig("View", state=tk.NORMAL)
                 return
 
@@ -194,8 +194,8 @@ class App(tk.Tk):
             self.main.save_all()
 
     def edit_action(self, action: EditAction) -> None:
-        if isinstance(self.main, SourceEditor):
-            self.main.edit_action(action)
+        if self.main is not None:
+            self.main.apply_edit_action(action)
 
     def open_file(
         self,
