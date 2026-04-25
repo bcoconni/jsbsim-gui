@@ -19,11 +19,11 @@ import re
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, Dict, List, Literal, Tuple, Union
 
 from .controller import Controller, XMLNode
 from .file_state import FileState
-from .hierarchical_tree import HierarchicalTree, SearchableTree, TextBox
+from .hierarchical_tree import HierarchicalTree, SearchableTree
 from .textview import XMLSourceCodeView
 
 
@@ -117,53 +117,83 @@ def search_property_occurrences(
     return results
 
 
-class PropertyOccurrencesTree(ttk.Frame):
-    def __init__(self, master: tk.Widget):
-        super().__init__(master)
-        self._label = ttk.Label(self, text="", anchor="center")
-        self._label.grid(column=0, row=0, sticky=EW, pady=5, padx=5)
-
+class PropertyOccurrencesTree(SearchableTree):
+    def __init__(
+        self,
+        master: tk.Widget,
+        controller: Controller,
+        file_states: Dict[str, FileState],
+    ):
+        super().__init__(
+            master, lambda parent: HierarchicalTree(parent, [], ["content"], True)
+        )
         self._occurrence_data: Dict[str, Tuple[FileState, int, int]] = {}
-
-        tree_widget = HierarchicalTree(self, [], ["content"], True)
-        tree_widget.tree.configure(show="tree headings", selectmode=BROWSE)
-        tree_widget.tree.heading("#0", text="Location")
-        tree_widget.tree.heading("content", text="Content")
-        tree_widget.grid(column=0, row=1, sticky=NSEW)
-        self._tree = tree_widget
-
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self._controller = controller
+        self._file_states = file_states
+        self.tree.tree.configure(show="tree headings", selectmode=BROWSE)
+        self.tree.tree.heading("#0", text="Location")
+        self.tree.tree.heading("content", text="Content")
+        self.tree.grid(column=0, row=1, sticky=NSEW)
 
     def set_occurrences(
-        self,
-        property_name: str,
-        occurrences: Dict[FileState, List[Tuple[int, int]]],
+        self, occurrences: Dict[FileState, List[Tuple[int, int]]]
     ) -> None:
         self._occurrence_data = {}
-        self._tree.clear()
-
-        display_property = property_name.replace("[0]", "")
-        self._label.config(
-            text=f"Occurrences of {display_property}" if display_property else ""
-        )
+        self.tree.clear()
 
         input_files: List[str] = []
         for file_state in occurrences.keys():
             if file_state.filepath not in input_files:
                 input_files.append(file_state.filepath)
 
-        self._tree.create_tree_nodes(input_files)
+        self.tree.create_tree_nodes(input_files)
 
         for file_state, file_occurrences in occurrences.items():
-            file_id = self._tree.get_id_from_path(file_state.filepath)
+            file_id = self.tree.get_id_from_path(file_state.filepath)
             lines = file_state.content.split("\n")
 
             for line, column in file_occurrences:
-                occurrence_id = self._tree.tree.insert(
+                occurrence_id = self.tree.tree.insert(
                     file_id, tk.END, text=str(line), values=(lines[line - 1].strip(),)
                 )
                 self._occurrence_data[occurrence_id] = (file_state, line, column)
+
+    def search(self, _: tk.Event) -> None:
+        property_path = self.search_box.get().strip()
+        if not property_path or len(property_path) < 2:
+            self.set_occurrences({})
+            return
+
+        variants = self._expand_property_with_children(property_path)
+        occurrences: Dict[FileState, List[Tuple[int, int]]] = {}
+        if variants:
+            occurrences = search_property_occurrences(
+                variants, list(self._file_states.values())
+            )
+
+        self.set_occurrences(occurrences)
+
+    def _expand_property_with_children(self, property_path: str) -> List[str]:
+        property_root = self._controller.get_property_root()
+        if not property_root:
+            return []
+
+        root_name = property_root.get_fully_qualified_name()
+        search_path = property_path.replace("[0]", "")
+        properties = self._controller.get_property_list()
+        variants = set()
+
+        for prop in properties:
+            full_path = prop.get_fully_qualified_name()
+            normalized_path = full_path.replace("[0]", "")
+
+            if search_path in normalized_path:
+                variants.add(normalized_path)
+                # Also add the relative path
+                if normalized_path.startswith(root_name + "/"):
+                    variants.add(normalized_path[len(root_name) + 1 :])
+
+        return list(variants)
 
     def bind_selection(
         self,
@@ -171,12 +201,12 @@ class PropertyOccurrencesTree(ttk.Frame):
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
         def bind_func(_: tk.Event) -> None:
-            selection = self._tree.tree.selection()
+            selection = self.tree.tree.selection()
             if selection and selection[0] in self._occurrence_data:
                 file_state, line, column = self._occurrence_data[selection[0]]
                 func(file_state, line, column)
 
-        self._tree.tree.bind("<<TreeviewSelect>>", bind_func, add)
+        self.tree.tree.bind("<<TreeviewSelect>>", bind_func, add)
 
 
 class FindWindow(tk.Toplevel):
@@ -189,14 +219,13 @@ class FindWindow(tk.Toplevel):
     ):
         super().__init__(master)
         self.title("Find")
-        self.controller = controller
         self.file_states = file_states
         self.navigate_callback = navigate_callback
 
         # Search mode selector
         mode_frame = ttk.Frame(self)
         mode_frame.grid(column=0, row=0, sticky=EW, padx=5, pady=5)
-        ttk.Label(mode_frame, text="Search:").grid(column=0, row=0, padx=(0, 5))
+        ttk.Label(mode_frame, text="Item:").grid(column=0, row=0, padx=(0, 5))
         self._mode_combo = ttk.Combobox(
             mode_frame,
             values=["XML", "Property"],
@@ -204,38 +233,22 @@ class FindWindow(tk.Toplevel):
             width=12,
         )
         self._mode_combo.current(0)
-        self._mode_combo.grid(column=1, row=0)
+        self._mode_combo.grid(column=1, row=0, sticky=EW)
         self._mode_combo.bind("<<ComboboxSelected>>", self._on_mode_change)
 
         # XML panel
-        self._xml_panel = ttk.Frame(self)
         xml_trees = controller.get_xml_trees()
-        self._xml_tree = XMLTree(self._xml_panel, xml_trees)
-        self._xml_tree.grid(column=0, row=0, sticky=NSEW)
-        self._xml_panel.grid_columnconfigure(0, weight=1)
-        self._xml_panel.grid_rowconfigure(0, weight=1)
+        self._xml_tree = XMLTree(mode_frame, xml_trees)
         self._xml_tree.bind_selection(self._on_xml_selected)
+        self._xml_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
 
         # Property panel
-        self._property_panel = ttk.Frame(self)
-        input_frame = ttk.Frame(self._property_panel)
-        input_frame.grid(column=0, row=0, sticky=EW, padx=5, pady=5)
-        ttk.Label(input_frame, text="Property:").grid(column=0, row=0, padx=(0, 5))
-        self._property_entry = TextBox(input_frame)
-        self._property_entry.grid(column=1, row=0, sticky=EW)
-        input_frame.grid_columnconfigure(1, weight=1)
-        self._property_entry.bind("<Return>", self._on_property_search)
-
-        self._occurrences_tree = PropertyOccurrencesTree(self._property_panel)
-        self._occurrences_tree.grid(column=0, row=1, sticky=NSEW)
+        self._occurrences_tree = PropertyOccurrencesTree(
+            mode_frame, controller, file_states
+        )
+        self._occurrences_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
         self._occurrences_tree.bind_selection(navigate_callback)
-        self._property_panel.grid_columnconfigure(0, weight=1)
-        self._property_panel.grid_rowconfigure(1, weight=1)
-
-        # Show XML panel by default, hide property panel
-        self._xml_panel.grid(column=0, row=1, sticky=NSEW)
-        self._property_panel.grid(column=0, row=1, sticky=NSEW)
-        self._property_panel.grid_remove()
+        self._occurrences_tree.grid_remove()
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
@@ -243,28 +256,13 @@ class FindWindow(tk.Toplevel):
     def _on_mode_change(self, _: tk.Event) -> None:
         mode = self._mode_combo.get()
         if mode == "XML":
-            self._property_panel.grid_remove()
-            self._xml_panel.grid()
+            self._occurrences_tree.grid_remove()
+            self._xml_tree.grid()
         else:
-            self._xml_panel.grid_remove()
-            self._property_panel.grid()
+            self._xml_tree.grid_remove()
+            self._occurrences_tree.grid()
 
     def _on_xml_selected(self, filepath: str, column: int, line: int) -> None:
         file_state = self.file_states.get(filepath)
         if file_state is not None:
             self.navigate_callback(file_state, line, column)
-
-    def _on_property_search(self, _: tk.Event) -> None:
-        property_path = self._property_entry.get().strip()
-        if not property_path:
-            self._occurrences_tree.set_occurrences("", {})
-            return
-
-        variants = self.controller.expand_property_with_children(property_path)
-        occurrences: Dict[FileState, List[Tuple[int, int]]] = {}
-        if variants:
-            occurrences = search_property_occurrences(
-                variants, list(self.file_states.values())
-            )
-
-        self._occurrences_tree.set_occurrences(property_path, occurrences)

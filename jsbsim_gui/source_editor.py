@@ -24,6 +24,7 @@ from typing import Dict, List, Optional
 from .controller import Controller
 from .edit_actions import EditableFrame, EditAction
 from .file_state import FileState
+from .find import FindWindow
 from .hierarchical_tree import FileTree, PropertyTree
 from .textview import XMLSourceCodeView
 
@@ -67,6 +68,7 @@ class SourceEditor(EditableFrame):
         self.root_dir = controller.get_root_dir()
         self.controller = controller
         self.file_states: Dict[str, FileState] = {}
+        self._find_window: Optional[FindWindow] = None
         left_frame = ttk.Frame(self)
 
         xml_trees = controller.get_xml_trees()
@@ -158,11 +160,16 @@ class SourceEditor(EditableFrame):
         return "break"
 
     def apply_edit_action(self, action: EditAction) -> None:
+        if action == EditAction.FIND:
+            self._open_find_window()
+            return
+
         focused_widget = self.focus_get()
         if widget_is_descendant(focused_widget, self.property_view):
             self.property_view.apply_edit_action(action)
             return
-        elif widget_is_descendant(focused_widget, self.fileview):
+
+        if widget_is_descendant(focused_widget, self.fileview):
             self.fileview.apply_edit_action(action)
             return
 
@@ -184,6 +191,25 @@ class SourceEditor(EditableFrame):
             for file_state in self.file_states.values()
             if file_state.is_modified
         ]
+
+    def _close_find_window(self) -> None:
+        if self._find_window is not None and self._find_window.winfo_exists():
+            self._find_window.destroy()
+        self._find_window = None
+
+    def _open_find_window(self) -> None:
+        if self._find_window is not None and self._find_window.winfo_exists():
+            self._find_window.lift()
+            return
+
+        self._find_window = FindWindow(
+            self,
+            self.controller,
+            self.file_states,
+            lambda file_state, line, column: self.move_to(
+                file_state, True, column, line
+            ),
+        )
 
     def save_file(self) -> bool:
         if not self.current_file.is_modified:

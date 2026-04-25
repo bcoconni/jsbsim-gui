@@ -9,6 +9,7 @@ class EditAction(Enum):
     CUT = auto()
     COPY = auto()
     PASTE = auto()
+    FIND = auto()
 
 
 class EditableFrame(tk.Frame):
