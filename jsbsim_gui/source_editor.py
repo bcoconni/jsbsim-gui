@@ -135,9 +135,7 @@ class SourceEditor(EditableFrame):
             self.current_file = file_state
             self.update_title_bar_state()
 
-    def move_to(
-        self, file_state: FileState, focus: bool, column: int, line: int
-    ) -> None:
+    def _open_file(self, file_state: FileState) -> None:
         file_tree = self.fileview
         file_id = file_tree.get_id_from_path(file_state.filepath)
         assert file_id is not None
@@ -145,9 +143,22 @@ class SourceEditor(EditableFrame):
         file_tree.tree.selection_set([file_id])
 
         self.open_source_file(file_state)
+
+    def move_to(
+        self, file_state: FileState, focus: bool, column: int, line: int
+    ) -> None:
+        self._open_file(file_state)
         assert isinstance(self.codeview.widget, XMLSourceCodeView)
         editor: XMLSourceCodeView = self.codeview.widget
         editor.move_cursor(f"{line}.{column}", focus)
+
+    def select_text(
+        self, text: str, file_state: FileState, column: int, line: int
+    ) -> None:
+        self._open_file(file_state)
+        assert isinstance(self.codeview.widget, XMLSourceCodeView)
+        editor: XMLSourceCodeView = self.codeview.widget
+        editor.select_text(text, f"{line}.{column}")
 
     def on_text_modified(self, modified: bool) -> None:
         if modified and not self.current_file.is_modified:
@@ -206,9 +217,8 @@ class SourceEditor(EditableFrame):
             self,
             self.controller,
             self.file_states,
-            lambda file_state, line, column: self.move_to(
-                file_state, True, column, line
-            ),
+            self.select_text,
+            lambda file_state, col, line: self.move_to(file_state, True, col, line),
         )
 
     def save_file(self) -> bool:

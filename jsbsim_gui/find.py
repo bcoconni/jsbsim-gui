@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023-2026 Bertrand Coconnier
+# Copyright (c) 2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -28,10 +28,17 @@ from .textview import XMLSourceCodeView
 
 
 class XMLTree(SearchableTree):
-    def __init__(self, master: tk.Widget, xml_trees: List[XMLNode]):
+    def __init__(
+        self,
+        master: tk.Widget,
+        xml_trees: List[XMLNode],
+        file_states: Dict[str, FileState],
+        move_cursor: Callable[[FileState, int, int], None],
+    ):
         super().__init__(master, lambda parent: HierarchicalTree(parent, [], [], False))
         self.tree.tree.configure(show="tree", selectmode=BROWSE)
-        self.xml_trees = xml_trees
+        self._file_states = file_states
+        self._move_cursor = move_cursor
         self.nodes: Dict[str, XMLNode] = {}
         tree = self.tree.tree
 
@@ -47,22 +54,19 @@ class XMLTree(SearchableTree):
                 self.nodes[node_id] = node
                 node_ids[node] = node_id
 
-    def bind_selection(
-        self,
-        func: Callable[[str, int, int], None],
-        add: Union[bool, Literal["", "+"], None] = None,
-    ) -> None:
-        def bind_func(_: tk.Event) -> None:
-            node = self.nodes[self.tree.tree.selection()[0]]
-            func(node.filepath, node.column, node.line)
+        self.tree.bind("<<TreeviewSelect>>", self._on_xml_selected)
 
-        self.tree.bind("<<TreeviewSelect>>", bind_func, add)
+    def _on_xml_selected(self, _: tk.Event) -> None:
+        node = self.nodes[self.tree.tree.selection()[0]]
+        file_state = self._file_states.get(node.filepath)
+        if file_state is not None:
+            self._move_cursor(file_state, node.column, node.line)
 
 
 def search_property_occurrences(
     property_variants: List[str], file_states: List[FileState]
-) -> Dict[FileState, List[Tuple[int, int]]]:
-    results: Dict[FileState, List[Tuple[int, int]]] = {}
+) -> Dict[FileState, List[Tuple[int, int, str]]]:
+    results: Dict[FileState, List[Tuple[int, int, str]]] = {}
 
     dummy_frame = tk.Frame()
     dummy_editor = XMLSourceCodeView(dummy_frame)
@@ -108,7 +112,7 @@ def search_property_occurrences(
                             break
                     if property_line == line:
                         property_column += column
-                    file_occurrences.append((property_line, property_column))
+                    file_occurrences.append((property_column, property_line, variant))
 
         if file_occurrences:
             results[file_state] = sorted(file_occurrences)
@@ -123,20 +127,23 @@ class PropertyOccurrencesTree(SearchableTree):
         master: tk.Widget,
         controller: Controller,
         file_states: Dict[str, FileState],
+        select_text: Callable[[str, FileState, int, int], None],
     ):
         super().__init__(
             master, lambda parent: HierarchicalTree(parent, [], ["content"], True)
         )
-        self._occurrence_data: Dict[str, Tuple[FileState, int, int]] = {}
+        self._occurrence_data: Dict[str, Tuple[FileState, int, int, str]] = {}
         self._controller = controller
         self._file_states = file_states
+        self._select_text = select_text
         self.tree.tree.configure(show="tree headings", selectmode=BROWSE)
         self.tree.tree.heading("#0", text="Location")
         self.tree.tree.heading("content", text="Content")
         self.tree.grid(column=0, row=1, sticky=NSEW)
+        self.tree.tree.bind("<<TreeviewSelect>>", self._on_entry_selected)
 
     def set_occurrences(
-        self, occurrences: Dict[FileState, List[Tuple[int, int]]]
+        self, occurrences: Dict[FileState, List[Tuple[int, int, str]]]
     ) -> None:
         self._occurrence_data = {}
         self.tree.clear()
@@ -150,13 +157,24 @@ class PropertyOccurrencesTree(SearchableTree):
 
         for file_state, file_occurrences in occurrences.items():
             file_id = self.tree.get_id_from_path(file_state.filepath)
+            if file_id is None:
+                continue
+
             lines = file_state.content.split("\n")
 
-            for line, column in file_occurrences:
+            for column, line, prop_name in file_occurrences:
                 occurrence_id = self.tree.tree.insert(
-                    file_id, tk.END, text=str(line), values=(lines[line - 1].strip(),)
+                    file_id,
+                    tk.END,
+                    text=f"line {line}",
+                    values=(lines[line - 1].strip(),),
                 )
-                self._occurrence_data[occurrence_id] = (file_state, line, column)
+                self._occurrence_data[occurrence_id] = (
+                    file_state,
+                    column,
+                    line,
+                    prop_name,
+                )
 
     def search(self, _: tk.Event) -> None:
         property_path = self.search_box.get().strip()
@@ -165,7 +183,7 @@ class PropertyOccurrencesTree(SearchableTree):
             return
 
         variants = self._expand_property_with_children(property_path)
-        occurrences: Dict[FileState, List[Tuple[int, int]]] = {}
+        occurrences: Dict[FileState, List[Tuple[int, int, str]]] = {}
         if variants:
             occurrences = search_property_occurrences(
                 variants, list(self._file_states.values())
@@ -195,18 +213,11 @@ class PropertyOccurrencesTree(SearchableTree):
 
         return list(variants)
 
-    def bind_selection(
-        self,
-        func: Callable[[FileState, int, int], None],
-        add: Union[bool, Literal["", "+"], None] = None,
-    ) -> None:
-        def bind_func(_: tk.Event) -> None:
-            selection = self.tree.tree.selection()
-            if selection and selection[0] in self._occurrence_data:
-                file_state, line, column = self._occurrence_data[selection[0]]
-                func(file_state, line, column)
-
-        self.tree.tree.bind("<<TreeviewSelect>>", bind_func, add)
+    def _on_entry_selected(self, _event: tk.Event) -> None:
+        selection = self.tree.tree.selection()
+        if selection and selection[0] in self._occurrence_data:
+            file_state, column, line, prop_name = self._occurrence_data[selection[0]]
+            self._select_text(prop_name, file_state, column, line)
 
 
 class FindWindow(tk.Toplevel):
@@ -215,54 +226,46 @@ class FindWindow(tk.Toplevel):
         master: tk.Widget,
         controller: Controller,
         file_states: Dict[str, FileState],
-        navigate_callback: Callable[[FileState, int, int], None],
+        select_text: Callable[[str, FileState, int, int], None],
+        move_cursor: Callable[[FileState, int, int], None],
     ):
         super().__init__(master)
         self.title("Find")
-        self.file_states = file_states
-        self.navigate_callback = navigate_callback
 
         # Search mode selector
         mode_frame = ttk.Frame(self)
         mode_frame.grid(column=0, row=0, sticky=EW, padx=5, pady=5)
-        ttk.Label(mode_frame, text="Item:").grid(column=0, row=0, padx=(0, 5))
-        self._mode_combo = ttk.Combobox(
+        ttk.Label(mode_frame, text="Type:").grid(column=0, row=0, padx=10, sticky=tk.W)
+        self._type_combo = ttk.Combobox(
             mode_frame,
             values=["XML", "Property"],
             state="readonly",
             width=12,
         )
-        self._mode_combo.current(0)
-        self._mode_combo.grid(column=1, row=0, sticky=EW)
-        self._mode_combo.bind("<<ComboboxSelected>>", self._on_mode_change)
+        self._type_combo.current(0)
+        self._type_combo.grid(column=1, row=0, sticky=EW)
+        self._type_combo.bind("<<ComboboxSelected>>", self._on_mode_change)
 
         # XML panel
         xml_trees = controller.get_xml_trees()
-        self._xml_tree = XMLTree(mode_frame, xml_trees)
-        self._xml_tree.bind_selection(self._on_xml_selected)
+        self._xml_tree = XMLTree(mode_frame, xml_trees, file_states, move_cursor)
         self._xml_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
 
         # Property panel
         self._occurrences_tree = PropertyOccurrencesTree(
-            mode_frame, controller, file_states
+            mode_frame, controller, file_states, select_text
         )
         self._occurrences_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
-        self._occurrences_tree.bind_selection(navigate_callback)
         self._occurrences_tree.grid_remove()
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
     def _on_mode_change(self, _: tk.Event) -> None:
-        mode = self._mode_combo.get()
+        mode = self._type_combo.get()
         if mode == "XML":
             self._occurrences_tree.grid_remove()
             self._xml_tree.grid()
         else:
             self._xml_tree.grid_remove()
             self._occurrences_tree.grid()
-
-    def _on_xml_selected(self, filepath: str, column: int, line: int) -> None:
-        file_state = self.file_states.get(filepath)
-        if file_state is not None:
-            self.navigate_callback(file_state, line, column)
