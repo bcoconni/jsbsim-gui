@@ -17,6 +17,8 @@
 
 import tkinter as tk
 import unittest
+import sys
+import os
 
 import jsbsim_gui.edit_actions as edit_actions
 from jsbsim_gui.menu_bar import MenuBar
@@ -79,6 +81,9 @@ class TestXMLSourceCodeViewEditActions(unittest.TestCase):
         self.root.destroy()
 
     def test_select_all_copy_cut_paste_undo_redo(self):
+        if sys.platform == "darwin" and os.environ.get("GITHUB_ACTIONS") == "true":
+            self.skipTest("Clipboard edit actions hang on macOS Tk in GitHub Actions")
+
         self.editor.focus_text()
         self.editor.apply_edit_action(edit_actions.EditAction.SELECT_ALL)
         self.editor.apply_edit_action(edit_actions.EditAction.COPY)
