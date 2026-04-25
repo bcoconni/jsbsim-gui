@@ -33,6 +33,8 @@ from tkinter.constants import (
 from typing import Callable, Dict, List, Optional, Tuple
 from xml.parsers import expat
 
+from .edit_actions import EditAction
+
 
 class TextView(ttk.Frame):
     """Display text with scrollbar(s)"""
@@ -73,6 +75,19 @@ class TextView(ttk.Frame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+        self._text.bind(
+            "<Control-y>",
+            lambda e: self._on_edit_shortcut(EditAction.REDO),
+        )
+        self._text.bind(
+            "<Control-a>",
+            lambda e: self._on_edit_shortcut(EditAction.SELECT_ALL),
+        )
+
+    def _on_edit_shortcut(self, action: EditAction) -> str:
+        self.apply_edit_action(action)
+        return "break"
+
     def new_content(self, contents: str) -> None:
         self._text.delete("1.0", END)
         self._text.insert("1.0", contents)
@@ -81,11 +96,36 @@ class TextView(ttk.Frame):
     def get_content(self) -> str:
         return self._text.get("1.0", "end-1c")
 
+    def focus_text(self) -> None:
+        self._text.focus_set()
+
     def move_cursor(self, position: str, focus: bool = True) -> None:
         self._text.mark_set(tk.INSERT, f"{position}")
         self._text.see(tk.INSERT)
         if focus:
             self.after_idle(self._text.focus_set)
+
+    def apply_edit_action(self, action: EditAction) -> None:
+        if action is EditAction.UNDO:
+            try:
+                self._text.edit_undo()
+            except tk.TclError:
+                pass
+        elif action is EditAction.REDO:
+            try:
+                self._text.edit_redo()
+            except tk.TclError:
+                pass
+        elif action is EditAction.SELECT_ALL:
+            self._text.tag_add(tk.SEL, "1.0", "end-1c")
+            self._text.mark_set(tk.INSERT, "1.0")
+            self._text.see(tk.INSERT)
+        elif action is EditAction.CUT:
+            self._text.event_generate("<<Cut>>")
+        elif action is EditAction.COPY:
+            self._text.event_generate("<<Copy>>")
+        elif action is EditAction.PASTE:
+            self._text.event_generate("<<Paste>>")
 
 
 class SourceCodeView(TextView):

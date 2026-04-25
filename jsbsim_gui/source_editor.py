@@ -19,10 +19,11 @@ import os
 import re
 import tkinter as tk
 from tkinter import ttk
-from tkinter.constants import BROWSE, INSERT, NONE, NS, NSEW
+from tkinter.constants import BROWSE, NONE, NS, NSEW
 from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from .controller import Controller, XMLNode
+from .edit_actions import EditAction
 from .file_state import FileState
 from .hierarchical_tree import FileTree, HierarchicalTree, PropertyTree, SearchableTree
 from .textview import XMLSourceCodeView
@@ -247,7 +248,7 @@ class SourceEditor(ttk.Frame):
         self.codeview.set_widget(editor)
 
         editor.bind_modified_text(self.on_text_modified)
-        self.bind("<Control-s>", lambda e: self.save_file())
+        editor.bind("<Control-s>", lambda e: self._on_save_shortcut())
 
         self.property_view = LabeledWidget(left_frame, "Property Explorer")
         property_tree = PropertyTree(
@@ -347,6 +348,16 @@ class SourceEditor(ttk.Frame):
             self.current_file.is_modified = True
             self.fileview.highlight_file(self.current_file.filepath)
             self.update_title_bar_state()
+
+    def _on_save_shortcut(self) -> str:
+        self.save_file()
+        return "break"
+
+    def edit_action(self, action: EditAction) -> None:
+        assert isinstance(self.codeview.widget, XMLSourceCodeView)
+        editor = self.codeview.widget
+        editor.focus_text()
+        editor.apply_edit_action(action)
 
     def update_title_bar_state(self) -> None:
         any_modified = self.has_modified_files()
