@@ -30,7 +30,7 @@ from tkinter.constants import (
     NSEW,
     VERTICAL,
 )
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 from xml.parsers import expat
 
 from .edit_actions import EditAction, EditableFrame
@@ -126,6 +126,14 @@ class TextView(EditableFrame):
             self._text.event_generate("<<Copy>>")
         elif action is EditAction.PASTE:
             self._text.event_generate("<<Paste>>")
+
+    def bind(
+        self,
+        sequence: str,
+        func: Callable[[tk.Event], str],
+        add: Union[bool, Literal["", "+"], None] = None,
+    ) -> str:
+        return self._text.bind(sequence, func, add)
 
 
 class SourceCodeView(TextView):
