@@ -229,6 +229,11 @@ class SearchableTree(ttk.Frame):
         self.grid_rowconfigure(1, weight=1)
 
         self.search_box.bind("<KeyRelease>", self.search)
+        self.tree._yscrollbar.configure(command=self._yview)
+
+    def _yview(self, *args):
+        self.update_visible_properties(None)
+        return self.tree.tree.yview(*args)
 
     def collapse(self, parent_id: str = "") -> None:
         self.tree.collapse(parent_id)
