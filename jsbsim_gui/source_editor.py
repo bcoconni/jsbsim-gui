@@ -214,7 +214,7 @@ class SourceEditor(EditableFrame):
             return
 
         self._find_window = FindWindow(
-            self,
+            self.winfo_toplevel(),
             self.controller,
             self.file_states,
             self.select_text,

@@ -19,7 +19,7 @@ import re
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from .controller import Controller, XMLNode
 from .file_state import FileState
@@ -259,7 +259,7 @@ class PropertyOccurrencesTree(SearchableTree):
 class FindWindow(tk.Toplevel):
     def __init__(
         self,
-        master: tk.Widget,
+        master: Union[tk.Tk, tk.Toplevel],
         controller: Controller,
         file_states: Dict[str, FileState],
         select_text: Callable[[str, FileState, int, int], None],
@@ -267,6 +267,7 @@ class FindWindow(tk.Toplevel):
     ):
         super().__init__(master)
         self.title("Find")
+        self.transient(master)
 
         # Search mode selector
         mode_frame = ttk.Frame(self)
@@ -292,7 +293,7 @@ class FindWindow(tk.Toplevel):
             mode_frame, controller, file_states, select_text
         )
         self._occurrences_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
-        self._occurrences_tree.grid_remove()
+        self._xml_tree.tkraise()
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
@@ -300,8 +301,6 @@ class FindWindow(tk.Toplevel):
     def _on_mode_change(self, _: tk.Event) -> None:
         mode = self._type_combo.get()
         if mode == "XML":
-            self._occurrences_tree.grid_remove()
-            self._xml_tree.grid()
+            self._xml_tree.tkraise()
         else:
-            self._xml_tree.grid_remove()
-            self._occurrences_tree.grid()
+            self._occurrences_tree.tkraise()
