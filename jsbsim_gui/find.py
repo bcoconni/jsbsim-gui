@@ -19,7 +19,7 @@ import re
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
-from typing import Callable, Dict, List, Literal, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple
 
 from .controller import Controller, XMLNode
 from .file_state import FileState
@@ -112,7 +112,7 @@ def search_property_occurrences(
                             break
                     if property_line == line:
                         property_column += column
-                    file_occurrences.append((property_column, property_line, variant))
+                    file_occurrences.append((property_line, property_column, variant))
 
         if file_occurrences:
             results[file_state] = sorted(file_occurrences)
@@ -136,11 +136,23 @@ class PropertyOccurrencesTree(SearchableTree):
         self._controller = controller
         self._file_states = file_states
         self._select_text = select_text
+        self._entries: List[str] = []
+        self._num_entries = 0
+        self._selected_entry = -1
         self.tree.tree.configure(show="tree headings", selectmode=BROWSE)
         self.tree.tree.heading("#0", text="Location")
         self.tree.tree.heading("content", text="Content")
         self.tree.grid(column=0, row=1, sticky=NSEW)
         self.tree.tree.bind("<<TreeviewSelect>>", self._on_entry_selected)
+
+        buttons_frame = ttk.Frame(self, padding=(0, 2))
+        ttk.Button(buttons_frame, text="Previous", command=self._prev_entry).grid(
+            column=0, row=0, padx=1
+        )
+        ttk.Button(buttons_frame, text="Next", command=self._next_entry).grid(
+            column=1, row=0, padx=1
+        )
+        buttons_frame.grid(column=0, row=2)
 
     def set_occurrences(
         self, occurrences: Dict[FileState, List[Tuple[int, int, str]]]
@@ -162,7 +174,7 @@ class PropertyOccurrencesTree(SearchableTree):
 
             lines = file_state.content.split("\n")
 
-            for column, line, prop_name in file_occurrences:
+            for line, column, prop_name in file_occurrences:
                 occurrence_id = self.tree.tree.insert(
                     file_id,
                     tk.END,
@@ -190,6 +202,9 @@ class PropertyOccurrencesTree(SearchableTree):
             )
 
         self.set_occurrences(occurrences)
+        self._entries = sorted(self._occurrence_data.keys())
+        self._num_entries = len(self._entries)
+        self._selected_entry = -1
 
     def _expand_property_with_children(self, property_path: str) -> List[str]:
         property_root = self._controller.get_property_root()
@@ -213,11 +228,32 @@ class PropertyOccurrencesTree(SearchableTree):
 
         return list(variants)
 
-    def _on_entry_selected(self, _event: tk.Event) -> None:
+    def _on_entry_selected(self, _event: Optional[tk.Event]) -> None:
         selection = self.tree.tree.selection()
         if selection and selection[0] in self._occurrence_data:
             file_state, column, line, prop_name = self._occurrence_data[selection[0]]
             self._select_text(prop_name, file_state, column, line)
+
+    def _cycle_entries(self):
+        if self._num_entries == 0:
+            return
+        if self._selected_entry < 0:
+            self._selected_entry = self._num_entries - 1
+        elif self._selected_entry >= self._num_entries:
+            self._selected_entry = 0
+
+        entry = self._entries[self._selected_entry]
+        self.tree.tree.selection_set([entry])
+        self.tree.tree.see(entry)
+        self._on_entry_selected(None)
+
+    def _next_entry(self):
+        self._selected_entry += 1
+        self._cycle_entries()
+
+    def _prev_entry(self):
+        self._selected_entry -= 1
+        self._cycle_entries()
 
 
 class FindWindow(tk.Toplevel):
