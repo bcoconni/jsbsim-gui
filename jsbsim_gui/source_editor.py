@@ -139,8 +139,8 @@ class SourceEditor(EditableFrame):
         file_tree = self.fileview
         file_id = file_tree.get_id_from_path(file_state.filepath)
         assert file_id is not None
-        file_tree.tree.see(file_id)
-        file_tree.tree.selection_set([file_id])
+        file_tree.see(file_id)
+        file_tree.selection_set([file_id])
 
         self.open_source_file(file_state)
 

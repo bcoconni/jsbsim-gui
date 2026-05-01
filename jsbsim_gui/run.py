@@ -34,7 +34,6 @@ from .source_editor import LabeledWidget
 
 class DragNDropManager(ABC):
     def __init__(self, source: tk.Widget, target: tk.Widget):
-        self.source = source
         source.bind("<ButtonPress-1>", self.select, add=True)
         source.bind("<B1-Motion>", self.drag, add=True)
         source.bind("<ButtonRelease-1>", self.drop, add=True)
@@ -79,7 +78,7 @@ class DragNDropManager(ABC):
 
 class DnDProperties(DragNDropManager):
     def __init__(self, source: PropertyTree, root: FGPropertyNode, target: tk.Widget):
-        super().__init__(source.tree.tree, target)
+        super().__init__(source.tree, target)
         self.property_tree = source
         self.property_list: list[FGPropertyNode] = []
         self._property_root = root
@@ -95,7 +94,7 @@ class DnDProperties(DragNDropManager):
                 if idx < 3:
                     propname = ttk.Label(
                         widget_preview,
-                        text=name,
+                        text=name[1],
                         justify=tk.LEFT,
                     )
                     propname.pack(anchor=tk.W)

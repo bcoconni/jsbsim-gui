@@ -46,29 +46,44 @@ class HierarchicalTree(EditableFrame):
         is_open: bool = True,
     ):
         super().__init__(master)
-        self.tree = ttk.Treeview(self, columns=columns_id)
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._tree = ttk.Treeview(self, columns=columns_id)
+        self._tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._hidden_items: List[Tuple[str, str, int]] = []
         self._num_columns = len(columns_id)
 
         self.create_tree_nodes(nodes, is_open)
 
         # Vertical scrollbar
-        self._yscrollbar = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
+        self._yscrollbar = ttk.Scrollbar(
+            self, orient=VERTICAL, command=self._tree.yview
+        )
         self._yscrollbar.pack(side=tk.LEFT, fill=tk.Y)
-        self.tree["yscrollcommand"] = self._yscrollbar.set
-        self.tree.bind("<Control-c>", self._copy_selected_items_to_clipboard)
+        self._tree["yscrollcommand"] = self._yscrollbar.set
+        self._tree.bind("<Control-c>", self._copy_selected_items_to_clipboard)
+
+        self.bbox = self._tree.bbox
+        self.configure_tree = self._tree.configure
+        self.get_children = self._tree.get_children
+        self.heading = self._tree.heading
+        self.identify_row = self._tree.identify_row
+        self.insert = self._tree.insert
+        self.item = self._tree.item
+        self.see = self._tree.see
+        self.selection = self._tree.selection
+        self.selection_set = self._tree.selection_set
+        self.set = self._tree.set
+        self.yview = self._tree.yview
 
     def create_tree_nodes(self, nodes: List[str], is_open: bool = True) -> None:
         for node in nodes:
             parent_id = ""
             for name in node.split("/"):
-                for child_id in self.tree.get_children(parent_id):
-                    if name == self.tree.item(child_id, "text"):
+                for child_id in self._tree.get_children(parent_id):
+                    if name == self._tree.item(child_id, "text"):
                         parent_id = child_id
                         break
                 else:
-                    parent_id = self.tree.insert(
+                    parent_id = self._tree.insert(
                         parent_id,
                         tk.END,
                         text=name,
@@ -77,15 +92,15 @@ class HierarchicalTree(EditableFrame):
                     )
 
     def clear(self) -> None:
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        for item in self._tree.get_children():
+            self._tree.delete(item)
         self._hidden_items = []
 
     def move_to_top(self) -> None:
-        children = self.tree.get_children()
+        children = self._tree.get_children()
         if children:
-            self.tree.see(children[0])
-            self.tree.yview_moveto(0)
+            self._tree.see(children[0])
+            self._tree.yview_moveto(0)
 
     def bind(
         self,
@@ -93,22 +108,22 @@ class HierarchicalTree(EditableFrame):
         func: Callable[[tk.Event], None],
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
-        self._yscrollbar.bind(sequence, func, add)
-        self.tree.bind(sequence, func, add)
+        self._tree.bind(sequence, func, add)
 
-    def _get_selected_elements(self, leaf_only: bool) -> List[str]:
-        selected_prop = []
-        for selected_item in self.tree.selection():
-            name = self.tree.item(selected_item, "text")
-            parent = self.tree.parent(selected_item)
+    def get_selected_items(self, leaf_only: bool) -> List[str]:
+        tree = self._tree
+        selected_items = []
+        for item in tree.selection():
+            name = tree.item(item, "text")
+            parent = tree.parent(item)
             while parent:
-                name = "/".join([self.tree.item(parent, "text"), name])
-                parent = self.tree.parent(parent)
+                name = "/".join([tree.item(parent, "text"), name])
+                parent = tree.parent(parent)
 
-            if not (leaf_only and self.tree.get_children(selected_item)):
-                selected_prop.append(name)
+            if not (leaf_only and tree.get_children(item)):
+                selected_items.append(name)
 
-        return selected_prop
+        return selected_items
 
     def filter(self, pattern: str, parent_id: str = "") -> bool:
         """
@@ -121,7 +136,7 @@ class HierarchicalTree(EditableFrame):
         Returns:
             bool: True if any item in the tree matches the pattern, False otherwise.
         """
-        tree = self.tree
+        tree = self._tree
         success = False
 
         for child_id in tree.get_children(parent_id):
@@ -146,14 +161,14 @@ class HierarchicalTree(EditableFrame):
         """
         if self._hidden_items:
             for child_params in reversed(self._hidden_items):
-                self.tree.reattach(*child_params)
+                self._tree.reattach(*child_params)
 
             self._hidden_items = []
             return True
         return False
 
     def collapse(self, parent_id: str = "") -> None:
-        tree = self.tree
+        tree = self._tree
         for child_id in tree.get_children(parent_id):
             self.collapse(child_id)
             tree.item(child_id, open=False)
@@ -162,8 +177,8 @@ class HierarchicalTree(EditableFrame):
     def get_id_from_path(self, path: str) -> Optional[str]:
         parent_id = ""
         for name in path.split("/"):
-            for child_id in self.tree.get_children(parent_id):
-                if name == self.tree.item(child_id, "text"):
+            for child_id in self._tree.get_children(parent_id):
+                if name == self._tree.item(child_id, "text"):
                     parent_id = child_id
                     break
             else:
@@ -173,7 +188,7 @@ class HierarchicalTree(EditableFrame):
 
     def _copy_selected_items_to_clipboard(self, _event: Optional[tk.Event]) -> str:
         self.clipboard_clear()
-        for item in self._get_selected_elements(False):
+        for item in self.get_selected_items(False):
             self.clipboard_append(item)
         return "break"
 
@@ -243,9 +258,9 @@ class SearchableTree(EditableFrame):
         self.search_box.bind("<KeyRelease>", self.search)
         self.tree._yscrollbar.configure(command=self._yview)
 
-    def _yview(self, *args):
+    def _yview(self, *args) -> None:
         self.update_visible_properties(None)
-        return self.tree.tree.yview(*args)
+        return self.tree.yview(*args)
 
     def collapse(self, parent_id: str = "") -> None:
         self.tree.collapse(parent_id)
@@ -261,7 +276,7 @@ class SearchableTree(EditableFrame):
 
     def update_visible_properties(self, _: Optional[tk.Event]) -> None:
         self.visible_items = []
-        tree = self.tree.tree
+        tree = self.tree
 
         def enumerate_children(parent_id: str) -> None:
             children = tree.get_children(parent_id)
@@ -293,18 +308,18 @@ class PropertyTree(SearchableTree):
         )
         self.properties: Dict[str, FGPropertyNode] = {}
 
-        tree = self.tree.tree
-        tree.configure(displaycolumns=("value",))  # Hide the node columns
+        tree = self.tree
+        tree.configure_tree(displaycolumns=("value",))  # Hide the node columns
         tree.heading("#0", text="Property")
         tree.heading("value", text="Value")
         self.initialize_values(sorted_properties, sorted_names)
         self._rename_indexed_nodes()
         self.bind_ids_to_nodes("", common_root)
-        self.tree.tree.bind("<Double-Button-1>", self.edit_property_value)
+        tree.bind("<Double-Button-1>", self.edit_property_value)
         self.tree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
 
     def _rename_indexed_nodes(self, parent_id: str = "") -> None:
-        tree = self.tree.tree
+        tree = self.tree
         children = tree.get_children(parent_id)
         nchildren = len(children)
         for i, child_id in enumerate(children):
@@ -347,14 +362,14 @@ class PropertyTree(SearchableTree):
     def initialize_values(
         self, properties: List[FGPropertyNode], property_names: List[str]
     ) -> None:
-        tree = self.tree.tree
+        tree = self.tree
         for node, pname in zip(properties, property_names):
             parent_id = self.tree.get_id_from_path(pname)
             assert parent_id is not None
             tree.set(parent_id, "value", node.get_double_value())
 
     def bind_ids_to_nodes(self, parent_id: str, root: FGPropertyNode) -> None:
-        tree = self.tree.tree
+        tree = self.tree
         for child_id in tree.get_children(parent_id):
             name = tree.item(child_id, "text")
             node = root.get_node(name)
@@ -367,7 +382,7 @@ class PropertyTree(SearchableTree):
         self.update_visible_properties(None)
 
     def edit_property_value(self, event: tk.Event) -> None:
-        tree = self.tree.tree
+        tree = self.tree
         item_id = tree.identify_row(event.y)
 
         # Dismiss when the table header is selected
@@ -401,7 +416,7 @@ class PropertyTree(SearchableTree):
         self.update_values()
 
     def update_values(self, values: Optional[List[float]] = None) -> None:
-        tree = self.tree.tree
+        tree = self.tree
         if values is None:
             for item_id in self.visible_items:
                 node = self.properties[item_id]
@@ -412,7 +427,7 @@ class PropertyTree(SearchableTree):
 
     def get_selected_elements(self) -> List[FGPropertyNode]:
         selected_prop: List[FGPropertyNode] = []
-        tree = self.tree.tree
+        tree = self.tree
 
         def enumerate_children(parent_id: str) -> None:
             children = tree.get_children(parent_id)
@@ -438,8 +453,8 @@ class PropertyTree(SearchableTree):
 class FileTree(HierarchicalTree):
     def __init__(self, master: tk.Widget, elements: List[str]):
         super().__init__(master, sorted(elements), [])
-        self.tree.configure(show="tree", selectmode=BROWSE)
-        self.tree.tag_configure("modified", foreground="red")
+        self._tree.configure(show="tree", selectmode=BROWSE)
+        self._tree.tag_configure("modified", foreground="red")
 
     def bind_selection(
         self,
@@ -447,18 +462,18 @@ class FileTree(HierarchicalTree):
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
         def bind_func(_: tk.Event) -> None:
-            selection = self._get_selected_elements(True)
+            selection = self.get_selected_items(True)
             if selection:
                 func(selection[0])
 
-        self.tree.bind("<<TreeviewSelect>>", bind_func, add)
+        self._tree.bind("<<TreeviewSelect>>", bind_func, add)
 
     def highlight_file(self, filepath: str) -> None:
         item_id = self.get_id_from_path(filepath)
         assert item_id
-        self.tree.item(item_id, tags=("modified",))
+        self._tree.item(item_id, tags=("modified",))
 
     def clear_highlight(self, filepath: str) -> None:
         item_id = self.get_id_from_path(filepath)
         assert item_id
-        self.tree.item(item_id, tags=())
+        self._tree.item(item_id, tags=())

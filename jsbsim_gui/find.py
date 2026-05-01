@@ -36,11 +36,11 @@ class XMLTree(SearchableTree):
         move_cursor: Callable[[FileState, int, int], None],
     ):
         super().__init__(master, lambda parent: HierarchicalTree(parent, [], [], False))
-        self.tree.tree.configure(show="tree", selectmode=BROWSE)
         self._file_states = file_states
         self._move_cursor = move_cursor
         self.nodes: Dict[str, XMLNode] = {}
-        tree = self.tree.tree
+        tree = self.tree
+        tree.configure_tree(show="tree", selectmode=BROWSE)
 
         for xml_tree in xml_trees:
             node_ids = {}
@@ -54,10 +54,10 @@ class XMLTree(SearchableTree):
                 self.nodes[node_id] = node
                 node_ids[node] = node_id
 
-        self.tree.bind("<<TreeviewSelect>>", self._on_xml_selected)
+        tree.bind("<<TreeviewSelect>>", self._on_xml_selected)
 
     def _on_xml_selected(self, _: tk.Event) -> None:
-        node = self.nodes[self.tree.tree.selection()[0]]
+        node = self.nodes[self.tree.selection()[0]]
         file_state = self._file_states.get(node.filepath)
         if file_state is not None:
             self._move_cursor(file_state, node.column, node.line)
@@ -139,11 +139,11 @@ class PropertyOccurrencesTree(SearchableTree):
         self._entries: List[str] = []
         self._num_entries = 0
         self._selected_entry = -1
-        self.tree.tree.configure(show="tree headings", selectmode=BROWSE)
-        self.tree.tree.heading("#0", text="Location")
-        self.tree.tree.heading("content", text="Content")
+        self.tree.configure_tree(show="tree headings", selectmode=BROWSE)
+        self.tree.heading("#0", text="Location")
+        self.tree.heading("content", text="Content")
         self.tree.grid(column=0, row=1, sticky=NSEW)
-        self.tree.tree.bind("<<TreeviewSelect>>", self._on_entry_selected)
+        self.tree.bind("<<TreeviewSelect>>", self._on_entry_selected)
 
         buttons_frame = ttk.Frame(self, padding=(0, 2))
         ttk.Button(buttons_frame, text="Previous", command=self._prev_entry).grid(
@@ -175,7 +175,7 @@ class PropertyOccurrencesTree(SearchableTree):
             lines = file_state.content.split("\n")
 
             for line, column, prop_name in file_occurrences:
-                occurrence_id = self.tree.tree.insert(
+                occurrence_id = self.tree.insert(
                     file_id,
                     tk.END,
                     text=f"line {line}",
@@ -229,7 +229,7 @@ class PropertyOccurrencesTree(SearchableTree):
         return list(variants)
 
     def _on_entry_selected(self, _event: Optional[tk.Event]) -> None:
-        selection = self.tree.tree.selection()
+        selection = self.tree.selection()
         if selection and selection[0] in self._occurrence_data:
             file_state, column, line, prop_name = self._occurrence_data[selection[0]]
             self._select_text(prop_name, file_state, column, line)
@@ -243,8 +243,8 @@ class PropertyOccurrencesTree(SearchableTree):
             self._selected_entry = 0
 
         entry = self._entries[self._selected_entry]
-        self.tree.tree.selection_set([entry])
-        self.tree.tree.see(entry)
+        self.tree.selection_set([entry])
+        self.tree.see(entry)
         self._on_entry_selected(None)
 
     def _next_entry(self):
