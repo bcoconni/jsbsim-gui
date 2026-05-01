@@ -223,7 +223,7 @@ class SearchableTree(EditableFrame):
         search_frame = ttk.Frame(self, padding=(0, 2))
         search_frame.grid(column=0, row=0, sticky=EW)
         search_label = ttk.Label(search_frame, text="Search:")
-        search_label.grid(column=0, row=0, padx=10)
+        search_label.grid(column=0, row=0, padx=10, sticky=tk.W)
         self.search_box = TextBox(search_frame)
         self.search_box.grid(column=1, row=0, sticky=EW)
         self.tree = create_tree(self)
@@ -232,7 +232,7 @@ class SearchableTree(EditableFrame):
         collapse_button = ttk.Button(
             search_frame, text="Collapse", command=self.collapse
         )
-        collapse_button.grid(column=2, row=0, padx=10)
+        collapse_button.grid(column=2, row=0, padx=5)
 
         # Widget layout
         search_frame.grid_columnconfigure(1, weight=1)

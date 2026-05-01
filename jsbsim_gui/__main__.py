@@ -19,6 +19,7 @@ import argparse
 from .app import App
 from .controller import Controller
 
+
 def run():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
@@ -45,6 +46,7 @@ def run():
         app.display_logo()
 
     app.mainloop()
+
 
 if __name__ == "__main__":
     run()

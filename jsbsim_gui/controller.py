@@ -307,33 +307,3 @@ class Controller:
         if not success:
             self.fdm = old_fdm
         return success
-
-    def expand_property_with_children(self, property_path: str) -> List[str]:
-        property_root = self.get_property_root()
-        if not property_root:
-            return []
-
-        root_name = property_root.get_fully_qualified_name()
-
-        if not property_path.startswith("/"):
-            normalized_path = root_name + "/" + property_path
-        else:
-            normalized_path = property_path
-
-        search_path = normalized_path.replace("[0]", "")
-        properties = self.get_property_list()
-        variants = set()
-
-        for prop in properties:
-            full_path = prop.get_fully_qualified_name()
-            normalized_path = full_path.replace("[0]", "")
-
-            if normalized_path == search_path or normalized_path.startswith(
-                search_path + "/"
-            ):
-                variants.add(normalized_path)
-                # Also add the relative path
-                if normalized_path.startswith(root_name + "/"):
-                    variants.add(normalized_path[len(root_name) + 1 :])
-
-        return list(variants)

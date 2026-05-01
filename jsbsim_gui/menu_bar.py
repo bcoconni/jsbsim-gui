@@ -79,6 +79,12 @@ class MenuBar(tk.Menu):
             accelerator="Ctrl+V",
             command=lambda: master.edit_action(EditAction.PASTE),
         )
+        self.edit_menu.add_separator()
+        self.edit_menu.add_command(
+            label="Find...",
+            accelerator="Ctrl+F",
+            command=lambda: master.edit_action(EditAction.FIND),
+        )
         self.add_cascade(label="Edit", menu=self.edit_menu)
         self.entryconfig("Edit", state=tk.DISABLED)
 

@@ -105,6 +105,13 @@ class TextView(EditableFrame):
         if focus:
             self.after_idle(self._text.focus_set)
 
+    def select_text(self, text: str, position: str) -> None:
+        self._text.tag_remove(tk.SEL, "1.0", tk.END)
+        end_position = f"{position} + {len(text)} chars"
+        self._text.tag_add(tk.SEL, position, end_position)
+        self._text.mark_set(tk.INSERT, f"{position}")
+        self._text.see(position)
+
     def apply_edit_action(self, action: EditAction) -> None:
         if action is EditAction.UNDO:
             try:
