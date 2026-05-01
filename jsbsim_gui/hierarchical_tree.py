@@ -233,14 +233,14 @@ class SearchableTree(EditableFrame):
         self, master: tk.Widget, create_tree: Callable[[tk.Widget], HierarchicalTree]
     ):
         super().__init__(master)
-        self.visible_items: List[str] = []
+        self._visible_items: List[str] = []
 
         search_frame = ttk.Frame(self, padding=(0, 2))
         search_frame.grid(column=0, row=0, sticky=EW)
         search_label = ttk.Label(search_frame, text="Search:")
         search_label.grid(column=0, row=0, padx=10, sticky=tk.W)
-        self.search_box = TextBox(search_frame)
-        self.search_box.grid(column=1, row=0, sticky=EW)
+        self._search_box = TextBox(search_frame)
+        self._search_box.grid(column=1, row=0, sticky=EW)
         self.tree = create_tree(self)
         self.tree.grid(column=0, row=1, columnspan=3, sticky=NSEW)
 
@@ -255,19 +255,22 @@ class SearchableTree(EditableFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        self.search_box.bind("<KeyRelease>", self.search)
+        self._search_box.bind("<KeyRelease>", self.search)
         self.tree._yscrollbar.configure(command=self._yview)
 
     def _yview(self, *args) -> None:
         self.update_visible_properties(None)
         return self.tree.yview(*args)
 
+    def get_search_text(self) -> str:
+        return self._search_box.get()
+
     def collapse(self, parent_id: str = "") -> None:
         self.tree.collapse(parent_id)
 
     def search(self, _: tk.Event) -> None:
         self.tree.unfilter()
-        pattern = self.search_box.get()
+        pattern = self._search_box.get()
         if pattern:
             self.tree.filter(pattern)
 
@@ -275,7 +278,7 @@ class SearchableTree(EditableFrame):
         self.tree.move_to_top()
 
     def update_visible_properties(self, _: Optional[tk.Event]) -> None:
-        self.visible_items = []
+        self._visible_items = []
         tree = self.tree
 
         def enumerate_children(parent_id: str) -> None:
@@ -285,7 +288,7 @@ class SearchableTree(EditableFrame):
                     for child_id in children:
                         enumerate_children(child_id)
             elif tree.bbox(parent_id):
-                self.visible_items.append(parent_id)
+                self._visible_items.append(parent_id)
 
         for item in tree.get_children():
             enumerate_children(item)
@@ -306,7 +309,7 @@ class PropertyTree(SearchableTree):
             master,
             lambda parent: HierarchicalTree(parent, sorted_names, ["value"], False),
         )
-        self.properties: Dict[str, FGPropertyNode] = {}
+        self._properties: Dict[str, FGPropertyNode] = {}
 
         tree = self.tree
         tree.configure_tree(displaycolumns=("value",))  # Hide the node columns
@@ -374,7 +377,7 @@ class PropertyTree(SearchableTree):
             name = tree.item(child_id, "text")
             node = root.get_node(name)
             assert node is not None
-            self.properties[child_id] = node
+            self._properties[child_id] = node
             self.bind_ids_to_nodes(child_id, node)
 
     def search(self, event: tk.Event) -> None:
@@ -412,17 +415,17 @@ class PropertyTree(SearchableTree):
             showerror("Error", message=f"'{value}' is not a number")
             return
 
-        self.properties[item_id].set_double_value(v)
+        self._properties[item_id].set_double_value(v)
         self.update_values()
 
     def update_values(self, values: Optional[List[float]] = None) -> None:
         tree = self.tree
         if values is None:
-            for item_id in self.visible_items:
-                node = self.properties[item_id]
+            for item_id in self._visible_items:
+                node = self._properties[item_id]
                 tree.set(item_id, "value", node.get_double_value())
         else:
-            for item_id, value in zip(self.visible_items, values):
+            for item_id, value in zip(self._visible_items, values):
                 tree.set(item_id, "value", value)
 
     def get_selected_elements(self) -> List[FGPropertyNode]:
@@ -435,7 +438,7 @@ class PropertyTree(SearchableTree):
                 for item in children:
                     enumerate_children(item)
             else:
-                selected_prop.append(self.properties[parent_id])
+                selected_prop.append(self._properties[parent_id])
 
         for selected_item in tree.selection():
             enumerate_children(selected_item)
@@ -447,7 +450,7 @@ class PropertyTree(SearchableTree):
         self.update_values()
 
     def get_visible_properties(self) -> List[FGPropertyNode]:
-        return [self.properties[item_id] for item_id in self.visible_items]
+        return [self._properties[item_id] for item_id in self._visible_items]
 
 
 class FileTree(HierarchicalTree):

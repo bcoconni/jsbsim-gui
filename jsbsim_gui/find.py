@@ -189,7 +189,7 @@ class PropertyOccurrencesTree(SearchableTree):
                 )
 
     def search(self, _: tk.Event) -> None:
-        property_path = self.search_box.get().strip()
+        property_path = self.get_search_text().strip()
         if not property_path or len(property_path) < 2:
             self.set_occurrences({})
             return
