@@ -15,13 +15,13 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import re
+import copy
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
-from .controller import Controller, XMLNode
+from .controller import Controller, TreeNode, XMLNode
 from .file_state import FileState
 from .hierarchical_tree import HierarchicalTree, SearchableTree
 from .textview import XMLSourceCodeView
@@ -63,8 +63,55 @@ class XMLTree(SearchableTree):
             self._move_cursor(file_state, node.column, node.line)
 
 
-def search_property_occurrences(
-    property_variants: List[str], file_states: List[FileState]
+def _tree_node_from_property_name(node_name: str) -> TreeNode:
+    names = node_name.split("/", maxsplit=1)
+    tree = TreeNode(names[0])
+    if len(names) == 2:
+        child = _tree_node_from_property_name(names[1])
+        child.parent = tree
+    return tree
+
+
+def _add_node(tree: TreeNode, node_name: str) -> None:
+    names = node_name.split("/", maxsplit=1)
+    child_names = names[1].split("/", maxsplit=1)
+    for child in tree.children:
+        if child.name == child_names[0]:
+            if len(child_names) == 2:
+                _add_node(child, names[1])
+            return
+    child = _tree_node_from_property_name(names[1])
+    child.parent = tree
+
+
+def _find_node(tree: TreeNode, node_name: str) -> Optional[TreeNode]:
+    names = node_name.split("/", maxsplit=1)
+    child_names = names[1].split("/", maxsplit=1)
+    for child in tree.children:
+        if child.name == child_names[0]:
+            if len(child_names) == 2:
+                return _find_node(child, names[1])
+            return child
+    return None
+
+
+def _nodes_in_text(
+    tree: TreeNode, text: str, relative_path: bool
+) -> List[Tuple[str, int]]:
+    matching_children: List[Tuple[str, int]] = []
+    for child in tree.children:
+        path = child.path[1:] if relative_path else child.path
+        column = text.find(path)
+        if column >= 0:
+            if child.children:
+                matching_children += _nodes_in_text(child, text, relative_path)
+            else:
+                matching_children.append((path, column))
+    return matching_children
+
+
+def _search_property_occurrences(
+    property_tree: TreeNode, root: Optional[TreeNode], file_states: List[FileState]
 ) -> Dict[FileState, List[Tuple[int, int, str]]]:
     results: Dict[FileState, List[Tuple[int, int, str]]] = {}
 
@@ -72,7 +119,7 @@ def search_property_occurrences(
     dummy_editor = XMLSourceCodeView(dummy_frame)
 
     for file_state in file_states:
-        file_occurrences = []
+        file_occurrences: List[Tuple[int, int, str]] = []
 
         dummy_editor.new_content(file_state.content)
         data_regions = dummy_editor.extract_tagged_regions("XML_data")
@@ -83,36 +130,24 @@ def search_property_occurrences(
 
         all_regions = data_regions + attr_regions
 
-        for variant in property_variants:
-            # Build pattern that allows optional [0] indices in property names
-            pattern_parts = []
-            for part in variant.split("/"):
-                escaped_part = re.escape(part)
-                # If part is empty (from leading slash in absolute paths) or has a
-                # non-zero index, match it exactly.
-                # Otherwise allow optional [0] after the part.
-                if not part or "[" in part:
-                    pattern_parts.append(escaped_part)
-                else:
-                    pattern_parts.append(escaped_part + r"(?:\[0\])?")
+        for line, column, text in all_regions:
+            normalized_text = text.replace("[0]", "")
+            paths = _nodes_in_text(property_tree, normalized_text, False)
+            if root is not None:
+                paths += _nodes_in_text(root, normalized_text, True)
 
-            pattern = r"(?:^|[\s/])(" + "/".join(pattern_parts) + r")(?:$|[\s/\[])"
-
-            for line, column, text in all_regions:
-                property_match = re.search(pattern, text)
-                if property_match:
-                    property_column = property_match.start(1)
-                    property_line = line
-                    for l in text.split("\n"):
-                        length = len(l)
-                        if length < property_column:
-                            property_column -= length + 1  # Including '\n
-                            property_line += 1
-                        else:
-                            break
-                    if property_line == line:
-                        property_column += column
-                    file_occurrences.append((property_line, property_column, variant))
+            for node_path, property_column in paths:
+                property_line = line
+                for l in text.split("\n"):
+                    length = len(l)
+                    if length < property_column:
+                        property_column -= length + 1  # Including '\n
+                        property_line += 1
+                    else:
+                        break
+                if property_line == line:
+                    property_column += column
+                file_occurrences.append((property_line, property_column, node_path))
 
         if file_occurrences:
             results[file_state] = sorted(file_occurrences)
@@ -194,11 +229,11 @@ class PropertyOccurrencesTree(SearchableTree):
             self.set_occurrences({})
             return
 
-        variants = self._expand_property_with_children(property_path)
+        property_tree, root = self._find_matching_properties(property_path)
         occurrences: Dict[FileState, List[Tuple[int, int, str]]] = {}
-        if variants:
-            occurrences = search_property_occurrences(
-                variants, list(self._file_states.values())
+        if property_tree.children:
+            occurrences = _search_property_occurrences(
+                property_tree, root, list(self._file_states.values())
             )
 
         self.set_occurrences(occurrences)
@@ -206,27 +241,30 @@ class PropertyOccurrencesTree(SearchableTree):
         self._num_entries = len(self._entries)
         self._selected_entry = -1
 
-    def _expand_property_with_children(self, property_path: str) -> List[str]:
-        property_root = self._controller.get_property_root()
-        if not property_root:
-            return []
-
-        root_name = property_root.get_fully_qualified_name()
+    def _find_matching_properties(
+        self, property_path: str
+    ) -> Tuple[TreeNode, Optional[TreeNode]]:
+        property_tree = TreeNode("")
         search_path = property_path.replace("[0]", "")
         properties = self._controller.get_property_list()
-        variants = set()
 
         for prop in properties:
             full_path = prop.get_fully_qualified_name()
             normalized_path = full_path.replace("[0]", "")
 
             if search_path in normalized_path:
-                variants.add(normalized_path)
-                # Also add the relative path
-                if normalized_path.startswith(root_name + "/"):
-                    variants.add(normalized_path[len(root_name) + 1 :])
+                _add_node(property_tree, normalized_path)
 
-        return list(variants)
+        property_root = self._controller.get_property_root()
+        if property_root is None:
+            return (property_tree, None)
+
+        root_name = property_root.get_fully_qualified_name()
+        root = _find_node(copy.deepcopy(property_tree), root_name)
+        if root is not None:
+            root.parent = None
+            root.name = ""
+        return property_tree, root
 
     def _on_entry_selected(self, _event: Optional[tk.Event]) -> None:
         selection = self.tree.selection()

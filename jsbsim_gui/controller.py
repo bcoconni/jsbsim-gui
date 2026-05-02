@@ -17,7 +17,7 @@
 import os
 import platform
 import xml.etree.ElementTree as et
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, List, Optional
 from xml.parsers import expat
 
 import jsbsim
@@ -29,20 +29,9 @@ from .consoles_panel import ConsolesPanel
 from .property_history import PropertyHistory
 
 
-class XMLNode:
-    def __init__(
-        self,
-        name: str,
-        attrs: Dict[str, str],
-        filepath: str,
-        column: int,
-        line: int,
-    ):
+class TreeNode:
+    def __init__(self, name: str):
         self.name = name
-        self.attrs = attrs
-        self.filepath = filepath
-        self.column = column
-        self.line = line
         self.children: List[XMLNode] = []
         self._parent: Optional[XMLNode] = None
 
@@ -71,6 +60,22 @@ class XMLNode:
         yield self
         for child in self.children:
             yield from child
+
+
+class XMLNode(TreeNode):
+    def __init__(
+        self,
+        name: str,
+        attrs: Dict[str, str],
+        filepath: str,
+        column: int,
+        line: int,
+    ):
+        super().__init__(name)
+        self.attrs = attrs
+        self.filepath = filepath
+        self.column = column
+        self.line = line
 
 
 class XMLNodeBuilder:
@@ -174,6 +179,9 @@ class Controller:
     def get_xml_trees(self) -> List[XMLNode]:
         aircraft_path = self.fdm.get_aircraft_path()
         root = XMLNodeBuilder(self.get_relative_path(self.filename), self.filename).root
+        if root is None:
+            return []
+
         xml_trees = [root]
 
         if root.name == "runscript":
