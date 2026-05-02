@@ -265,10 +265,16 @@ class SearchableTree(EditableFrame):
     def get_search_text(self) -> str:
         return self._search_box.get()
 
+    def set_search_text(self, text: str) -> None:
+        self._search_box.selection_range(0, tk.END)
+        self._search_box.select_clear()
+        self._search_box.insert(0, text)
+        self.search(None)
+
     def collapse(self, parent_id: str = "") -> None:
         self.tree.collapse(parent_id)
 
-    def search(self, _: tk.Event) -> None:
+    def search(self, _: Optional[tk.Event]) -> None:
         self.tree.unfilter()
         pattern = self._search_box.get()
         if pattern:
@@ -320,6 +326,8 @@ class PropertyTree(SearchableTree):
         self.bind_ids_to_nodes("", common_root)
         tree.bind("<Double-Button-1>", self.edit_property_value)
         self.tree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
+
+        self.get_selected_property_names = self.tree.get_selected_items
 
     def _rename_indexed_nodes(self, parent_id: str = "") -> None:
         tree = self.tree
@@ -428,7 +436,7 @@ class PropertyTree(SearchableTree):
             for item_id, value in zip(self._visible_items, values):
                 tree.set(item_id, "value", value)
 
-    def get_selected_elements(self) -> List[FGPropertyNode]:
+    def get_selected_properties(self) -> List[FGPropertyNode]:
         selected_prop: List[FGPropertyNode] = []
         tree = self.tree
 

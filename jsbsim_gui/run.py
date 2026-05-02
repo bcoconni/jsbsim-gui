@@ -84,7 +84,7 @@ class DnDProperties(DragNDropManager):
         self._property_root = root
 
     def create_source_widget(self, master: tk.Widget) -> Optional[tk.Widget]:
-        self.property_list = self.property_tree.get_selected_elements()
+        self.property_list = self.property_tree.get_selected_properties()
         if self.property_list:
             widget_preview = ttk.Frame(master, borderwidth=1)
             _, property_names = self.property_tree.get_unified_property_names(

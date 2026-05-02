@@ -298,6 +298,10 @@ class FindWindow(tk.Toplevel):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
+    def find_property(self, property_name: str) -> None:
+        self._occurrences_tree.tkraise()
+        self._occurrences_tree.set_search_text(property_name)
+
     def _on_mode_change(self, _: tk.Event) -> None:
         mode = self._type_combo.get()
         if mode == "XML":

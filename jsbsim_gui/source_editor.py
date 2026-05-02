@@ -114,6 +114,7 @@ class SourceEditor(EditableFrame):
             controller.get_property_list(),
             controller.get_property_root(),
         )
+        property_tree.tree.bind("<Control-f>", self._find_property)
         self.property_view.set_widget(property_tree)
 
         # Window layout
@@ -144,6 +145,14 @@ class SourceEditor(EditableFrame):
 
         self.open_source_file(file_state)
 
+    def _find_property(self, _: Optional[tk.Event]) -> str:
+        self._open_find_window()
+        tree: PropertyTree = self.property_view.widget
+        property_names = tree.get_selected_property_names(False)
+        if self._find_window is not None and len(property_names) == 1:
+            self._find_window.find_property(property_names[0])
+        return "break"
+
     def move_to(
         self, file_state: FileState, focus: bool, column: int, line: int
     ) -> None:
@@ -171,11 +180,14 @@ class SourceEditor(EditableFrame):
         return "break"
 
     def apply_edit_action(self, action: EditAction) -> None:
+        focused_widget = self.focus_get()
         if action == EditAction.FIND:
-            self._open_find_window()
+            if widget_is_descendant(focused_widget, self.property_view):
+                self._find_property(None)
+            else:
+                self._open_find_window()
             return
 
-        focused_widget = self.focus_get()
         if widget_is_descendant(focused_widget, self.property_view):
             self.property_view.apply_edit_action(action)
             return
