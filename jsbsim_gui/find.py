@@ -231,6 +231,7 @@ class PropertyOccurrencesTree(SearchableTree):
     def _on_entry_selected(self, _event: Optional[tk.Event]) -> None:
         selection = self.tree.selection()
         if selection and selection[0] in self._occurrence_data:
+            self._selected_entry = self._entries.index(selection[0])
             file_state, column, line, prop_name = self._occurrence_data[selection[0]]
             self._select_text(prop_name, file_state, column, line)
 
@@ -299,6 +300,7 @@ class FindWindow(tk.Toplevel):
         self.grid_rowconfigure(1, weight=1)
 
     def find_property(self, property_name: str) -> None:
+        self._type_combo.current(1)
         self._occurrences_tree.tkraise()
         self._occurrences_tree.set_search_text(property_name)
 
