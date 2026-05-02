@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import copy
 import os
 import platform
 from typing import Iterable, List, Optional
@@ -64,30 +65,36 @@ class PlotInfo:
 class PlotInfoList:
     def __init__(self, properties: Optional[List[FGPropertyNode]] = None):
         if properties:
-            self.plotinfos: List[PlotInfo] = [
+            self._plotinfos: List[PlotInfo] = [
                 PlotInfo(p, p.get_name()) for p in properties
             ]
             if len(properties) > 1:
                 self._update_unique_names()
         else:
-            self.plotinfos = []
+            self._plotinfos = []
+
+    def __deepcopy__(self, memo):
+        plist_copy = PlotInfoList()
+        memo[id(plist_copy)] = plist_copy
+        plist_copy._plotinfos = [copy.copy(plot_info) for plot_info in self._plotinfos]
+        return plist_copy
 
     def __iter__(self) -> Iterable[PlotInfo]:
-        return iter(self.plotinfos)
+        return iter(self._plotinfos)
 
     def __len__(self) -> int:
-        return len(self.plotinfos)
+        return len(self._plotinfos)
 
     def __getitem__(self, index: int) -> PlotInfo:
-        return self.plotinfos[index]
+        return self._plotinfos[index]
 
     def _update_unique_names(self) -> None:
         fully_qualified_names = [
-            p.node.get_fully_qualified_name() for p in self.plotinfos
+            p.node.get_fully_qualified_name() for p in self._plotinfos
         ]
         common_root = os.path.commonpath(fully_qualified_names)
 
-        for p in self.plotinfos:
+        for p in self._plotinfos:
             p.name = os.path.relpath(p.node.get_fully_qualified_name(), common_root)
 
             if platform.system() == "Windows":
@@ -97,15 +104,15 @@ class PlotInfoList:
         if not props:
             return
 
-        self.plotinfos.extend([PlotInfo(p, p.get_name()) for p in props])
-        if len(self.plotinfos) > 1:
+        self._plotinfos.extend([PlotInfo(p, p.get_name()) for p in props])
+        if len(self._plotinfos) > 1:
             self._update_unique_names()
 
     def pop(self, index: int) -> FGPropertyNode:
-        prop = self.plotinfos.pop(index)
-        if len(self.plotinfos) > 1:
+        prop = self._plotinfos.pop(index)
+        if len(self._plotinfos) > 1:
             self._update_unique_names()
         else:
-            for p in self.plotinfos:
+            for p in self._plotinfos:
                 p.name = p.node.get_name()
         return prop.node

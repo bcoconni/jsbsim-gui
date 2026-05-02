@@ -15,9 +15,10 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import copy
 import math
 import tkinter as tk
-from tkinter import font, ttk
+from tkinter import NSEW, font, ttk
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import matplotlib.artist
@@ -39,6 +40,7 @@ from matplotlib.lines import Line2D
 from matplotlib.transforms import Transform
 
 from .controller import Controller
+from .edit_actions import Command, EditableFrame
 from .plotinfo_list import PlotInfoList
 
 
@@ -181,19 +183,39 @@ class SelectedLine:
         return None
 
 
-class PlotsView(ttk.Frame):
-    def __init__(self, master: tk.Widget, controller: Controller, **kw):
+class PlotCommand(Command):
+    def __init__(self, plot_view):
+        self._plot_view = plot_view
+        self._old_plots = copy.deepcopy(plot_view.plots)
+        self._new_plots: List[PlotInfoList] = []
+
+    def current_plots(self):
+        self._new_plots = copy.deepcopy(self._plot_view.plots)
+
+    def execute(self) -> None:
+        self._plot_view.plots = copy.deepcopy(self._new_plots)
+        self._plot_view.initialize_canvas()
+
+    def undo(self):
+        self._plot_view.plots = copy.deepcopy(self._old_plots)
+        self._plot_view.initialize_canvas()
+
+
+class PlotsView(EditableFrame):
+    def __init__(self, master: tk.Misc, controller: Controller, **kw):
         super().__init__(master, **kw)
         self.controller = controller
         helper_font = font.Font(slant="italic")
-        self.helper_message = ttk.Label(
+        self._helper_message = ttk.Label(
             self,
             text="Drop properties to plot",
             anchor=tk.CENTER,
             foreground="gray",
             font=helper_font,
         )
-        self.helper_message.pack(fill=tk.BOTH, expand=True)
+        self._helper_message.grid(column=0, row=0, sticky=NSEW)
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
 
         root = master.winfo_toplevel()
         pixels = root.winfo_screenwidth()
@@ -208,6 +230,10 @@ class PlotsView(ttk.Frame):
         self.pan_xref: float = 0.0
         self.t_hover: Optional[float] = None
         self.motion_handlers: List[Callable[[MouseEvent], None]] = []
+
+    def _redo_from_helper_message(self, _event: tk.Event) -> str:
+        self.redo()
+        return "break"
 
     def bind_motion_handler(self, handler: Callable[[MouseEvent], None]) -> None:
         self.motion_handlers.append(handler)
@@ -244,15 +270,19 @@ class PlotsView(ttk.Frame):
             self.config(cursor="")
 
     def on_key_press(self, event: KeyEvent):
-        if event.key == "delete":
+        if self.selected_line is not None and event.key == "delete":
             params = self.selected_line.get_params()
             if params:
+                remove_plot_command = PlotCommand(self)
                 ax_id, line_id = params
                 self.plots[ax_id].pop(line_id)
                 if not self.plots[ax_id]:
                     self.plots.pop(ax_id)
                 self.selected_line.deselect()
-                self.initialize_canvas()
+                remove_plot_command.current_plots()
+                self.do(remove_plot_command)
+        elif event.key == "ctrl+z":
+            self.undo()
 
     def on_move(self, event: MouseEvent):
         canvas = event.canvas
@@ -407,19 +437,23 @@ class PlotsView(ttk.Frame):
                         target_ax_id = ax_id
                         break
 
+        add_plot_command = PlotCommand(self)
+
         if target_ax_id is None:
             self.plots.append(PlotInfoList(properties))
         else:
             self.plots[target_ax_id].add_properties(properties)
 
-        self.initialize_canvas()
+        add_plot_command.current_plots()
+        self.do(add_plot_command)
 
     def initialize_canvas(self):
-        if self.helper_message:
-            self.helper_message.destroy()
-            self.helper_message = None
+        if not self.plots:
+            self._helper_message.tkraise()
+            return
 
         if self.canvas:
+            self._helper_message.lower()
             self.selected_line.deselect()
             self.canvas.figure.clear()
         else:
@@ -435,7 +469,9 @@ class PlotsView(ttk.Frame):
             self.selected_line = SelectedLine(
                 self.canvas.figure, linewidth=4, color="red"
             )
-            self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            self.canvas.get_tk_widget().grid(column=0, row=0, sticky=NSEW)
+            self.columnconfigure(0, weight=1)
+            self.rowconfigure(0, weight=1)
 
         pinfo0 = self.plots[0][0]
         pinfo0.load_data(self.controller)

@@ -196,6 +196,8 @@ class HierarchicalTree(EditableFrame):
     def apply_edit_action(self, action: EditAction) -> None:
         if action is EditAction.COPY:
             self._copy_selected_items_to_clipboard(None)
+        else:
+            super().apply_edit_action(action)
 
 
 class TextBox(ttk.Entry):
@@ -259,6 +261,8 @@ class SearchableTree(EditableFrame):
         self._search_box.bind("<KeyRelease>", self._search)
         self.tree._yscrollbar.configure(command=self._yview)
 
+        self.apply_edit_action = self.tree.apply_edit_action
+
     def _yview(self, *args) -> None:
         self._update_visible_items(None)
         return self.tree.yview(*args)
@@ -299,9 +303,6 @@ class SearchableTree(EditableFrame):
 
         for item in tree.get_children():
             enumerate_children(item)
-
-    def apply_edit_action(self, action: EditAction) -> None:
-        self.tree.apply_edit_action(action)
 
 
 class PropertyTree(SearchableTree):

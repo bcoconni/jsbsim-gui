@@ -63,11 +63,8 @@ class App(tk.Tk):
         self.menubar = MenuBar(self, self.root_dir)
         self.config(menu=self.menubar)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.bind_all("<Control-f>", self._on_find)
-
-    def _on_find(self, _event: tk.Event):
-        if self.main is not None:
-            self.main.apply_edit_action(EditAction.FIND)
+        self.bind_all("<Control-f>", lambda _event: self.edit_action(EditAction.FIND))
+        self.bind_all("<Control-y>", lambda _event: self.edit_action(EditAction.REDO))
 
     def on_closing(self) -> None:
         if not self._prompt_save_if_modified(

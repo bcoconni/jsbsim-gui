@@ -30,6 +30,7 @@ from .edit_actions import EditAction, EditableFrame
 from .hierarchical_tree import PropertyTree
 from .plots_view import PlotsView
 from .source_editor import LabeledWidget
+from .widget import widget_is_descendant
 
 
 class DragNDropManager(ABC):
@@ -251,4 +252,8 @@ class Run(EditableFrame):
         self._status_bar.config(text=f"Simulated time: {sim_time:.3f}s")
 
     def apply_edit_action(self, action: EditAction) -> None:
-        self.property_view.apply_edit_action(action)
+        focused_widget = self.focus_get()
+        if widget_is_descendant(focused_widget, self.property_view):
+            self.property_view.apply_edit_action(action)
+
+        self.plots_view.apply_edit_action(action)

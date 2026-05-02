@@ -27,6 +27,7 @@ from .file_state import FileState
 from .find import FindWindow
 from .hierarchical_tree import FileTree, PropertyTree
 from .textview import XMLSourceCodeView
+from .widget import widget_is_descendant
 
 
 class LabeledWidget(EditableFrame):
@@ -51,15 +52,6 @@ class LabeledWidget(EditableFrame):
     def apply_edit_action(self, action: EditAction) -> None:
         if self.widget is not None:
             self.widget.apply_edit_action(action)
-
-
-def widget_is_descendant(
-    widget: Optional[tk.Misc], container: Optional[tk.Widget]
-) -> bool:
-    if not (widget and container):
-        return False
-
-    return str(widget).startswith(str(container))
 
 
 class SourceEditor(EditableFrame):
