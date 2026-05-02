@@ -43,10 +43,8 @@ class XMLNode:
         self.filepath = filepath
         self.column = column
         self.line = line
-        self._parent: Optional[XMLNode] = None
         self.children: List[XMLNode] = []
-        self.children_it = iter(self.children)
-        self.it: Optional[Iterator[XMLNode]] = None
+        self._parent: Optional[XMLNode] = None
 
     @property
     def parent(self):
@@ -70,23 +68,9 @@ class XMLNode:
         return "/".join(reversed(names))
 
     def __iter__(self):
-        self.children_it = iter(self.children)
-        self.it = None
-        return self
-
-    def __next__(self):
-        if self.it:
-            try:
-                return next(self.it)
-            except StopIteration:
-                self.it = iter(next(self.children_it))
-                return next(self.it)
-        else:
-            if self.children:
-                self.it = iter(next(self.children_it))
-            else:
-                self.it = iter([])
-            return self
+        yield self
+        for child in self.children:
+            yield from child
 
 
 class XMLNodeBuilder:
