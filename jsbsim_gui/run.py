@@ -239,12 +239,13 @@ class Run(EditableFrame):
 
     def update_properties(self, _) -> None:
         sim_time = self.plots_view.t_hover
+        prop_view: PropertyTree = self.property_view.widget
         if sim_time:
-            props = self.property_view.widget.get_visible_properties()
+            props = prop_view.get_visible_properties()
             values = self.controller.get_time_snapshot(sim_time, props)
-            self.property_view.widget.update_values(values)
+            prop_view.update_values(values)
         else:
-            self.property_view.widget.update_values()
+            prop_view.update_values()
             sim_time = self.controller.fdm.get_sim_time()
 
         self._status_bar.config(text=f"Simulated time: {sim_time:.3f}s")

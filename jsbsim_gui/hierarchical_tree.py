@@ -22,6 +22,7 @@ from tkinter.constants import BROWSE, EW, NSEW, VERTICAL
 from tkinter.messagebox import showerror
 from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
+import numpy as np
 from jsbsim import FGPropertyNode
 from .edit_actions import EditAction, EditableFrame
 
@@ -200,9 +201,9 @@ class HierarchicalTree(EditableFrame):
 class TextBox(ttk.Entry):
     def __init__(self, master: tk.Widget, **kw):
         super().__init__(master, **kw)
-        self.bind("<Control-a>", self.select_all)
+        self.bind("<Control-a>", self._select_all)
 
-    def select_all(self, *_) -> str:
+    def _select_all(self, *_) -> str:
         self.selection_range(0, tk.END)
         # Return break to interrupt the default key binding.
         return "break"
@@ -216,7 +217,7 @@ class CellEntry(TextBox):
         self.update_value = update_value
         self.insert(0, content)
         self.config(exportselection=False)
-        self.select_all()
+        self._select_all()
         self.focus_force()
         self.bind("<Return>", self.set_value)
         self.bind("<KP_Enter>", self.set_value)
@@ -255,11 +256,11 @@ class SearchableTree(EditableFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        self._search_box.bind("<KeyRelease>", self.search)
+        self._search_box.bind("<KeyRelease>", self._search)
         self.tree._yscrollbar.configure(command=self._yview)
 
     def _yview(self, *args) -> None:
-        self.update_visible_properties(None)
+        self._update_visible_items(None)
         return self.tree.yview(*args)
 
     def get_search_text(self) -> str:
@@ -269,21 +270,21 @@ class SearchableTree(EditableFrame):
         self._search_box.selection_range(0, tk.END)
         self._search_box.select_clear()
         self._search_box.insert(0, text)
-        self.search(None)
+        self._search(None)
 
     def collapse(self, parent_id: str = "") -> None:
         self.tree.collapse(parent_id)
 
-    def search(self, _: Optional[tk.Event]) -> None:
+    def _search(self, _: Optional[tk.Event]) -> None:
         self.tree.unfilter()
         pattern = self._search_box.get()
         if pattern:
             self.tree.filter(pattern)
 
-        self.update_visible_properties(None)
+        self._update_visible_items(None)
         self.tree.move_to_top()
 
-    def update_visible_properties(self, _: Optional[tk.Event]) -> None:
+    def _update_visible_items(self, _: Optional[tk.Event]) -> None:
         self._visible_items = []
         tree = self.tree
 
@@ -307,7 +308,7 @@ class PropertyTree(SearchableTree):
     def __init__(
         self, master: tk.Widget, properties: List[FGPropertyNode], root: FGPropertyNode
     ):
-        self.property_root: str = root.get_fully_qualified_name()
+        self._property_root: str = root.get_fully_qualified_name()
         common_root, property_pairs = self.get_unified_property_names(root, properties)
         sorted_properties = [pair[0] for pair in property_pairs]
         sorted_names = [pair[1] for pair in property_pairs]
@@ -321,11 +322,11 @@ class PropertyTree(SearchableTree):
         tree.configure_tree(displaycolumns=("value",))  # Hide the node columns
         tree.heading("#0", text="Property")
         tree.heading("value", text="Value")
-        self.initialize_values(sorted_properties, sorted_names)
+        self._initialize_values(sorted_properties, sorted_names)
         self._rename_indexed_nodes()
-        self.bind_ids_to_nodes("", common_root)
-        tree.bind("<Double-Button-1>", self.edit_property_value)
-        self.tree.bind("<ButtonRelease-1>", self.update_visible_properties, add="+")
+        self._bind_ids_to_nodes("", common_root)
+        tree.bind("<Double-Button-1>", self._edit_property_value)
+        self.tree.bind("<ButtonRelease-1>", self._update_visible_items, add="+")
 
         self.get_selected_property_names = self.tree.get_selected_items
 
@@ -347,12 +348,12 @@ class PropertyTree(SearchableTree):
         for node in properties:
             name = node.get_fully_qualified_name()
             raw_names.append(name)
-            if have_common_root and not name.startswith(self.property_root):
+            if have_common_root and not name.startswith(self._property_root):
                 have_common_root = False
 
         if have_common_root:
             # Remove the root name and its trailing slash
-            offset = len(self.property_root) + 1
+            offset = len(self._property_root) + 1
             common_root = root
         else:
             offset = 1  # Remove the leading slash
@@ -368,9 +369,9 @@ class PropertyTree(SearchableTree):
 
     def collapse(self, parent_id: str = "") -> None:
         super().collapse(parent_id)
-        self.update_visible_properties(None)
+        self._update_visible_items(None)
 
-    def initialize_values(
+    def _initialize_values(
         self, properties: List[FGPropertyNode], property_names: List[str]
     ) -> None:
         tree = self.tree
@@ -379,20 +380,20 @@ class PropertyTree(SearchableTree):
             assert parent_id is not None
             tree.set(parent_id, "value", node.get_double_value())
 
-    def bind_ids_to_nodes(self, parent_id: str, root: FGPropertyNode) -> None:
+    def _bind_ids_to_nodes(self, parent_id: str, root: FGPropertyNode) -> None:
         tree = self.tree
         for child_id in tree.get_children(parent_id):
             name = tree.item(child_id, "text")
             node = root.get_node(name)
             assert node is not None
             self._properties[child_id] = node
-            self.bind_ids_to_nodes(child_id, node)
+            self._bind_ids_to_nodes(child_id, node)
 
-    def search(self, event: tk.Event) -> None:
-        super().search(event)
-        self.update_visible_properties(None)
+    def _search(self, event: tk.Event) -> None:
+        super()._search(event)
+        self._update_visible_items(None)
 
-    def edit_property_value(self, event: tk.Event) -> None:
+    def _edit_property_value(self, event: tk.Event) -> None:
         tree = self.tree
         item_id = tree.identify_row(event.y)
 
@@ -412,11 +413,11 @@ class PropertyTree(SearchableTree):
 
         x, y, width, height = tree.bbox(item_id, "value")
         cell_entry = CellEntry(
-            tree, content, lambda value: self.set_value(item_id, value)
+            tree, content, lambda value: self._set_value(item_id, value)
         )
         cell_entry.place(x=x, y=y, width=width, height=height)
 
-    def set_value(self, item_id: str, value: str) -> None:
+    def _set_value(self, item_id: str, value: str) -> None:
         try:
             v = float(value)
         except ValueError:
@@ -426,7 +427,7 @@ class PropertyTree(SearchableTree):
         self._properties[item_id].set_double_value(v)
         self.update_values()
 
-    def update_values(self, values: Optional[List[float]] = None) -> None:
+    def update_values(self, values: Optional[np.ndarray] = None) -> None:
         tree = self.tree
         if values is None:
             for item_id in self._visible_items:
@@ -453,8 +454,8 @@ class PropertyTree(SearchableTree):
 
         return selected_prop
 
-    def update_visible_properties(self, event: Optional[tk.Event]) -> None:
-        super().update_visible_properties(event)
+    def _update_visible_items(self, event: Optional[tk.Event]) -> None:
+        super()._update_visible_items(event)
         self.update_values()
 
     def get_visible_properties(self) -> List[FGPropertyNode]:

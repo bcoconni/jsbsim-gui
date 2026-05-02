@@ -282,7 +282,10 @@ class Controller:
         try:
             return self.property_history.get_time_snapshot(step, properties)
         except ValueError:
-            return [prop.get_double_value() for prop in properties]
+            values = np.empty(len(properties))
+            for i, prop in enumerate(properties):
+                values[i] = prop.get_double_value()
+            return values
 
     def trim(self, mode: int) -> bool:
         try:
