@@ -95,19 +95,60 @@ def _find_node(tree: TreeNode, node_name: str) -> Optional[TreeNode]:
     return None
 
 
+def _node_in_text(
+    tree: TreeNode,
+    text: str,
+    relative_path: bool,
+    match_start: int = -1,
+    match_end: int = -1,
+) -> Optional[Tuple[int, int]]:
+    for child in tree.children:
+        name = child.name if relative_path else "/" + child.name
+        if name[-1] != "]":
+            # Names without an index may optionally include an explicit '[0]'.
+            # 'name[0]' is tested first because if the order were reversed, the more
+            # generic 'name' pattern would always match, preventing the 'name[0]' case
+            # from ever being evaluated.
+            paths = (name + "[0]", name)
+        else:
+            paths = (name,)
+        for i, path in enumerate(paths):
+            if match_end == -1:
+                column = text.find(path)
+            else:
+                column = match_end if text.startswith(path, match_end) else -1
+            if column >= 0:
+                end_column = column + len(path)
+                # When i == 1, 'name[0]' has failed to match but the unindexed 'name' is
+                # a hit. We must now verify that this does not incorrectly match other
+                # indexed variants like 'name[1]' or 'name[2]'
+                if i == 1 and text.startswith("[", end_column):
+                    continue
+                start_column = column if match_start == -1 else match_start
+                if child.children:
+                    return _node_in_text(child, text, False, start_column, end_column)
+                else:
+                    return (start_column, end_column)
+    return None
+
+
 def _nodes_in_text(
     tree: TreeNode, text: str, relative_path: bool
-) -> List[Tuple[str, int]]:
-    matching_children: List[Tuple[str, int]] = []
-    for child in tree.children:
-        path = child.path[1:] if relative_path else child.path
-        column = text.find(path)
-        if column >= 0:
-            if child.children:
-                matching_children += _nodes_in_text(child, text, relative_path)
-            else:
-                matching_children.append((path, column))
-    return matching_children
+) -> List[Tuple[int, int]]:
+    matching_positions: List[Tuple[int, int]] = []
+    position = _node_in_text(tree, text, relative_path)
+    while position:
+        matching_positions.append(position)
+        end = position[1]
+        if len(text) > end:
+            position = _node_in_text(tree, text[end:], relative_path)
+            if position is not None:
+                next_start, next_end = position
+                position = next_start + end, next_end + end
+        else:
+            position = None
+
+    return matching_positions
 
 
 def _search_property_occurrences(
@@ -131,12 +172,12 @@ def _search_property_occurrences(
         all_regions = data_regions + attr_regions
 
         for line, column, text in all_regions:
-            normalized_text = text.replace("[0]", "")
-            paths = _nodes_in_text(property_tree, normalized_text, False)
+            paths = _nodes_in_text(property_tree, text, False)
             if root is not None:
-                paths += _nodes_in_text(root, normalized_text, True)
+                paths += _nodes_in_text(root, text, True)
 
-            for node_path, property_column in paths:
+            for property_column, column_end in paths:
+                node_path = text[property_column:column_end]
                 property_line = line
                 for l in text.split("\n"):
                     length = len(l)
