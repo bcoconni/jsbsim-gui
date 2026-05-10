@@ -30,8 +30,13 @@ from tkinter.constants import (
     NSEW,
     VERTICAL,
 )
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, List, Literal, Optional, Tuple, Union
 from xml.parsers import expat
+
+from pygments import lex
+from pygments.lexer import Lexer
+from pygments.lexers import get_lexer_by_name
+from pygments.token import Comment, Name, String, Text, _TokenType
 
 from .edit_actions import EditAction, EditableFrame
 
@@ -146,12 +151,16 @@ class TextView(EditableFrame):
 class SourceCodeView(TextView):
     """Display text with line numbers"""
 
+    HIGHLIGHT_DELAY_MS = 300
+
     def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
         # Override parameters defined upstream
         kw["borderwidth"] = 0
         kw["relief"] = FLAT
         super().__init__(master, frame_column=1, undo=True, **kw)
         self._modified_text_callbacks: List[Callable[[bool], None]] = []
+        self._highlight_timer: Optional[str] = None
+        self._lexer: Optional[Lexer] = None
 
         self._line_numbers = tk.Text(
             self, width=1, bg="#eeeeee", borderwidth=0, relief=FLAT, wrap=NONE
@@ -188,7 +197,53 @@ class SourceCodeView(TextView):
             func(modified)
 
         self._update_line_numbers()
+
+        if self._highlight_timer:
+            self.after_cancel(self._highlight_timer)
+        self._highlight_timer = self.after(
+            self.HIGHLIGHT_DELAY_MS, self._update_highlighting
+        )
+
         self._text.edit_modified(False)
+
+    def _update_highlighting(self) -> None:
+        self._highlight_timer = None
+        if self._lexer:
+            self.highlight_text()
+
+    def highlight_text(self) -> None:
+        if not self._lexer:
+            return
+
+        content = self.get_content()
+        for tag in self._get_highlight_tags():
+            self._text.tag_remove(tag, "1.0", END)
+
+        line, col = 1, 0
+        for token, value in lex(content, self._lexer):
+            if not value:
+                continue
+
+            start = f"{line}.{col}"
+            segments = value.split("\n")
+            num_newlines = len(segments) - 1
+
+            if num_newlines > 0:
+                line += num_newlines
+                col = len(segments[-1])
+            else:
+                col += len(value)
+
+            end = f"{line}.{col}"
+            tag_name = self._get_tag_name(token)
+            if tag_name:
+                self._text.tag_add(tag_name, start, end)
+
+    def _get_highlight_tags(self) -> List[str]:
+        return []
+
+    def _get_tag_name(self, _token: _TokenType) -> Optional[str]:
+        return None
 
     def _move_line_numbers(self, first: float, last: float) -> None:
         self._yscrollbar.set(first, last)
@@ -266,77 +321,32 @@ class XMLSourceCodeView(SourceCodeView):
         self._text.tag_configure("XML_attr_value", foreground="#aaaa00")
         self._text.tag_configure("XML_data", foreground="#000000")
 
+        self._lexer = get_lexer_by_name("xml")
         self._parser = self.new_parser()
         if contents:
             self._parser.Parse(contents)
+            self.highlight_text()
+
+    def _get_highlight_tags(self) -> List[str]:
+        return ["XML_tag", "XML_comment", "XML_attr_name", "XML_attr_value", "XML_data"]
+
+    def _get_tag_name(self, token: _TokenType) -> Optional[str]:
+        if token in Name.Tag:
+            return "XML_tag"
+        if token in Comment:
+            return "XML_comment"
+        if token in Name.Attribute:
+            return "XML_attr_name"
+        if token in String:
+            return "XML_attr_value"
+        if token in Text:
+            return "XML_data"
+        return None
 
     def new_parser(self) -> expat.XMLParserType:
         parser = expat.ParserCreate()
         parser.buffer_text = True
-        parser.StartElementHandler = self._start_element
-        parser.EndElementHandler = self._end_element
-        parser.CommentHandler = self._comments
-        parser.XmlDeclHandler = self._xmldecl
-        parser.DefaultHandler = self._character_data
         return parser
-
-    def _start_element(self, name: str, attrs: Dict[str, str]) -> None:
-        line = self._parser.CurrentLineNumber
-        start = self._parser.CurrentColumnNumber + 1
-        end = start + len(name)
-        self._text.tag_add("XML_tag", f"{line}.{start}", f"{line}.{end}")
-
-        if attrs:
-            for attr_name, attr_value in attrs.items():
-                index = self._text.search(attr_name, f"{line}.{end+1}")
-                line, start = index.split(".")
-                end = int(start) + len(attr_name)
-                self._text.tag_add("XML_attr_name", index, f"{line}.{end}")
-
-                index = self._text.search(attr_value, f"{line}.{end+1}")
-                line, col = index.split(".")
-                start = int(col)
-                end = start + len(attr_value) + 1
-                self._text.tag_add(
-                    "XML_attr_value", f"{line}.{start-1}", f"{line}.{end}"
-                )
-
-    def _end_element(self, name: str) -> None:
-        line = self._parser.CurrentLineNumber
-        start = self._parser.CurrentColumnNumber + 2
-        end = start + len(name)
-        self._text.tag_add("XML_tag", f"{line}.{start}", f"{line}.{end}")
-
-    def _get_multilines_start_end(self, data: str) -> Tuple[int, int, int, int]:
-        line1 = self._parser.CurrentLineNumber
-        start = self._parser.CurrentColumnNumber
-        data_lines = data.split("\n")
-        nlines = len(data_lines)
-        end = len(data_lines[-1])
-        if nlines > 1:
-            line2 = line1 + nlines - 1
-        else:
-            line2 = line1
-            end += start
-        return start, line1, end, line2
-
-    def _comments(self, data: str) -> None:
-        start, line1, end, line2 = self._get_multilines_start_end(data)
-        if line1 == line2:
-            end += 7  # len("<!--") + len("-->") == 7
-        else:
-            end += 3  # len("-->") == 3
-        self._text.tag_add("XML_comment", f"{line1}.{start}", f"{line2}.{end}")
-
-    def _xmldecl(self, version: str, encoding: Optional[str], _: int) -> None:
-        attrs = {"version": version}
-        if encoding:
-            attrs["encoding"] = encoding
-        self._start_element("?xml", attrs)
-
-    def _character_data(self, data: str) -> None:
-        start, line1, end, line2 = self._get_multilines_start_end(data)
-        self._text.tag_add("XML_data", f"{line1}.{start}", f"{line2}.{end}")
 
     def new_content(self, contents: str) -> None:
         super().new_content(contents)
@@ -345,6 +355,7 @@ class XMLSourceCodeView(SourceCodeView):
             self._parser.Parse(contents)
         except expat.ExpatError:
             pass
+        self.highlight_text()
 
     def extract_tagged_regions(self, tag_name: str) -> List[Tuple[int, int, str]]:
         tagged_regions = []
