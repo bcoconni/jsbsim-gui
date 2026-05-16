@@ -18,7 +18,7 @@
 import copy
 import os
 import platform
-from typing import Iterable, List, Optional
+from typing import Iterator, List, Optional
 
 import numpy as np
 from jsbsim import FGPropertyNode
@@ -44,7 +44,7 @@ class PlotInfo:
         ndata = data.size
         if ndata:
             max_idx = max(max_idx, ndata - 1)
-            assert 0 <= min_idx and min_idx <= max_idx
+            assert 0 <= min_idx <= max_idx
             ratio = max((max_idx - min_idx) // self.max_points, 1)
             sample_data = data[min_idx:max_idx:ratio]
             # Make sure the last data point is included.
@@ -79,7 +79,7 @@ class PlotInfoList:
         plist_copy._plotinfos = [copy.copy(plot_info) for plot_info in self._plotinfos]
         return plist_copy
 
-    def __iter__(self) -> Iterable[PlotInfo]:
+    def __iter__(self) -> Iterator[PlotInfo]:
         return iter(self._plotinfos)
 
     def __len__(self) -> int:

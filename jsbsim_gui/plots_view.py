@@ -238,17 +238,24 @@ class PlotsView(EditableFrame):
     def bind_motion_handler(self, handler: Callable[[MouseEvent], None]) -> None:
         self.motion_handlers.append(handler)
 
-    def on_leave_figure(self, event: LocationEvent):
+    def on_leave_figure(self, event: Event):
+        assert isinstance(event, LocationEvent)
+
         for ax in event.canvas.figure.axes:
             ax.lines[-1].set_visible(False)
 
+        assert self.label_manager is not None
         self.label_manager.hide_labels()
         self.t_hover = None
         self.on_draw(event)
 
-    def on_button_press(self, event: MouseEvent):
+    def on_button_press(self, event: Event):
+        assert self.selected_line is not None
+        assert isinstance(event, MouseEvent)
+
         if event.inaxes:
             if event.button == MouseButton.LEFT:
+                assert self.canvas is not None
                 for ax_id, ax in enumerate(self.canvas.figure.axes):
                     if ax == event.inaxes:
                         for line_id, line in enumerate(ax.lines[:-1]):
@@ -264,12 +271,16 @@ class PlotsView(EditableFrame):
         self.selected_line.deselect()
         self.reset_and_redraw()
 
-    def on_button_release(self, event: MouseEvent):
+    def on_button_release(self, event: Event):
+        assert isinstance(event, MouseEvent)
+
         if event.button == MouseButton.RIGHT:
             self.pan = False
             self.config(cursor="")
 
-    def on_key_press(self, event: KeyEvent):
+    def on_key_press(self, event: Event):
+        assert isinstance(event, KeyEvent)
+
         if self.selected_line is not None and event.key == "delete":
             params = self.selected_line.get_params()
             if params:
@@ -284,10 +295,12 @@ class PlotsView(EditableFrame):
         elif event.key == "ctrl+z":
             self.undo()
 
-    def on_move(self, event: MouseEvent):
+    def on_move(self, event: Event):
+        assert self.label_manager
+        assert isinstance(event, MouseEvent)
+
         canvas = event.canvas
         axes = canvas.figure.axes
-        assert self.label_manager
 
         if event.inaxes and event.xdata:
             ax0 = axes[0]
@@ -365,6 +378,8 @@ class PlotsView(EditableFrame):
 
     def on_draw(self, event: Event):
         assert self.label_manager
+        assert isinstance(event.canvas, FigureCanvasTkAgg)
+
         canvas = event.canvas
         is_draw_event = isinstance(event, DrawEvent)
 
@@ -383,7 +398,8 @@ class PlotsView(EditableFrame):
         if not is_draw_event:
             canvas.blit(canvas.figure.bbox)
 
-    def on_scroll(self, event: MouseEvent):
+    def on_scroll(self, event: Event):
+        assert isinstance(event, MouseEvent)
         ax0 = event.inaxes
 
         if ax0 and event.xdata:
@@ -411,7 +427,8 @@ class PlotsView(EditableFrame):
 
             self.reset_and_redraw()
 
-    def on_resize(self, _: ResizeEvent) -> None:
+    def on_resize(self, event: Event) -> None:
+        assert isinstance(event, ResizeEvent)
         if self.canvas:
             self.reset_and_redraw()
 
@@ -453,6 +470,7 @@ class PlotsView(EditableFrame):
             return
 
         if self.canvas:
+            assert self.selected_line is not None
             self._helper_message.lower()
             self.selected_line.deselect()
             self.canvas.figure.clear()
