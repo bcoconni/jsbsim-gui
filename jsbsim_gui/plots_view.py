@@ -77,27 +77,27 @@ class Label:
         figure_coords = m_figure.transform(display_coords)
         return tuple(figure_coords)
 
-    def update_time_position(self, time_step_id: int, m_figure: Transform) -> None:
+    def update_time_position(self, t: float, m_figure: Transform) -> None:
         xdata: np.ndarray = self._ax.lines[0].get_xdata(True)
         if xdata.size > 1:
-            x0 = xdata[time_step_id]
-            self._text.set_text(f"t={x0:.3f}s")
+            self._text.set_text(f"t={t:.3f}s")
             self._text.set_visible(True)
             w = self.text_bbox_size()[0]
             ymin, ymax = self._ax.get_ybound()
             pos_x, pos_y = self.data_to_figure_coords(
-                x0 - w / 2, ymax + 0.05 * (ymax - ymin), m_figure
+                t - w / 2, ymax + 0.05 * (ymax - ymin), m_figure
             )
             self._text.set_position((pos_x, pos_y))
 
-    def update_position(self, time_step_id: int, m_figure: Transform) -> None:
+    def update_position(self, t: float, m_figure: Transform) -> None:
         m_display = self._ax.transData
         assert self._line is not None
         ydata: np.ndarray = self._line.get_ydata(True)
         if ydata.size > 1:
             xdata: np.ndarray = self._line.get_xdata(True)
-            x0 = xdata[time_step_id]
-            y0 = ydata[time_step_id]
+            idx = min(np.searchsorted(xdata, t), ydata.size - 1)
+            x0 = xdata[idx]
+            y0 = ydata[idx]
             if np.isnan(y0):
                 self._text.set_visible(False)
                 return
@@ -138,12 +138,12 @@ class LabelManager:
                 label = Label(self._figure, ax, line, color=f"C{idx%10}")
                 self._labels.append(label)
 
-    def update_positions(self, time_step_id: int) -> None:
+    def update_positions(self, t: float) -> None:
         m_figure = self._figure.transFigure.inverted()
-        self._labels[0].update_time_position(time_step_id, m_figure)
+        self._labels[0].update_time_position(t, m_figure)
 
         for label in self._labels[1:]:
-            label.update_position(time_step_id, m_figure)
+            label.update_position(t, m_figure)
 
     def hide_labels(self) -> None:
         for label in self._labels:
@@ -305,20 +305,10 @@ class PlotsView(EditableFrame):
         if event.inaxes and event.xdata:
             ax0 = axes[0]
             data0: np.ndarray = ax0.lines[0].get_xdata(True)
-            ndata = data0.size
-            if ndata < 2:
+            if data0.size < 2:
                 return
 
-            tmin = data0[0]
-            tmax = data0[-1]
-            dt = (tmax - tmin) / ndata
-            step_id = int((event.xdata - tmin) / dt)
-            x0 = tmin + step_id * dt
-            if step_id < ndata - 1 and event.xdata - x0 > dt / 2:
-                step_id += 1
-                x0 += dt
-            self.t_hover = x0
-            pinfo0 = self.plots[0][0]
+            self.t_hover = event.xdata
 
             if self.pan:
                 xmin, xmax = ax0.get_xbound()
@@ -332,24 +322,16 @@ class PlotsView(EditableFrame):
                     xmin = 0.0
                     xmax = xmin + width
 
-                dt = self.controller.dt
-                t = pinfo0.get_time(0, -1, dt)
-                tmax = t[-1]
+                tmax = max(plots.t_max() for plots in self.plots)
                 if xmax > tmax:
                     pan_offset = tmax - xmax
                     xmax = tmax
                     xmin = xmax - width
 
-                # Make sure the first and last data elements are displayed *outside*
-                # the plot
-                min_idx = math.floor(xmin / dt)
-                max_idx = min(math.ceil(xmax / dt), round(tmax / dt))
-                t = pinfo0.get_time(min_idx, max_idx, dt)
-
                 for ax, plots in zip(axes, self.plots):
                     ax.set_xlim(xmin, xmax)
                     for line, pinfo in zip(ax.lines[:-1], plots):
-                        ydata = pinfo.get_data(min_idx, max_idx)
+                        t, ydata = pinfo.get_data(xmin, xmax)
                         line.set_xdata(t)
                         line.set_ydata(ydata)
                     ax.lines[-1].set_visible(False)
@@ -359,7 +341,7 @@ class PlotsView(EditableFrame):
                 self.reset_and_redraw()
                 return
 
-            self.label_manager.update_positions(step_id)
+            self.label_manager.update_positions(event.xdata)
 
             for ax in axes:
                 vline = ax.lines[-1]
@@ -407,21 +389,14 @@ class PlotsView(EditableFrame):
             dxl = event.xdata - xmin
             dxr = xmax - event.xdata
             factor = math.pow(1.5, -event.step)
-            pinfo0 = self.plots[0][0]
-            dt = self.controller.dt
-            t = pinfo0.get_time(0, -1, dt)
-            tmax = t[-1]
+            tmax = max(plots.t_max() for plots in self.plots)
             xl = max(event.xdata - dxl * factor, 0.0)
             xr = min(event.xdata + dxr * factor, tmax)
-            # Make sure the first and last data elements are displayed *outside* the plot
-            min_idx = math.floor(xl / dt)
-            max_idx = min(math.ceil(xr / dt), round(tmax / dt))
-            t = pinfo0.get_time(min_idx, max_idx, dt)
 
             for ax, plots in zip(event.canvas.figure.axes, self.plots):
                 ax.set_xlim(xl, xr)
                 for line, pinfo in zip(ax.lines[:-1], plots):
-                    ydata = pinfo.get_data(min_idx, max_idx)
+                    t, ydata = pinfo.get_data(xl, xr)
                     line.set_xdata(t)
                     line.set_ydata(ydata)
 
@@ -457,7 +432,7 @@ class PlotsView(EditableFrame):
         add_plot_command = PlotCommand(self)
 
         if target_ax_id is None:
-            self.plots.append(PlotInfoList(properties))
+            self.plots.append(PlotInfoList(self.controller, properties))
         else:
             self.plots[target_ax_id].add_properties(properties)
 
@@ -493,10 +468,6 @@ class PlotsView(EditableFrame):
             self.columnconfigure(0, weight=1)
             self.rowconfigure(0, weight=1)
 
-        pinfo0 = self.plots[0][0]
-        pinfo0.load_data(self.controller)
-        dt = self.controller.dt
-        t = pinfo0.get_time(0, -1, dt)
         w = self.winfo_width()
         h = self.winfo_height()
         nplots = len(self.plots)
@@ -504,13 +475,17 @@ class PlotsView(EditableFrame):
         figure.set_size_inches(w / self.dpi, h / self.dpi)
         figure.subplots(nplots, 1, sharex=True)
 
+        for plots in self.plots:
+            plots.refresh()
+        tmax = max(plots.t_max() for plots in self.plots)
+
         for plot_id, plots in enumerate(self.plots):
             ax = figure.axes[plot_id]
             # Plot the property history
             for idx, pinfo in enumerate(plots):
-                pinfo.load_data(self.controller)
                 color = f"C{idx%10}"
-                ax.plot(t, pinfo.get_data(0, -1), label=pinfo.name, color=color)
+                t, ydata = pinfo.get_data(0.0, float("inf"))
+                ax.plot(t, ydata, label=pinfo.name, color=color)
             # Cross hair
             ax.axvline(color="0.0", linewidth=0.5, visible=False, animated=True)
             # Figure decorations
@@ -520,13 +495,13 @@ class PlotsView(EditableFrame):
                 ax.set_ylabel(plots[0].name)
             ax.grid(True)
             ax.autoscale(enable=True, axis="y", tight=False)
-            if t.size > 1:
-                ax.set_xlim(t[0], t[-1])
-            else:
-                ax.set_xlim(0, dt)
-
             if plot_id == nplots - 1:
                 ax.set_xlabel("Time (s)")
+
+        if tmax > 0.0:
+            figure.axes[0].set_xlim(0.0, tmax)
+        else:
+            figure.axes[0].set_xlim(0.0, 1.0)
 
         self.label_manager = LabelManager(figure)
         self.label_manager.create_labels(figure.axes)
@@ -540,24 +515,25 @@ class PlotsView(EditableFrame):
 
     def update_plots(self):
         if self.plots:
-            pinfo0 = self.plots[0][0]
-            pinfo0.load_data(self.controller)
-            t = pinfo0.get_time(0, -1, self.controller.dt)
             assert self.canvas
             axes = self.canvas.figure.axes
             t_data = axes[0].lines[0].get_xdata(True)
 
-            if not t_data.size or t[-1] > t_data[-1]:
+            for plots in self.plots:
+                plots.refresh()
+            new_tmax = max(plots.t_max() for plots in self.plots)
+
+            if not t_data.size or new_tmax > t_data[-1]:
                 self.bbox = None
                 mouse_xy = self._get_mouse_coords_in_canvas()
                 inaxes = self.canvas.inaxes(mouse_xy)
 
                 for axe, plots in zip(axes, self.plots):
                     for line, pinfo in zip(axe.lines[:-1], plots):
-                        pinfo.load_data(self.controller)
+                        t, ydata = pinfo.get_data(0.0, float("inf"))
                         line.set_xdata(t)
-                        line.set_ydata(pinfo.get_data(0, -1))
-                    axe.set_xlim(t[0], t[-1])
+                        line.set_ydata(ydata)
+                    axe.set_xlim(0.0, new_tmax)
                     axe.relim(True)
                     axe.autoscale_view(scalex=False, scaley=True)
                     axe.lines[-1].set_visible(inaxes is not None)  # Cross hair
