@@ -16,9 +16,11 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import copy
+import math
 import os
 import platform
-from typing import Iterator, List, Optional
+from abc import ABC, abstractmethod
+from typing import Iterator, List, Optional, Tuple
 
 import numpy as np
 from jsbsim import FGPropertyNode
@@ -26,19 +28,25 @@ from jsbsim import FGPropertyNode
 from .controller import Controller
 
 
-class PlotInfo:
+class PlotInfo(ABC):
     max_points: int = 256
+    name: str
 
-    def __init__(self, node: FGPropertyNode, name: str):
-        self.node = node
-        self.name = name
-        self._data: np.ndarray = np.array([])
+    @property
+    @abstractmethod
+    def leaf_name(self) -> str: ...
 
-    def __eq__(self, other) -> bool:
-        return self.node == other.node and self.name == other.name
+    @abstractmethod
+    def unique_path(self) -> str: ...
 
-    def load_data(self, controller: Controller) -> None:
-        self._data = controller.get_property_log(self.node)
+    @abstractmethod
+    def t_max(self) -> float: ...
+
+    @abstractmethod
+    def get_data(self, t_min: float, t_max: float) -> Tuple[np.ndarray, np.ndarray]: ...
+
+    def refresh(self) -> None:
+        pass
 
     def _get_sample(self, min_idx: int, max_idx: int, data: np.ndarray) -> np.ndarray:
         ndata = data.size
@@ -54,19 +62,60 @@ class PlotInfo:
         else:
             return data
 
-    def get_time(self, min_idx: int, max_idx: int, dt: float) -> np.ndarray:
-        t = np.arange(0, self._data.size) * dt
-        return self._get_sample(min_idx, max_idx, t)
 
-    def get_data(self, min_idx: int, max_idx: int) -> np.ndarray:
-        return self._get_sample(min_idx, max_idx, self._data)
+class PropertyPlotInfo(PlotInfo):
+    def __init__(self, node: FGPropertyNode, name: str, controller: Controller):
+        self.node = node
+        self.name = name
+        self._controller = controller
+        self._data: np.ndarray = np.array([])
+        self._dt: float = controller.dt
+
+    def __eq__(self, other) -> bool:
+        return (
+            isinstance(other, PropertyPlotInfo)
+            and self.node == other.node
+            and self.name == other.name
+        )
+
+    @property
+    def leaf_name(self) -> str:
+        return self.node.get_name()
+
+    def unique_path(self) -> str:
+        return self.node.get_fully_qualified_name()
+
+    def refresh(self) -> None:
+        self._data = self._controller.get_property_log(self.node)
+
+    def t_max(self) -> float:
+        return (self._data.size - 1) * self._dt if self._data.size else 0.0
+
+    def get_data(self, t_min: float, t_max: float) -> Tuple[np.ndarray, np.ndarray]:
+        ndata = self._data.size
+        if not ndata:
+            return np.array([]), np.array([])
+        t_full = np.arange(ndata) * self._dt
+        min_idx = max(0, math.floor(t_min / self._dt)) if self._dt > 0 else 0
+        max_idx = (
+            min(math.ceil(t_max / self._dt), ndata - 1)
+            if math.isfinite(t_max) and self._dt > 0
+            else ndata - 1
+        )
+        return (
+            self._get_sample(min_idx, max_idx, t_full),
+            self._get_sample(min_idx, max_idx, self._data),
+        )
 
 
 class PlotInfoList:
-    def __init__(self, properties: Optional[List[FGPropertyNode]] = None):
+    def __init__(
+        self, controller: Controller, properties: Optional[List[FGPropertyNode]] = None
+    ):
+        self._controller = controller
         if properties:
             self._plotinfos: List[PlotInfo] = [
-                PlotInfo(p, p.get_name()) for p in properties
+                PropertyPlotInfo(p, p.get_name(), controller) for p in properties
             ]
             if len(properties) > 1:
                 self._update_unique_names()
@@ -74,7 +123,7 @@ class PlotInfoList:
             self._plotinfos = []
 
     def __deepcopy__(self, memo):
-        plist_copy = PlotInfoList()
+        plist_copy = PlotInfoList(self._controller)
         memo[id(plist_copy)] = plist_copy
         plist_copy._plotinfos = [copy.copy(plot_info) for plot_info in self._plotinfos]
         return plist_copy
@@ -89,30 +138,37 @@ class PlotInfoList:
         return self._plotinfos[index]
 
     def _update_unique_names(self) -> None:
-        fully_qualified_names = [
-            p.node.get_fully_qualified_name() for p in self._plotinfos
-        ]
+        fully_qualified_names = [p.unique_path() for p in self._plotinfos]
         common_root = os.path.commonpath(fully_qualified_names)
 
-        for p in self._plotinfos:
-            p.name = os.path.relpath(p.node.get_fully_qualified_name(), common_root)
+        for p, fullname in zip(self._plotinfos, fully_qualified_names):
+            p.name = os.path.relpath(fullname, common_root)
 
             if platform.system() == "Windows":
                 p.name = p.name.replace("\\", "/")
+
+    def t_max(self) -> float:
+        return max((p.t_max() for p in self._plotinfos), default=0.0)
+
+    def refresh(self) -> None:
+        for pinfo in self._plotinfos:
+            pinfo.refresh()
 
     def add_properties(self, props: List[FGPropertyNode]) -> None:
         if not props:
             return
 
-        self._plotinfos.extend([PlotInfo(p, p.get_name()) for p in props])
+        self._plotinfos.extend(
+            [PropertyPlotInfo(p, p.get_name(), self._controller) for p in props]
+        )
         if len(self._plotinfos) > 1:
             self._update_unique_names()
 
-    def pop(self, index: int) -> FGPropertyNode:
+    def pop(self, index: int) -> PlotInfo:
         prop = self._plotinfos.pop(index)
         if len(self._plotinfos) > 1:
             self._update_unique_names()
         else:
             for p in self._plotinfos:
-                p.name = p.node.get_name()
-        return prop.node
+                p.name = p.leaf_name
+        return prop
