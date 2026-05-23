@@ -309,8 +309,8 @@ class PropertyTree(SearchableTree):
     def __init__(
         self, master: tk.Widget, properties: List[FGPropertyNode], root: FGPropertyNode
     ):
-        self._property_root: str = root.get_fully_qualified_name()
-        common_root, property_pairs = self.get_unified_property_names(root, properties)
+        self._root = root
+        common_root, property_pairs = self.get_unified_property_names(properties)
         sorted_properties = [pair[0] for pair in property_pairs]
         sorted_names = [pair[1] for pair in property_pairs]
         super().__init__(
@@ -342,23 +342,24 @@ class PropertyTree(SearchableTree):
             self._rename_indexed_nodes(child_id)
 
     def get_unified_property_names(
-        self, root: FGPropertyNode, properties: List[FGPropertyNode]
+        self, properties: List[FGPropertyNode]
     ) -> Tuple[FGPropertyNode, List[Tuple[FGPropertyNode, str]]]:
         have_common_root = True
         raw_names = []
+        root_name = self._root.get_fully_qualified_name()
         for node in properties:
             name = node.get_fully_qualified_name()
             raw_names.append(name)
-            if have_common_root and not name.startswith(self._property_root):
+            if have_common_root and not name.startswith(root_name):
                 have_common_root = False
 
         if have_common_root:
             # Remove the root name and its trailing slash
-            offset = len(self._property_root) + 1
-            common_root = root
+            offset = len(root_name) + 1
+            common_root = self._root
         else:
             offset = 1  # Remove the leading slash
-            common_root = root.get_node("/")
+            common_root = self._root.get_node("/")
             assert common_root is not None
 
         stripped_names = [name[offset:] for name in raw_names]

@@ -20,107 +20,116 @@ import math
 import os
 import platform
 from abc import ABC, abstractmethod
-from typing import Iterator, List, Optional, Tuple
+from typing import Dict, Iterator, List, Set
 
 import numpy as np
 from jsbsim import FGPropertyNode
 
 from .controller import Controller
+from .csv_tree import CsvData
 
 
 class PlotInfo(ABC):
-    max_points: int = 256
+    max_points = 256
     name: str
+    line_style: str
+    _data = np.empty((2, 0))
 
     @property
     @abstractmethod
-    def leaf_name(self) -> str: ...
+    def default_name(self) -> str: ...
 
     @abstractmethod
-    def unique_path(self) -> str: ...
+    def get_data(self, t_min: float, t_max: float) -> np.ndarray: ...
 
-    @abstractmethod
-    def t_max(self) -> float: ...
-
-    @abstractmethod
-    def get_data(self, t_min: float, t_max: float) -> Tuple[np.ndarray, np.ndarray]: ...
+    def t_max(self) -> float:
+        return self._data[0, -1] if self._data.size else 0.0
 
     def refresh(self) -> None:
         pass
 
     def _get_sample(self, min_idx: int, max_idx: int, data: np.ndarray) -> np.ndarray:
-        ndata = data.size
+        ndata = data.shape[1]
         if ndata:
             max_idx = max(max_idx, ndata - 1)
             assert 0 <= min_idx <= max_idx
             ratio = max((max_idx - min_idx) // self.max_points, 1)
-            sample_data = data[min_idx:max_idx:ratio]
+            sample_data = data[:, min_idx:max_idx:ratio]
             # Make sure the last data point is included.
             if min_idx + (sample_data.size - 1) * ratio != max_idx:
-                sample_data = np.append(sample_data, data[max_idx])
+                sample_data = np.column_stack((sample_data, data[:, max_idx]))
             return sample_data
         else:
             return data
 
 
-class PropertyPlotInfo(PlotInfo):
-    def __init__(self, node: FGPropertyNode, name: str, controller: Controller):
-        self.node = node
-        self.name = name
-        self._controller = controller
-        self._data: np.ndarray = np.array([])
-        self._dt: float = controller.dt
-
-    def __eq__(self, other) -> bool:
-        return (
-            isinstance(other, PropertyPlotInfo)
-            and self.node == other.node
-            and self.name == other.name
-        )
+class _CsvPlotInfo(PlotInfo):
+    def __init__(self, csv_data: CsvData):
+        self.csv_path = csv_data.path
+        self._column_name = csv_data.name
+        self.name = csv_data.name
+        self.line_style = "--"
+        self._data = np.empty((2, csv_data.data.size))
+        self._data[0, :] = csv_data.time
+        self._data[1, :] = csv_data.data
 
     @property
-    def leaf_name(self) -> str:
+    def default_name(self) -> str:
+        return self._column_name
+
+    def get_data(self, t_min: float, t_max: float) -> np.ndarray:
+        if not self._data.size:
+            return np.array((2, 0))
+        min_idx = max(0, int(np.searchsorted(self._data[0, :], t_min)) - 1)
+        max_idx = self._data.shape[1] - 1
+        if math.isfinite(t_max):
+            max_idx = min(
+                int(np.searchsorted(self._data[0, :], t_max, side="right")), max_idx
+            )
+
+        min_idx = min(min_idx, max_idx)
+        return self._get_sample(min_idx, max_idx, self._data)
+
+
+class _PropertyPlotInfo(PlotInfo):
+    def __init__(self, node: FGPropertyNode, controller: Controller):
+        self.node = node
+        self.name = node.get_name()
+        self._controller = controller
+        self._dt = controller.dt
+        self.line_style = "-"
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, _PropertyPlotInfo) and self.node == other.node
+
+    @property
+    def default_name(self) -> str:
         return self.node.get_name()
 
-    def unique_path(self) -> str:
-        return self.node.get_fully_qualified_name()
-
     def refresh(self) -> None:
-        self._data = self._controller.get_property_log(self.node)
+        data = self._controller.get_property_log(self.node)
+        ndata = data.size
+        self._data = np.empty((2, ndata))
+        self._data[0, :] = np.arange(ndata) * self._dt
+        self._data[1, :] = data
 
-    def t_max(self) -> float:
-        return (self._data.size - 1) * self._dt if self._data.size else 0.0
-
-    def get_data(self, t_min: float, t_max: float) -> Tuple[np.ndarray, np.ndarray]:
-        ndata = self._data.size
+    def get_data(self, t_min: float, t_max: float) -> np.ndarray:
+        ndata = self._data.shape[1]
         if not ndata:
-            return np.array([]), np.array([])
-        t_full = np.arange(ndata) * self._dt
+            return np.array((0, 2))
         min_idx = max(0, math.floor(t_min / self._dt)) if self._dt > 0 else 0
         max_idx = (
             min(math.ceil(t_max / self._dt), ndata - 1)
             if math.isfinite(t_max) and self._dt > 0
             else ndata - 1
         )
-        return (
-            self._get_sample(min_idx, max_idx, t_full),
-            self._get_sample(min_idx, max_idx, self._data),
-        )
+        return self._get_sample(min_idx, max_idx, self._data)
 
 
 class PlotInfoList:
-    def __init__(
-        self, controller: Controller, properties: Optional[List[FGPropertyNode]] = None
-    ):
+    def __init__(self, controller: Controller):
         self._controller = controller
-        if properties:
-            self._plotinfos: List[PlotInfo] = [
-                PropertyPlotInfo(p, p.get_name(), controller) for p in properties
-            ]
-            if len(properties) > 1:
-                self._update_unique_names()
-        else:
-            self._plotinfos = []
+        self._plotinfos: List[PlotInfo] = []
 
     def __deepcopy__(self, memo):
         plist_copy = PlotInfoList(self._controller)
@@ -137,15 +146,35 @@ class PlotInfoList:
     def __getitem__(self, index: int) -> PlotInfo:
         return self._plotinfos[index]
 
-    def _update_unique_names(self) -> None:
-        fully_qualified_names = [p.unique_path() for p in self._plotinfos]
-        common_root = os.path.commonpath(fully_qualified_names)
+    def _update_property_names(self) -> None:
+        prop_infos = [p for p in self._plotinfos if isinstance(p, _PropertyPlotInfo)]
+        if len(prop_infos) <= 1:
+            for p in prop_infos:
+                p.name = p.default_name
+            return
 
-        for p, fullname in zip(self._plotinfos, fully_qualified_names):
+        full_names = [p.node.get_fully_qualified_name() for p in prop_infos]
+        common_root = os.path.commonpath(full_names)
+
+        for p, fullname in zip(prop_infos, full_names):
             p.name = os.path.relpath(fullname, common_root)
 
             if platform.system() == "Windows":
                 p.name = p.name.replace("\\", "/")
+
+    def _update_csv_names(self) -> None:
+        csv_infos = [p for p in self._plotinfos if isinstance(p, _CsvPlotInfo)]
+        name_to_paths: Dict[str, Set[str]] = {}
+
+        for p in csv_infos:
+            name_to_paths.setdefault(p.default_name, set()).add(p.csv_path)
+
+        for p in csv_infos:
+            if len(name_to_paths[p.default_name]) > 1:
+                csv_filename = os.path.basename(p.csv_path)
+                p.name = f"{p.default_name} ({csv_filename})"
+            else:
+                p.name = p.default_name
 
     def t_max(self) -> float:
         return max((p.t_max() for p in self._plotinfos), default=0.0)
@@ -155,20 +184,23 @@ class PlotInfoList:
             pinfo.refresh()
 
     def add_properties(self, props: List[FGPropertyNode]) -> None:
-        if not props:
-            return
+        if props:
+            self._plotinfos.extend(
+                [_PropertyPlotInfo(p, self._controller) for p in props]
+            )
+            self._update_property_names()
 
-        self._plotinfos.extend(
-            [PropertyPlotInfo(p, p.get_name(), self._controller) for p in props]
-        )
-        if len(self._plotinfos) > 1:
-            self._update_unique_names()
+    def add_csv_columns(self, cols_data: List[CsvData]) -> None:
+        if cols_data:
+            self._plotinfos.extend([_CsvPlotInfo(data) for data in cols_data])
+            self._update_csv_names()
 
     def pop(self, index: int) -> PlotInfo:
         prop = self._plotinfos.pop(index)
         if len(self._plotinfos) > 1:
-            self._update_unique_names()
+            self._update_property_names()
+            self._update_csv_names()
         else:
             for p in self._plotinfos:
-                p.name = p.leaf_name
+                p.name = p.default_name
         return prop

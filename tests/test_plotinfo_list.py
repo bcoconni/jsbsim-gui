@@ -20,7 +20,7 @@ import unittest
 import numpy as np
 from jsbsim import FGPropertyManager
 
-from jsbsim_gui.plotinfo_list import PlotInfoList, PropertyPlotInfo
+from jsbsim_gui.plotinfo_list import PlotInfoList, _PropertyPlotInfo
 
 
 class MockController:
@@ -36,7 +36,7 @@ class TestPlotInfoList(unittest.TestCase):
         self.controller = MockController()
 
     def sim_plot_info(self, node, name):
-        return PropertyPlotInfo(node, name, self.controller)
+        return _PropertyPlotInfo(node, self.controller)
 
     def test_init_default(self):
         plot_info = PlotInfoList(self.controller)
@@ -45,7 +45,7 @@ class TestPlotInfoList(unittest.TestCase):
             self.fail("PropertyList should be empty")
 
     def test_init_empty_list(self):
-        plot_info = PlotInfoList(self.controller, [])
+        plot_info = PlotInfoList(self.controller)
 
         for _, _ in plot_info:
             self.fail("PropertyList should be empty")
@@ -54,7 +54,8 @@ class TestPlotInfoList(unittest.TestCase):
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         assert prop1 is not None
-        plot_info = PlotInfoList(self.controller, [prop1])
+        plot_info = PlotInfoList(self.controller)
+        plot_info.add_properties([prop1])
         self.assertEqual(list(plot_info)[0], self.sim_plot_info(prop1, "c"))
 
     def test_init_two_properties(self):
@@ -62,7 +63,8 @@ class TestPlotInfoList(unittest.TestCase):
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/b/d", True)
         assert prop1 is not None and prop2 is not None
-        plot_info = PlotInfoList(self.controller, [prop1, prop2])
+        plot_info = PlotInfoList(self.controller)
+        plot_info.add_properties([prop1, prop2])
         self.assertEqual(
             list(plot_info),
             [self.sim_plot_info(prop1, "c"), self.sim_plot_info(prop2, "d")],
@@ -72,7 +74,8 @@ class TestPlotInfoList(unittest.TestCase):
         pm = FGPropertyManager()
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/d/c", True)
-        plot_info = PlotInfoList(self.controller, [prop1, prop2])
+        plot_info = PlotInfoList(self.controller)
+        plot_info.add_properties([prop1, prop2])
         self.assertEqual(
             list(plot_info),
             [self.sim_plot_info(prop1, "b/c"), self.sim_plot_info(prop2, "d/c")],
@@ -83,7 +86,8 @@ class TestPlotInfoList(unittest.TestCase):
         prop1 = pm.get_node("a/b/c", True)
         prop2 = pm.get_node("a/d/c", True)
         l = [prop1]
-        plot_info = PlotInfoList(self.controller, l)
+        plot_info = PlotInfoList(self.controller)
+        plot_info.add_properties(l)
         plot_info.add_properties([prop2])
         self.assertEqual(
             list(plot_info),

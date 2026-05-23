@@ -18,16 +18,17 @@
 import time
 import tkinter as tk
 from abc import ABC, abstractmethod
-from tkinter import ttk
+from tkinter import filedialog, ttk
 from tkinter.constants import EW, NS, NSEW
 from tkinter.messagebox import showerror
-from typing import Optional
+from typing import List, Optional
 
 from jsbsim import FGPropertyNode
 
 from .controller import Controller
+from .csv_tree import CsvData, CsvTree
 from .edit_actions import EditAction, EditableFrame
-from .hierarchical_tree import PropertyTree
+from .hierarchical_tree import PropertyTree, SearchableTree
 from .plots_view import PlotsView
 from .source_editor import LabeledWidget
 from .widget import widget_is_descendant
@@ -77,37 +78,52 @@ class DragNDropManager(ABC):
                 self.drop_on_target(event)
 
 
-class DnDProperties(DragNDropManager):
-    def __init__(self, source: PropertyTree, root: FGPropertyNode, target: tk.Widget):
+class DnDTreeItems(DragNDropManager):
+    def __init__(self, source: SearchableTree, target: tk.Widget):
         super().__init__(source.tree, target)
-        self.property_tree = source
-        self.property_list: list[FGPropertyNode] = []
-        self._property_root = root
+        self._source_tree = source
+        self._data_plots: List[FGPropertyNode] | List[CsvData] = []
 
-    def create_source_widget(self, master: tk.Widget) -> Optional[tk.Widget]:
-        self.property_list = self.property_tree.get_selected_properties()
-        if self.property_list:
-            widget_preview = ttk.Frame(master, borderwidth=1)
-            _, property_names = self.property_tree.get_unified_property_names(
-                self._property_root, self.property_list
-            )
-            for idx, name in enumerate(property_names):
-                if idx < 3:
-                    propname = ttk.Label(
-                        widget_preview,
-                        text=name[1],
-                        justify=tk.LEFT,
-                    )
-                    propname.pack(anchor=tk.W)
-                else:
-                    propname = ttk.Label(widget_preview, text="...", justify=tk.LEFT)
-                    propname.pack(anchor=tk.W)
-                    break
-            return widget_preview
-        return None
+    def _create_namelist_widget(self, master: tk.Widget, names: List[str]) -> tk.Widget:
+        widget_preview = ttk.Frame(master, borderwidth=1)
+        for idx, name in enumerate(names):
+            if idx < 3:
+                propname = ttk.Label(widget_preview, text=name, justify=tk.LEFT)
+                propname.pack(anchor=tk.W)
+            else:
+                propname = ttk.Label(widget_preview, text="...", justify=tk.LEFT)
+                propname.pack(anchor=tk.W)
+                break
+        return widget_preview
 
     def drop_on_target(self, _):
-        self.target.add_properties(self.property_list)
+        assert isinstance(self.target, PlotsView)
+        self.target.add_data(self._data_plots)
+
+
+class DnDProperties(DnDTreeItems):
+    def create_source_widget(self, master: tk.Widget) -> Optional[tk.Widget]:
+        assert isinstance(self._source_tree, PropertyTree)
+        self._data_plots = self._source_tree.get_selected_properties()
+        if self._data_plots:
+            _, property_names = self._source_tree.get_unified_property_names(
+                self._data_plots
+            )
+            return self._create_namelist_widget(
+                master, [names[1] for names in property_names]
+            )
+        return None
+
+
+class DnDCsvColumns(DnDTreeItems):
+    def create_source_widget(self, master: tk.Widget) -> Optional[tk.Widget]:
+        assert isinstance(self._source_tree, CsvTree)
+        self._data_plots = self._source_tree.get_selected_csv_columns()
+        if self._data_plots:
+            return self._create_namelist_widget(
+                master, [col.name for col in self._data_plots]
+            )
+        return None
 
 
 class Run(EditableFrame):
@@ -165,20 +181,29 @@ class Run(EditableFrame):
         self.run_pause_button.grid(column=1, row=2, sticky=EW, padx=5, pady=5)
         button_pos = self._trim_options.grid_info()
         controls_frame.columnconfigure(button_pos["column"], weight=1)
-        controls_frame.grid(column=0, row=1, sticky=EW)
+        controls_frame.grid(column=0, row=2, sticky=EW)
+
+        csv_view = LabeledWidget(self, "CSV Data")
+        load_csv_button = ttk.Button(
+            csv_view.header_frame, text="Load CSV…", command=self._load_csv
+        )
+        load_csv_button.grid(column=1, row=0, padx=5)
+        self.csv_tree = CsvTree(csv_view)
+        csv_view.set_widget(self.csv_tree)
+        csv_view.grid(column=0, row=1, sticky=NSEW)
 
         self.plots_view = PlotsView(self, controller)
         self.plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
         self.plots_view.bind_motion_handler(self.update_properties)
 
-        self.dnd_properties = DnDProperties(
-            self.property_view.widget, root, self.plots_view
-        )
+        self.dnd_properties = DnDProperties(self.property_view.widget, self.plots_view)
+        self.dnd_csv_columns = DnDCsvColumns(self.csv_tree, self.plots_view)
 
         # Window Layout
         plotsview_pos = self.plots_view.grid_info()
         self.grid_columnconfigure(plotsview_pos["column"], weight=1)
-        self.grid_rowconfigure(plotsview_pos["row"], weight=1)
+        self.grid_rowconfigure(0, weight=2)
+        self.grid_rowconfigure(1, weight=1)
 
     def run_ic(self):
         self.controller.run_ic()
@@ -257,3 +282,11 @@ class Run(EditableFrame):
             self.property_view.apply_edit_action(action)
 
         self.plots_view.apply_edit_action(action)
+
+    def _load_csv(self) -> None:
+        paths = filedialog.askopenfilenames(
+            title="Load CSV files",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*")],
+        )
+        for path in paths:
+            self.csv_tree.load_csv(path)
