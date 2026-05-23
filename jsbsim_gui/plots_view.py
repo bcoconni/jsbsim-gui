@@ -40,6 +40,7 @@ from matplotlib.lines import Line2D
 from matplotlib.transforms import Transform
 
 from .controller import Controller
+from .csv_tree import CsvData
 from .edit_actions import Command, EditableFrame
 from .plotinfo_list import PlotInfoList
 
@@ -331,9 +332,9 @@ class PlotsView(EditableFrame):
                 for ax, plots in zip(axes, self.plots):
                     ax.set_xlim(xmin, xmax)
                     for line, pinfo in zip(ax.lines[:-1], plots):
-                        t, ydata = pinfo.get_data(xmin, xmax)
-                        line.set_xdata(t)
-                        line.set_ydata(ydata)
+                        data = pinfo.get_data(xmin, xmax)
+                        line.set_xdata(data[0, :])
+                        line.set_ydata(data[1, :])
                     ax.lines[-1].set_visible(False)
 
                 self.label_manager.hide_labels()
@@ -396,9 +397,9 @@ class PlotsView(EditableFrame):
             for ax, plots in zip(event.canvas.figure.axes, self.plots):
                 ax.set_xlim(xl, xr)
                 for line, pinfo in zip(ax.lines[:-1], plots):
-                    t, ydata = pinfo.get_data(xl, xr)
-                    line.set_xdata(t)
-                    line.set_ydata(ydata)
+                    data = pinfo.get_data(xl, xr)
+                    line.set_xdata(data[0, :])
+                    line.set_ydata(data[1, :])
 
             self.reset_and_redraw()
 
@@ -417,8 +418,8 @@ class PlotsView(EditableFrame):
         y = tk_widget.winfo_height() - (y - tk_widget.winfo_rooty())
         return x, y
 
-    def add_properties(self, properties: List[FGPropertyNode]):
-        # Check if the properties are dropped on a subplot
+    def add_data(self, data: List[FGPropertyNode] | List[CsvData]):
+        # Check if the data plots are dropped on a subplot
         canvas = self.canvas
         target_ax_id: Optional[int] = None
         if canvas:
@@ -432,9 +433,16 @@ class PlotsView(EditableFrame):
         add_plot_command = PlotCommand(self)
 
         if target_ax_id is None:
-            self.plots.append(PlotInfoList(self.controller, properties))
+            plist = PlotInfoList(self.controller)
+            self.plots.append(plist)
         else:
-            self.plots[target_ax_id].add_properties(properties)
+            plist = self.plots[target_ax_id]
+
+        if isinstance(data[0], FGPropertyNode):
+            plist.add_properties(data)
+        else:
+            assert isinstance(data[0], CsvData)
+            plist.add_csv_columns(data)
 
         add_plot_command.current_plots()
         self.do(add_plot_command)
@@ -484,8 +492,14 @@ class PlotsView(EditableFrame):
             # Plot the property history
             for idx, pinfo in enumerate(plots):
                 color = f"C{idx%10}"
-                t, ydata = pinfo.get_data(0.0, float("inf"))
-                ax.plot(t, ydata, label=pinfo.name, color=color)
+                data = pinfo.get_data(0.0, math.inf)
+                ax.plot(
+                    data[0, :],
+                    data[1, :],
+                    label=pinfo.name,
+                    color=color,
+                    linestyle=pinfo.line_style,
+                )
             # Cross hair
             ax.axvline(color="0.0", linewidth=0.5, visible=False, animated=True)
             # Figure decorations
@@ -517,40 +531,36 @@ class PlotsView(EditableFrame):
         if self.plots:
             assert self.canvas
             axes = self.canvas.figure.axes
-            t_data = axes[0].lines[0].get_xdata(True)
+            self.bbox = None
 
             for plots in self.plots:
                 plots.refresh()
-            new_tmax = max(plots.t_max() for plots in self.plots)
 
-            if not t_data.size or new_tmax > t_data[-1]:
-                self.bbox = None
-                mouse_xy = self._get_mouse_coords_in_canvas()
-                inaxes = self.canvas.inaxes(mouse_xy)
+            tmax = max(plots.t_max() for plots in self.plots)
+            mouse_xy = self._get_mouse_coords_in_canvas()
+            inaxes = self.canvas.inaxes(mouse_xy)
 
-                for axe, plots in zip(axes, self.plots):
-                    for line, pinfo in zip(axe.lines[:-1], plots):
-                        t, ydata = pinfo.get_data(0.0, float("inf"))
-                        line.set_xdata(t)
-                        line.set_ydata(ydata)
-                    axe.set_xlim(0.0, new_tmax)
-                    axe.relim(True)
-                    axe.autoscale_view(scalex=False, scaley=True)
-                    axe.lines[-1].set_visible(inaxes is not None)  # Cross hair
+            for axis, plots in zip(axes, self.plots):
+                for line, pinfo in zip(axis.lines[:-1], plots):
+                    data = pinfo.get_data(0.0, math.inf)
+                    line.set_xdata(data[0, :])
+                    line.set_ydata(data[1, :])
+                axis.set_xlim(0.0, tmax)
+                axis.relim(True)
+                axis.autoscale_view(scalex=False, scaley=True)
+                axis.lines[-1].set_visible(inaxes is not None)  # Cross hair
 
-                if inaxes:
-                    # Force displaying the cross hair and the labels when the mouse is
-                    # hovering over a plot.
-                    mouse_event = MouseEvent(
-                        "update_plots_event", self.canvas, *mouse_xy
-                    )
-                    data_pos = inaxes.transData.inverted().transform(mouse_xy)
-                    mouse_event.xdata = data_pos[0]
-                    mouse_event.ydata = data_pos[1]
-                    mouse_event.inaxes = inaxes
-                    self.on_move(mouse_event)
-                else:
-                    assert self.label_manager
-                    self.label_manager.hide_labels()
+            if inaxes:
+                # Force displaying the cross hair and the labels when the mouse is
+                # hovering over a plot.
+                mouse_event = MouseEvent("update_plots_event", self.canvas, *mouse_xy)
+                data_pos = inaxes.transData.inverted().transform(mouse_xy)
+                mouse_event.xdata = data_pos[0]
+                mouse_event.ydata = data_pos[1]
+                mouse_event.inaxes = inaxes
+                self.on_move(mouse_event)
+            else:
+                assert self.label_manager
+                self.label_manager.hide_labels()
 
-                self.reset_and_redraw()
+            self.reset_and_redraw()
