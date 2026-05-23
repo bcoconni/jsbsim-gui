@@ -96,34 +96,43 @@ class MenuBar(tk.Menu):
 
     def select_script_file(self) -> None:
         filename = fd.askopenfilename(
-            title="Open a script / aircraft",
+            title="Open a script, aircraft or CSV file",
             initialdir=self.root_dir,
-            filetypes=(("script files", "*.xml"),),
+            filetypes=(
+                ("script and aircraft files", "*.xml"),
+                ("CSV files", "*.csv"),
+            ),
         )
-        if filename:
-            root = et.parse(filename).getroot()
-            success = False
-            if root.tag == "runscript":
-                use_el = root.find("use")
-                aircraft_name = use_el.attrib["aircraft"]
-                success = self.master.open_file(
-                    filename, aircraft_name, Controller.load_script
-                )
-            elif root.tag == "fdm_config":
-                aircraft_name = os.path.splitext(os.path.basename(filename))[0]
-                success = self.master.open_file(
-                    filename, aircraft_name, Controller.load_aircraft
-                )
+        if not filename:
+            return
 
-            if success:
-                self.entryconfig("Edit", state=tk.NORMAL)
-                self.entryconfig("View", state=tk.NORMAL)
-            else:
-                name = os.path.relpath(filename, self.root_dir)
-                showerror(
-                    "Error",
-                    message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
-                )
+        if filename.lower().endswith(".csv"):
+            self.master.load_csv(filename)
+            return
+
+        root = et.parse(filename).getroot()
+        success = False
+        if root.tag == "runscript":
+            use_el = root.find("use")
+            aircraft_name = use_el.attrib["aircraft"]
+            success = self.master.open_file(
+                filename, aircraft_name, Controller.load_script
+            )
+        elif root.tag == "fdm_config":
+            aircraft_name = os.path.splitext(os.path.basename(filename))[0]
+            success = self.master.open_file(
+                filename, aircraft_name, Controller.load_aircraft
+            )
+
+        if success:
+            self.entryconfig("Edit", state=tk.NORMAL)
+            self.entryconfig("View", state=tk.NORMAL)
+        else:
+            name = os.path.relpath(filename, self.root_dir)
+            showerror(
+                "Error",
+                message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
+            )
 
     def set_root_dir(self) -> None:
         directory = fd.askdirectory(

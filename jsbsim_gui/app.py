@@ -195,6 +195,18 @@ class App(tk.Tk):
         if isinstance(self.main, SourceEditor):
             self.main.save_all()
 
+    def load_csv(self, path: str) -> None:
+        if not isinstance(self.main, Run):
+            if self._controller is None:
+                showerror(
+                    "Error",
+                    message="Please open an aircraft or script before loading a CSV file.",
+                )
+                return
+            self.run()
+        if isinstance(self.main, Run):
+            self.main.load_csv(path)
+
     def edit_action(self, action: EditAction) -> None:
         if self.main is not None:
             self.main.apply_edit_action(action)
