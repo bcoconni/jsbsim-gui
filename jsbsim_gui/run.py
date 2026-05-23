@@ -18,7 +18,7 @@
 import time
 import tkinter as tk
 from abc import ABC, abstractmethod
-from tkinter import filedialog, ttk
+from tkinter import ttk
 from tkinter.constants import EW, NS, NSEW
 from tkinter.messagebox import showerror
 from typing import List, Optional
@@ -183,14 +183,11 @@ class Run(EditableFrame):
         controls_frame.columnconfigure(button_pos["column"], weight=1)
         controls_frame.grid(column=0, row=2, sticky=EW)
 
-        csv_view = LabeledWidget(self, "CSV Data")
-        load_csv_button = ttk.Button(
-            csv_view.header_frame, text="Load CSV…", command=self._load_csv
-        )
-        load_csv_button.grid(column=1, row=0, padx=5)
-        self.csv_tree = CsvTree(csv_view)
-        csv_view.set_widget(self.csv_tree)
-        csv_view.grid(column=0, row=1, sticky=NSEW)
+        self.csv_view = LabeledWidget(self, "CSV Data")
+        self.csv_tree = CsvTree(self.csv_view)
+        self.csv_view.set_widget(self.csv_tree)
+        self.csv_view.grid(column=0, row=1, sticky=NSEW)
+        self.csv_view.grid_remove()
 
         self.plots_view = PlotsView(self, controller)
         self.plots_view.grid(column=1, row=0, rowspan=3, sticky=NSEW)
@@ -202,8 +199,8 @@ class Run(EditableFrame):
         # Window Layout
         plotsview_pos = self.plots_view.grid_info()
         self.grid_columnconfigure(plotsview_pos["column"], weight=1)
-        self.grid_rowconfigure(0, weight=2)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=0)
 
     def run_ic(self):
         self.controller.run_ic()
@@ -283,10 +280,10 @@ class Run(EditableFrame):
 
         self.plots_view.apply_edit_action(action)
 
-    def _load_csv(self) -> None:
-        paths = filedialog.askopenfilenames(
-            title="Load CSV files",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*")],
-        )
-        for path in paths:
-            self.csv_tree.load_csv(path)
+    def load_csv(self, path: str) -> None:
+        was_empty = not self.csv_tree.has_loaded_files()
+        self.csv_tree.load_csv(path)
+        if was_empty and self.csv_tree.has_loaded_files():
+            self.csv_view.grid()
+            self.grid_rowconfigure(0, weight=2)
+            self.grid_rowconfigure(1, weight=1)

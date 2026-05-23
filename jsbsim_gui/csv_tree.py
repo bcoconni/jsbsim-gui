@@ -45,6 +45,9 @@ class CsvTree(SearchableTree):
         self._item_id_to_column: Dict[str, CsvData] = {}
         self._loaded_files: List[str] = []
 
+    def has_loaded_files(self) -> bool:
+        return bool(self._loaded_files)
+
     def load_csv(self, csv_path: str) -> None:
         if csv_path in self._loaded_files:
             return
