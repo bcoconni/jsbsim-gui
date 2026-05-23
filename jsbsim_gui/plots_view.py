@@ -465,16 +465,18 @@ class PlotsView(EditableFrame):
         self.do(add_plot_command)
 
     def initialize_canvas(self):
+        if self.canvas:
+            assert self.selected_line is not None
+            self.selected_line.deselect()
+            self.canvas.figure.clear()
+
         if not self.plots:
             self._helper_message.tkraise()
             return
-
-        if self.canvas:
-            assert self.selected_line is not None
-            self._helper_message.lower()
-            self.selected_line.deselect()
-            self.canvas.figure.clear()
         else:
+            self._helper_message.lower()
+
+        if not self.canvas:
             self.canvas = FigureCanvasTkAgg(Figure(dpi=self.dpi), master=self)
             self.canvas.mpl_connect("draw_event", self.on_draw)
             self.canvas.mpl_connect("figure_leave_event", self.on_leave_figure)
