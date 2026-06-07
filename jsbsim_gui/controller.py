@@ -17,7 +17,7 @@
 import os
 import platform
 import xml.etree.ElementTree as et
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from xml.parsers import expat
 
 import jsbsim
@@ -32,8 +32,8 @@ from .property_history import PropertyHistory
 class TreeNode:
     def __init__(self, name: str):
         self.name = name
-        self.children: List[XMLNode] = []
-        self._parent: Optional[XMLNode] = None
+        self.children: List[TreeNode] = []
+        self._parent: Optional[TreeNode] = None
 
     @property
     def parent(self):
@@ -104,6 +104,16 @@ class XMLNodeBuilder:
     def end_element(self, _: str) -> None:
         self.root = self.parent
         self.parent = self.parent.parent
+
+
+def _get_included_files(root: XMLNode) -> List[Tuple[XMLNode, str]]:
+    included_files: List[Tuple[XMLNode, str]] = []
+    for node in root:
+        if "file" in node.attrs:
+            filename = append_xml(node.attrs["file"])
+            included_files.append((node, filename))
+
+    return included_files
 
 
 class Controller:
@@ -208,13 +218,9 @@ class Controller:
         engine_path = self.fdm.get_engine_path()
         systems_path = self.fdm.get_systems_path()
 
-        include_files = []
-        for node in root:
-            if "file" in node.attrs:
-                filename = append_xml(node.attrs["file"])
-                include_files.append((node, filename))
+        included_files = _get_included_files(root)
 
-        for node, filename in include_files:
+        for node, filename in included_files:
             if os.path.exists(os.path.join(aircraft_path, filename)):
                 fullpath = os.path.join(aircraft_path, filename)
             elif os.path.exists(os.path.join(aircraft_path, "Systems", filename)):
@@ -239,6 +245,8 @@ class Controller:
             root_include = XMLNodeBuilder(
                 self.get_relative_path(fullpath), fullpath
             ).root
+
+            included_files.extend(_get_included_files(root_include))
 
             if node.name in ("engine", "thruster"):
                 xml_trees.append(root_include)
