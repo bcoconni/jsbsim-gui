@@ -26,6 +26,7 @@ from typing import Callable, ClassVar, List, Optional, Tuple
 
 from jsbsim import FGLogger, LogFormat, LogLevel
 
+from .chat import ChatConsole
 from .textview import TextView
 
 
@@ -246,6 +247,7 @@ class ConsolesPanel(ttk.Notebook):
         )
         self.add(self._output_console, text="Output")
         self.add(self._problems_console, text="Problems")
+        self.add(ChatConsole(self, **kw), text="Chat")
 
     def _update_problems_tab_title(self, count: int) -> None:
         if count > 0:

@@ -89,6 +89,9 @@ class TextView(EditableFrame):
             lambda e: self._on_edit_shortcut(EditAction.SELECT_ALL),
         )
 
+        self.tag_add = self._text.tag_add
+        self.tag_configure = self._text.tag_configure
+
     def _on_edit_shortcut(self, action: EditAction) -> str:
         self.apply_edit_action(action)
         return "break"
@@ -138,6 +141,16 @@ class TextView(EditableFrame):
             self._text.event_generate("<<Copy>>")
         elif action is EditAction.PASTE:
             self._text.event_generate("<<Paste>>")
+
+    def append_content(self, contents: str) -> Tuple[str, str]:
+        initial_state = self._text['state']
+        base = self._text.index("end-1c")
+        self._text.configure(state=NORMAL)
+        self._text.insert(END, contents)
+        self._text.see(END)
+        self._text.configure(state=initial_state)
+        end = self._text.index("end-1c")
+        return (base, end)
 
     def bind(
         self,
