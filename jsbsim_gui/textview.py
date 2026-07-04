@@ -142,15 +142,12 @@ class TextView(EditableFrame):
         elif action is EditAction.PASTE:
             self._text.event_generate("<<Paste>>")
 
-    def append_content(self, contents: str) -> Tuple[str, str]:
+    def append_content(self, *args, **kw) -> None:
         initial_state = self._text['state']
-        base = self._text.index("end-1c")
         self._text.configure(state=NORMAL)
-        self._text.insert(END, contents)
+        self._text.insert(END, *args, **kw)
         self._text.see(END)
         self._text.configure(state=initial_state)
-        end = self._text.index("end-1c")
-        return (base, end)
 
     def bind(
         self,
