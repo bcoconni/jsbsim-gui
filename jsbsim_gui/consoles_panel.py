@@ -232,7 +232,11 @@ class ConsoleLogger(FGLogger):
 
 class ConsolesPanel(ttk.Notebook):
     def __init__(
-        self, master: tk.Widget, on_file_link_click: Callable[[str, int], None], **kw
+        self,
+        master: tk.Widget,
+        on_file_link_click: Callable[[str, int], None],
+        system_prompt: str,
+        **kw,
     ):
         super().__init__(master)
         self._output_console = Console(
@@ -247,7 +251,7 @@ class ConsolesPanel(ttk.Notebook):
         )
         self.add(self._output_console, text="Output")
         self.add(self._problems_console, text="Problems")
-        self.add(ChatConsole(self, **kw), text="Chat")
+        self.add(ChatConsole(self, system_prompt, **kw), text="Chat")
 
     def _update_problems_tab_title(self, count: int) -> None:
         if count > 0:

@@ -143,7 +143,7 @@ class TextView(EditableFrame):
             self._text.event_generate("<<Paste>>")
 
     def append_content(self, *args, **kw) -> None:
-        initial_state = self._text['state']
+        initial_state = self._text["state"]
         self._text.configure(state=NORMAL)
         self._text.insert(END, *args, **kw)
         self._text.see(END)

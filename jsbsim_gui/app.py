@@ -222,9 +222,10 @@ class App(tk.Tk):
 
         if self._consoles_panel:
             self._consoles_panel.destroy()
-        self._consoles_panel = ConsolesPanel(
-            self, on_file_link_click=self._on_file_link_click, height=10
-        )
+        with open("prompts/system_prompt.md", "r", encoding="utf-8") as f:
+            self._consoles_panel = ConsolesPanel(
+                self, self._on_file_link_click, f.read(), height=10
+            )
 
         if not self._statusbar:
             self._statusbar = ttk.Label(self, text="Ready", relief=tk.RAISED)

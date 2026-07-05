@@ -35,7 +35,7 @@ class Format(str, enum.Enum):
 
 
 class ChatConsole(tk.Frame):
-    def __init__(self, master: tk.Widget, **kw):
+    def __init__(self, master: tk.Widget, system_prompt: str, **kw):
         super().__init__(master)
         self._chat_area = TextView(
             self, wrap=tk.WORD, state=DISABLED, font=("Helvetica", 10), **kw
@@ -64,7 +64,7 @@ class ChatConsole(tk.Frame):
         self._conversation_history = [
             {
                 "role": "system",
-                "content": "You are an expert in flight dynamics modelling using JSBSim",
+                "content": system_prompt,
             }
         ]
 
