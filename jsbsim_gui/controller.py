@@ -133,6 +133,7 @@ class Controller:
         self.filename = ""
         self.property_history = PropertyHistory([])
         self.fdm = jsbsim.FGFDMExec(root_dir)
+        self.fdm.set_output_path(os.getcwd())
 
     def __del__(self):
         self.close()
@@ -297,9 +298,11 @@ class Controller:
     def reload(self) -> bool:
         old_fdm = self.fdm
         root_dir = self.fdm.get_root_dir()
+        output_path = self.fdm.get_output_path()
         success = False
 
         self.fdm = jsbsim.FGFDMExec(root_dir)
+        self.fdm.set_output_path(output_path)
 
         root = et.parse(self.filename).getroot()
         if root.tag == "runscript":
