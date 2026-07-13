@@ -24,7 +24,8 @@ from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 from jsbsim import FGPropertyNode
-from .edit_actions import EditAction, EditableFrame
+
+from .edit_actions import SHORTCUT_MODIFIER, EditableFrame, EditAction
 
 
 def _natural_sort_key(path: str) -> List[Tuple[str, int]]:
@@ -60,7 +61,9 @@ class HierarchicalTree(EditableFrame):
         )
         self._yscrollbar.pack(side=tk.LEFT, fill=tk.Y)
         self._tree["yscrollcommand"] = self._yscrollbar.set
-        self._tree.bind("<Control-c>", self._copy_selected_items_to_clipboard)
+        self._tree.bind(
+            f"<{SHORTCUT_MODIFIER}-c>", self._copy_selected_items_to_clipboard
+        )
 
         self.bbox = self._tree.bbox
         self.configure_tree = self._tree.configure
@@ -203,7 +206,7 @@ class HierarchicalTree(EditableFrame):
 class TextBox(ttk.Entry):
     def __init__(self, master: tk.Widget, **kw):
         super().__init__(master, **kw)
-        self.bind("<Control-a>", self._select_all)
+        self.bind(f"<{SHORTCUT_MODIFIER}-a>", self._select_all)
 
     def _select_all(self, *_) -> str:
         self.selection_range(0, tk.END)

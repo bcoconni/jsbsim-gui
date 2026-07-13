@@ -27,7 +27,7 @@ from PIL import Image, ImageTk
 
 from .consoles_panel import ConsolesPanel
 from .controller import Controller
-from .edit_actions import EditAction, EditableFrame
+from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditableFrame, EditAction
 from .menu_bar import MenuBar
 from .run import Run
 from .source_editor import SourceEditor
@@ -63,8 +63,12 @@ class App(tk.Tk):
         self.menubar = MenuBar(self, self.root_dir)
         self.config(menu=self.menubar)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.bind_all("<Control-f>", lambda _event: self.edit_action(EditAction.FIND))
-        self.bind_all("<Control-y>", lambda _event: self.edit_action(EditAction.REDO))
+        self.bind_all(
+            f"<{SHORTCUT_MODIFIER}-f>", lambda _event: self.edit_action(EditAction.FIND)
+        )
+        self.bind_all(
+            f"<{REDO_SHORTCUT}>", lambda _event: self.edit_action(EditAction.REDO)
+        )
 
     def on_closing(self) -> None:
         if not self._prompt_save_if_modified(

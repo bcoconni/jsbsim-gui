@@ -22,7 +22,7 @@ from tkinter import filedialog as fd
 from tkinter.messagebox import showerror
 
 from .controller import Controller
-from .edit_actions import EditAction
+from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
 
 
 class MenuBar(tk.Menu):
@@ -36,7 +36,7 @@ class MenuBar(tk.Menu):
         self.file_menu.add_separator()
         self.file_menu.add_command(
             label="Save",
-            accelerator="Ctrl+S",
+            accelerator=f"{SHORTCUT_MODIFIER}+S",
             command=master.save_file,
             state=tk.DISABLED,
         )
@@ -50,39 +50,39 @@ class MenuBar(tk.Menu):
         self.edit_menu = tk.Menu(self, tearoff=False)
         self.edit_menu.add_command(
             label="Undo",
-            accelerator="Ctrl+Z",
+            accelerator=f"{SHORTCUT_MODIFIER}+Z",
             command=lambda: master.edit_action(EditAction.UNDO),
         )
         self.edit_menu.add_command(
             label="Redo",
-            accelerator="Ctrl+Y",
+            accelerator=REDO_SHORTCUT,
             command=lambda: master.edit_action(EditAction.REDO),
         )
         self.edit_menu.add_separator()
         self.edit_menu.add_command(
             label="Select All",
-            accelerator="Ctrl+A",
+            accelerator=f"{SHORTCUT_MODIFIER}+A",
             command=lambda: master.edit_action(EditAction.SELECT_ALL),
         )
         self.edit_menu.add_command(
             label="Cut",
-            accelerator="Ctrl+X",
+            accelerator=f"{SHORTCUT_MODIFIER}+X",
             command=lambda: master.edit_action(EditAction.CUT),
         )
         self.edit_menu.add_command(
             label="Copy",
-            accelerator="Ctrl+C",
+            accelerator=f"{SHORTCUT_MODIFIER}+C",
             command=lambda: master.edit_action(EditAction.COPY),
         )
         self.edit_menu.add_command(
             label="Paste",
-            accelerator="Ctrl+V",
+            accelerator=f"{SHORTCUT_MODIFIER}+V",
             command=lambda: master.edit_action(EditAction.PASTE),
         )
         self.edit_menu.add_separator()
         self.edit_menu.add_command(
             label="Find...",
-            accelerator="Ctrl+F",
+            accelerator=f"{SHORTCUT_MODIFIER}+F",
             command=lambda: master.edit_action(EditAction.FIND),
         )
         self.add_cascade(label="Edit", menu=self.edit_menu)

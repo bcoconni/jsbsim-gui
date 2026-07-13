@@ -293,7 +293,7 @@ class PlotsView(EditableFrame):
                 self.selected_line.deselect()
                 remove_plot_command.current_plots()
                 self.do(remove_plot_command)
-        elif event.key == "ctrl+z":
+        elif event.key in ("ctrl+z", "cmd+z"):
             self.undo()
 
     def on_move(self, event: Event):

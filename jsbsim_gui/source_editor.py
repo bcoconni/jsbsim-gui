@@ -22,7 +22,7 @@ from tkinter.constants import NONE, NS, NSEW
 from typing import Dict, List, Optional
 
 from .controller import Controller
-from .edit_actions import EditableFrame, EditAction
+from .edit_actions import SHORTCUT_MODIFIER, EditableFrame, EditAction
 from .file_state import FileState
 from .find import FindWindow
 from .hierarchical_tree import FileTree, PropertyTree
@@ -98,7 +98,7 @@ class SourceEditor(EditableFrame):
         self.codeview.set_widget(editor)
 
         editor.bind_modified_text(self.on_text_modified)
-        editor.bind("<Control-s>", lambda e: self._on_save_shortcut())
+        editor.bind(f"<{SHORTCUT_MODIFIER}-s>", lambda e: self._on_save_shortcut())
 
         self.property_view = LabeledWidget(left_frame, "Property Explorer")
         property_tree = PropertyTree(
@@ -106,7 +106,7 @@ class SourceEditor(EditableFrame):
             controller.get_property_list(),
             controller.get_property_root(),
         )
-        property_tree.tree.bind("<Control-f>", self._find_property)
+        property_tree.tree.bind(f"<{SHORTCUT_MODIFIER}-f>", self._find_property)
         self.property_view.set_widget(property_tree)
 
         # Window layout

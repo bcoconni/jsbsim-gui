@@ -15,10 +15,14 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import sys
 import tkinter as tk
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import List
+
+SHORTCUT_MODIFIER = "Control" if sys.platform != "darwin" else "Command"
+REDO_SHORTCUT = "Control-y" if sys.platform != "darwin" else "Command-y"
 
 
 class EditAction(Enum):

@@ -38,7 +38,7 @@ from pygments.lexer import Lexer
 from pygments.lexers import get_lexer_by_name
 from pygments.token import Comment, Name, String, Text, _TokenType
 
-from .edit_actions import EditAction, EditableFrame
+from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction, EditableFrame
 
 
 class TextView(EditableFrame):
@@ -81,11 +81,10 @@ class TextView(EditableFrame):
         self.grid_rowconfigure(0, weight=1)
 
         self._text.bind(
-            "<Control-y>",
-            lambda e: self._on_edit_shortcut(EditAction.REDO),
+            f"<{REDO_SHORTCUT}>", lambda e: self._on_edit_shortcut(EditAction.REDO)
         )
         self._text.bind(
-            "<Control-a>",
+            f"<{SHORTCUT_MODIFIER}-a>",
             lambda e: self._on_edit_shortcut(EditAction.SELECT_ALL),
         )
 
