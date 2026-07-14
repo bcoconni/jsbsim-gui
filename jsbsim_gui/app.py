@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023 Bertrand Coconnier
+# Copyright (c) 2023-2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -142,11 +142,7 @@ class App(tk.Tk):
         ):
             return
 
-        if has_modified_files and not self._controller.reload():
-            showerror(
-                "Reload Error",
-                message="Failed to reload the model. Please check the console for errors.",
-            )
+        if has_modified_files and not self._reload_controller():
             return
 
         w = self.main.winfo_width()
@@ -161,12 +157,26 @@ class App(tk.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+    def _reload_controller(self) -> bool:
+        assert self._controller is not None
+        if self._controller.reload():
+            return True
+
+        showerror(
+            "Reload Error",
+            message="Failed to reload the model. Please check the console for errors.",
+        )
+        return False
+
     def edit(self) -> None:
         if self.main:
             self.main.destroy()
 
         # Open the file in a text widget
-        self.main = SourceEditor(self, self._controller)
+        assert self._controller is not None
+        self.main = SourceEditor(
+            self, self._controller, self.mark_title_modified, self._reload_controller
+        )
         self.menubar.update_save_menu_state(True)
 
         # Window layout

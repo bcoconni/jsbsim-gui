@@ -19,7 +19,8 @@ import os
 import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import NONE, NS, NSEW
-from typing import Dict, List, Optional
+from tkinter.messagebox import showerror
+from typing import Callable, Dict, List, Optional
 
 from .controller import Controller
 from .edit_actions import SHORTCUT_MODIFIER, EditableFrame, EditAction
@@ -55,12 +56,20 @@ class LabeledWidget(EditableFrame):
 
 
 class SourceEditor(EditableFrame):
-    def __init__(self, master: tk.Widget, controller: Controller):
+    def __init__(
+        self,
+        master: tk.Tk,
+        controller: Controller,
+        has_dirty_files: Callable[[bool], None],
+        file_updated: Callable[[], None],
+    ):
         super().__init__(master)
         self.root_dir = controller.get_root_dir()
         self.controller = controller
         self.file_states: Dict[str, FileState] = {}
         self._find_window: Optional[FindWindow] = None
+        self._has_dirty_files = has_dirty_files
+        self._files_updated = file_updated
         left_frame = ttk.Frame(self)
 
         xml_trees = controller.get_xml_trees()
@@ -126,7 +135,6 @@ class SourceEditor(EditableFrame):
             self.codeview.set_label(file_state.filepath)
             editor.new_content(file_state.content)
             self.current_file = file_state
-            self.update_title_bar_state()
 
     def _open_file(self, file_state: FileState) -> None:
         file_tree = self.fileview
@@ -165,7 +173,7 @@ class SourceEditor(EditableFrame):
         if modified and not self.current_file.is_modified:
             self.current_file.is_modified = True
             self.fileview.highlight_file(self.current_file.filepath)
-            self.update_title_bar_state()
+            self._has_dirty_files(True)
 
     def _on_save_shortcut(self) -> str:
         self.save_file()
@@ -192,10 +200,6 @@ class SourceEditor(EditableFrame):
         editor = self.codeview.widget
         editor.focus_text()
         editor.apply_edit_action(action)
-
-    def update_title_bar_state(self) -> None:
-        any_modified = self.has_modified_files()
-        self.master.mark_title_modified(any_modified)
 
     def has_modified_files(self) -> bool:
         return any(file_state.is_modified for file_state in self.file_states.values())
@@ -239,7 +243,8 @@ class SourceEditor(EditableFrame):
 
         if self.current_file.write(self.root_dir):
             self.fileview.clear_highlight(self.current_file.filepath)
-            self.update_title_bar_state()
+            self._has_dirty_files(self.has_modified_files())
+            self._files_updated()
             return True
 
         return False
@@ -262,8 +267,10 @@ class SourceEditor(EditableFrame):
         # Save AFTER all the files have been validated
         for file_state in modified_files:
             if not file_state.write(self.root_dir):
+                showerror("Error", message=f'Could not save "{file_state.filepath}"')
                 return False
             self.fileview.clear_highlight(file_state.filepath)
 
-        self.update_title_bar_state()
+        self._has_dirty_files(False)
+        self._files_updated()
         return True
