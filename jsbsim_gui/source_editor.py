@@ -125,7 +125,7 @@ class SourceEditor(EditableFrame):
         left_frame.grid(column=0, row=0, sticky=NS)
         left_frame.grid_columnconfigure(0, weight=1)
         left_frame.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
     def open_source_file(self, file_state: FileState) -> None:

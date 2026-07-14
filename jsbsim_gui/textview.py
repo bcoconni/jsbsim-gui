@@ -77,7 +77,7 @@ class TextView(EditableFrame):
             self._text.insert("1.0", contents)
 
         # Widget layout
-        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(frame_column, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         self._text.bind(
