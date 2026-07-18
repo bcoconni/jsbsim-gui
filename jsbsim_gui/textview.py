@@ -16,7 +16,7 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, TclError
 from tkinter.constants import (
     DISABLED,
     END,
@@ -80,6 +80,7 @@ class TextView(EditableFrame):
         self.grid_columnconfigure(frame_column, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+        self._text.bind("<<Paste>>", lambda e: self._paste())
         self._text.bind(
             f"<{REDO_SHORTCUT}>", lambda e: self._on_edit_shortcut(EditAction.REDO)
         )
@@ -90,6 +91,26 @@ class TextView(EditableFrame):
 
     def _on_edit_shortcut(self, action: EditAction) -> str:
         self.apply_edit_action(action)
+        return "break"
+
+    def _paste(self) -> str:
+        try:
+            clipboard_text = self._text.clipboard_get()
+        except TclError:
+            return "break"
+
+        selection_bounds = self._text.tag_ranges(tk.SEL)
+        if selection_bounds:
+            start, end = selection_bounds
+            self._text.config(autoseparators=False)
+            self._text.edit_separator()
+            self._text.delete(start, end)
+            self._text.insert(start, clipboard_text)
+            self._text.edit_separator()
+            self._text.config(autoseparators=True)
+        else:
+            self._text.insert(tk.INSERT, clipboard_text)
+
         return "break"
 
     def new_content(self, contents: str) -> None:
@@ -136,7 +157,7 @@ class TextView(EditableFrame):
         elif action is EditAction.COPY:
             self._text.event_generate("<<Copy>>")
         elif action is EditAction.PASTE:
-            self._text.event_generate("<<Paste>>")
+            self._paste()
 
     def bind(
         self,
