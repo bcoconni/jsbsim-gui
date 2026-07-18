@@ -158,7 +158,8 @@ class App(tk.Tk):
         self.grid_rowconfigure(0, weight=1)
 
     def _reload_controller(self) -> bool:
-        assert self._controller is not None
+        assert self._controller is not None and self._consoles_panel is not None
+        self._consoles_panel.reset()
         if self._controller.reload():
             return True
 

@@ -87,6 +87,11 @@ class Console(TextView):
         self._text.tag_configure(LogTags.BOLD, font=bold_font)
         self._text.tag_configure(LogTags.UNDERLINE, underline=True)
 
+    def reset_content(self):
+        self._text.configure(state=NORMAL)
+        self._text.delete("1.0", END)
+        self._text.configure(state=DISABLED)
+
     def write(self, contents: str) -> None:
         self._text.configure(state=NORMAL)
         self._text.insert(END, contents)
@@ -258,3 +263,7 @@ class ConsolesPanel(ttk.Notebook):
         return ConsoleLogger(
             self._output_console, self._problems_console, get_relative_path
         )
+
+    def reset(self):
+        self._output_console.reset_content()
+        self._problems_console.reset_content()
