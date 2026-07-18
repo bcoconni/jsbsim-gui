@@ -17,8 +17,7 @@
 import os
 import platform
 import xml.etree.ElementTree as et
-from typing import Dict, List, Optional, Tuple
-from xml.parsers import expat
+from typing import List, Optional, Tuple
 
 import jsbsim
 import numpy as np
@@ -26,83 +25,7 @@ from jsbsim import FGPropertyNode
 from jsbsim._jsbsim import _append_xml as append_xml
 
 from .property_history import PropertyHistory
-
-
-class TreeNode:
-    def __init__(self, name: str):
-        self.name = name
-        self.children: List[TreeNode] = []
-        self._parent: Optional[TreeNode] = None
-
-    @property
-    def parent(self):
-        return self._parent
-
-    @parent.setter
-    def parent(self, parent) -> None:
-        if self._parent:
-            self._parent.children.remove(self)
-        if parent:
-            parent.children.append(self)
-        self._parent = parent
-
-    @property
-    def path(self) -> str:
-        names: List[str] = [self.name]
-        parent = self._parent
-        while parent:
-            names.append(parent.name)
-            parent = parent._parent
-        return "/".join(reversed(names))
-
-    def __iter__(self):
-        yield self
-        for child in self.children:
-            yield from child
-
-
-class XMLNode(TreeNode):
-    def __init__(
-        self,
-        name: str,
-        attrs: Dict[str, str],
-        filepath: str,
-        column: int,
-        line: int,
-    ):
-        super().__init__(name)
-        self.attrs = attrs
-        self.filepath = filepath
-        self.column = column
-        self.line = line
-
-
-class XMLNodeBuilder:
-    def __init__(self, filepath: str, fullpath: str):
-        self.filepath = filepath
-        self.parent: Optional[XMLNode] = None
-        self.root: Optional[XMLNode] = None
-        self.parser = expat.ParserCreate()
-        self.parser.StartElementHandler = self.start_element
-        self.parser.EndElementHandler = self.end_element
-
-        with open(fullpath, "rb") as f:
-            self.parser.ParseFile(f)
-
-    def start_element(self, name: str, attrs: Dict[str, str]) -> None:
-        node = XMLNode(
-            name,
-            attrs,
-            self.filepath,
-            self.parser.CurrentColumnNumber,
-            self.parser.CurrentLineNumber,
-        )
-        node.parent = self.parent
-        self.parent = node
-
-    def end_element(self, _: str) -> None:
-        self.root = self.parent
-        self.parent = self.parent.parent
+from .tree_node import XMLNode, XMLNodeBuilder
 
 
 def _get_included_files(root: XMLNode) -> List[Tuple[XMLNode, str]]:

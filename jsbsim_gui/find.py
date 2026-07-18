@@ -21,10 +21,11 @@ from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
-from .controller import Controller, TreeNode, XMLNode
+from .controller import Controller
 from .file_state import FileState
 from .hierarchical_tree import HierarchicalTree, SearchableTree
 from .textview import XMLSourceCodeView
+from .tree_node import TreeNode, XMLNode
 
 
 class XMLTree(SearchableTree):
@@ -50,7 +51,7 @@ class XMLTree(SearchableTree):
                 else:
                     parent_id = ""
 
-                node_id = tree.insert(parent_id, tk.END, text=node.name, open=False)
+                node_id = tree.insert(parent_id, tk.END, text=f"{node}", open=False)
                 self.nodes[node_id] = node
                 node_ids[node] = node_id
 
