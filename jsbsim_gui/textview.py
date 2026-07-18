@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import re
+from string import whitespace
 import tkinter as tk
 from tkinter import ttk, TclError
 from tkinter.constants import (
@@ -81,6 +83,7 @@ class TextView(EditableFrame):
         self.grid_rowconfigure(0, weight=1)
 
         self._text.bind("<<Paste>>", lambda e: self._paste())
+        self._text.bind("<Return>", self._auto_indent)
         self._text.bind(
             f"<{REDO_SHORTCUT}>", lambda e: self._on_edit_shortcut(EditAction.REDO)
         )
@@ -113,10 +116,22 @@ class TextView(EditableFrame):
 
         return "break"
 
+    def _auto_indent(self, _event: tk.Event) -> str:
+        line_head = self._text.get("insert linestart", tk.INSERT)
+        match = re.match(r"^([ \t]*)", line_head)
+        whitespaces = match.group(1) if match else ""
+        self._text.config(autoseparators=False)
+        self._text.edit_separator()
+        self._text.insert(tk.INSERT, "\n" + whitespaces)
+        self._text.edit_separator()
+        self._text.config(autoseparators=True)
+        return "break"
+
     def new_content(self, contents: str) -> None:
         self._text.delete("1.0", END)
         self._text.insert("1.0", contents)
         self._text.edit_modified(False)
+        self._text.edit_reset()
 
     def get_content(self) -> str:
         return self._text.get("1.0", "end-1c")
