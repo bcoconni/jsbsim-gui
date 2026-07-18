@@ -25,7 +25,6 @@ import numpy as np
 from jsbsim import FGPropertyNode
 from jsbsim._jsbsim import _append_xml as append_xml
 
-from .consoles_panel import ConsolesPanel
 from .property_history import PropertyHistory
 
 
@@ -116,6 +115,13 @@ def _get_included_files(root: XMLNode) -> List[Tuple[XMLNode, str]]:
     return included_files
 
 
+def get_path_relative_to_root(filename: str, root_dir: str) -> str:
+    path = os.path.relpath(os.path.realpath(filename), root_dir)
+    if platform.system() == "Windows":
+        return path.replace("\\", "/")
+    return path
+
+
 class Controller:
     @staticmethod
     def get_version() -> str:
@@ -125,8 +131,7 @@ class Controller:
     def get_default_root_dir() -> str:
         return jsbsim.get_default_root_dir()
 
-    def __init__(self, root_dir: str, consoles_panel: ConsolesPanel):
-        logger = consoles_panel.get_console_logger(self.get_relative_path)
+    def __init__(self, root_dir: str, logger: jsbsim.FGLogger):
         jsbsim.set_logger(logger)
         self._logger_registered = True
         self.dt = 1.0 / 120.0
@@ -176,10 +181,7 @@ class Controller:
         return os.path.realpath(self.fdm.get_root_dir())
 
     def get_relative_path(self, filename: str) -> str:
-        path = os.path.relpath(os.path.realpath(filename), self.get_root_dir())
-        if platform.system() == "Windows":
-            return path.replace("\\", "/")
-        return path
+        return get_path_relative_to_root(filename, self.get_root_dir())
 
     def get_relative_name(self, name: str) -> str:
         root = self.get_property_root().get_fully_qualified_name()

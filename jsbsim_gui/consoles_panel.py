@@ -257,9 +257,7 @@ class ConsolesPanel(ttk.Notebook):
             self.tab(self._problems_console, text=f"Problems ({count})")
             self.select(self._problems_console)
 
-    def get_console_logger(
-        self, get_relative_path: Callable[[str], str]
-    ) -> ConsoleLogger:
+    def get_logger(self, get_relative_path: Callable[[str], str]) -> ConsoleLogger:
         return ConsoleLogger(
             self._output_console, self._problems_console, get_relative_path
         )

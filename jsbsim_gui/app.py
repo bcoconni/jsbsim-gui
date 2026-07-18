@@ -26,7 +26,7 @@ from typing import Callable, Optional
 from PIL import Image, ImageTk
 
 from .consoles_panel import ConsolesPanel
-from .controller import Controller
+from .controller import Controller, get_path_relative_to_root
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditableFrame, EditAction
 from .menu_bar import MenuBar
 from .run import Run
@@ -240,6 +240,9 @@ class App(tk.Tk):
         self._consoles_panel = ConsolesPanel(
             self, on_file_link_click=self._on_file_link_click, height=10
         )
+        console_logger = self._consoles_panel.get_logger(
+            lambda name: get_path_relative_to_root(name, self.root_dir)
+        )
 
         if not self._statusbar:
             self._statusbar = ttk.Label(self, text="Ready", relief=tk.RAISED)
@@ -247,7 +250,7 @@ class App(tk.Tk):
         if self._controller:
             self._controller.close()
 
-        self._controller = Controller(self.root_dir, self._consoles_panel)
+        self._controller = Controller(self.root_dir, console_logger)
         success = load_file(self._controller, filename)
 
         if success:
