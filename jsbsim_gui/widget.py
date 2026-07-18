@@ -16,6 +16,7 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import tkinter as tk
+from tkinter import ttk
 from typing import Optional
 
 
@@ -26,3 +27,20 @@ def widget_is_descendant(
         return False
 
     return str(widget).startswith(str(container))
+
+
+class AutoClearLabel(ttk.Label):
+    def __init__(self, master: tk.Widget, **kw):
+        super().__init__(master, **kw)
+        self._clear_timer_id: Optional[str] = None
+
+    def set_text(self, message: str, duration_ms=2000) -> None:
+        if self._clear_timer_id is not None:
+            self.after_cancel(self._clear_timer_id)
+
+        self.config(text=message)
+        self._clear_timer_id = self.after(duration_ms, self._clear_text)
+
+    def _clear_text(self):
+        self.config(text="")
+        self._clear_timer_id = None

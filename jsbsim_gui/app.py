@@ -31,6 +31,7 @@ from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditableFrame, EditA
 from .menu_bar import MenuBar
 from .run import Run
 from .source_editor import SourceEditor
+from .widget import AutoClearLabel
 
 
 class App(tk.Tk):
@@ -38,7 +39,7 @@ class App(tk.Tk):
         super().__init__()
         self._consoles_panel: Optional[ConsolesPanel] = None
         self._controller: Optional[Controller] = None
-        self._statusbar: Optional[ttk.Label] = None
+        self._statusbar = AutoClearLabel(self)
         self.main: Optional[EditableFrame] = None
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
@@ -161,6 +162,7 @@ class App(tk.Tk):
         assert self._controller is not None and self._consoles_panel is not None
         self._consoles_panel.reset()
         if self._controller.reload():
+            self._statusbar.set_text("Model reloaded.")
             return True
 
         showerror(
@@ -244,9 +246,6 @@ class App(tk.Tk):
             lambda name: get_path_relative_to_root(name, self.root_dir)
         )
 
-        if not self._statusbar:
-            self._statusbar = ttk.Label(self, text="Ready", relief=tk.RAISED)
-
         if self._controller:
             self._controller.close()
 
@@ -256,6 +255,7 @@ class App(tk.Tk):
         if success:
             self._consoles_panel.grid(column=0, row=1, sticky=EW)
             self._statusbar.grid(column=0, row=2, sticky=EW)
+            self._statusbar.set_text("Ready.")
             self.edit()
         else:
             self._controller.close()

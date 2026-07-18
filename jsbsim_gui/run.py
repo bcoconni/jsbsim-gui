@@ -31,7 +31,7 @@ from .edit_actions import EditAction, EditableFrame
 from .hierarchical_tree import PropertyTree, SearchableTree
 from .plots_view import PlotsView
 from .source_editor import LabeledWidget
-from .widget import widget_is_descendant
+from .widget import AutoClearLabel, widget_is_descendant
 
 
 class DragNDropManager(ABC):
@@ -131,7 +131,11 @@ class Run(EditableFrame):
     MAX_UPDATE_TIME_s = 0.95 * REALTIME_UPDATE_INTERVAL_ms / 1000
 
     def __init__(
-        self, master: tk.Widget, controller: Controller, status_bar: ttk.Label, **kw
+        self,
+        master: tk.Widget,
+        controller: Controller,
+        status_bar: AutoClearLabel,
+        **kw,
     ):
         super().__init__(master, **kw)
         self.property_view = LabeledWidget(self, "Property Explorer")
@@ -240,7 +244,7 @@ class Run(EditableFrame):
 
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
-        self._status_bar.config(text=f"Simulated time: {sim_time:.3f}s")
+        self._status_bar.set_text(f"Simulated time: {sim_time:.3f}s")
 
     def pause(self) -> None:
         self.after_cancel(self.update_id)
@@ -271,7 +275,7 @@ class Run(EditableFrame):
             prop_view.update_values()
             sim_time = self.controller.fdm.get_sim_time()
 
-        self._status_bar.config(text=f"Simulated time: {sim_time:.3f}s")
+        self._status_bar.set_text(f"Simulated time: {sim_time:.3f}s")
 
     def apply_edit_action(self, action: EditAction) -> None:
         focused_widget = self.focus_get()
