@@ -26,8 +26,6 @@ Clone the repository
 
 ```bash
 git clone https://github.com/JSBSim-Team/jsbsim-gui.git
-git submodule init
-git submodule update
 ```
 
 The project requires Python and the necessary libraries (Tkinter and Matplotlib) to be installed. You can install them using pip:

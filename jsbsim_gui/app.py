@@ -94,7 +94,9 @@ class App(tk.Tk):
     def display_logo(self) -> None:
         self.menubar.update_save_menu_state(False)
 
-        with Image.open("logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp") as image:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.join(base_dir, "resources", "logo_JSBSIM_globe_410x429.bmp")
+        with Image.open(logo_path) as image:
             resized_image = Image.new("RGB", size=(600, image.height), color="white")
             resized_image.paste(image, ((600 - image.width) // 2, 0))
             logo_image = ImageTk.PhotoImage(resized_image)
