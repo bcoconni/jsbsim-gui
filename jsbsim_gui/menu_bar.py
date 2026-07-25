@@ -94,6 +94,11 @@ class MenuBar(tk.Menu):
         self.add_cascade(label="View", menu=view_menu)
         self.entryconfig("View", state=tk.DISABLED)
 
+        tool_menu = tk.Menu(self, tearoff=False)
+        tool_menu.add_command(label="Contacts", command=self.master.contacts_tool)
+        self.add_cascade(label="Tools", menu=tool_menu)
+        self.entryconfig("Tools", state=tk.DISABLED)
+
     def select_script_file(self) -> None:
         filename = fd.askopenfilename(
             title="Open a script, aircraft or CSV file",
@@ -125,8 +130,7 @@ class MenuBar(tk.Menu):
             )
 
         if success:
-            self.entryconfig("Edit", state=tk.NORMAL)
-            self.entryconfig("View", state=tk.NORMAL)
+            self.unhide_menus()
         else:
             name = os.path.relpath(filename, self.root_dir)
             showerror(
@@ -147,3 +151,8 @@ class MenuBar(tk.Menu):
         state = tk.NORMAL if enable else tk.DISABLED
         self.file_menu.entryconfig("Save", state=state)
         self.file_menu.entryconfig("Save All", state=state)
+
+    def unhide_menus(self) -> None:
+        self.entryconfig("Edit", state=tk.NORMAL)
+        self.entryconfig("View", state=tk.NORMAL)
+        self.entryconfig("Tools", state=tk.NORMAL)

@@ -32,6 +32,7 @@ from .menu_bar import MenuBar
 from .run import Run
 from .source_editor import SourceEditor
 from .widget import AutoClearLabel
+from .tools.gears import ContactsTool
 
 
 class App(tk.Tk):
@@ -43,6 +44,8 @@ class App(tk.Tk):
         self.main: Optional[EditableFrame] = None
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
+        self._style = ttk.Style()
+        self._style.theme_use("clam")
 
         if root_dir:
             self.root_dir = root_dir
@@ -110,8 +113,7 @@ class App(tk.Tk):
         )
         success = self.open_file(filename, model_name, Controller.load_aircraft)
         if success:
-            self.menubar.entryconfig("Edit", state=tk.NORMAL)
-            self.menubar.entryconfig("View", state=tk.NORMAL)
+            self.menubar.unhide_menus()
             return
 
         self.display_logo()
@@ -122,8 +124,7 @@ class App(tk.Tk):
         try:
             success = self.open_file(filename, script_name, Controller.load_script)
             if success:
-                self.menubar.entryconfig("Edit", state=tk.NORMAL)
-                self.menubar.entryconfig("View", state=tk.NORMAL)
+                self.menubar.unhide_menus()
                 return
 
             error_msg = f'"{script_name}" is not a script file'
@@ -264,3 +265,7 @@ class App(tk.Tk):
             self._controller = None  # Delete the FGFDMExec instance.
 
         return success
+
+    def contacts_tool(self) -> None:
+        assert self._controller is not None
+        ContactsTool(self, self._controller)

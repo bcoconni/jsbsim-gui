@@ -19,7 +19,6 @@ import copy
 import math
 import os
 import platform
-from abc import ABC, abstractmethod
 from typing import Dict, Iterator, List, Set
 
 import numpy as np
@@ -29,18 +28,15 @@ from .controller import Controller
 from .csv_tree import CsvData
 
 
-class PlotInfo(ABC):
+class PlotInfo:
     max_points = 256
     name: str
     line_style: str
     _data = np.empty((2, 0))
 
     @property
-    @abstractmethod
-    def default_name(self) -> str: ...
-
-    @abstractmethod
-    def get_data(self, t_min: float, t_max: float) -> np.ndarray: ...
+    def default_name(self) -> str:
+        return self.name
 
     def t_max(self) -> float:
         return self._data[0, -1] if self._data.size else 0.0
@@ -62,6 +58,18 @@ class PlotInfo(ABC):
         else:
             return data
 
+    def get_data(self, t_min: float, t_max: float) -> np.ndarray:
+        if not self._data.size:
+            return np.array((2, 0))
+        min_idx = max(0, int(np.searchsorted(self._data[0, :], t_min)) - 1)
+        max_idx = self._data.shape[1] - 1
+        if math.isfinite(t_max):
+            max_idx = min(
+                int(np.searchsorted(self._data[0, :], t_max, side="right")), max_idx
+            )
+
+        return self._get_sample(min_idx, max_idx, self._data)
+
 
 class _CsvPlotInfo(PlotInfo):
     def __init__(self, csv_data: CsvData):
@@ -76,19 +84,6 @@ class _CsvPlotInfo(PlotInfo):
     @property
     def default_name(self) -> str:
         return self._column_name
-
-    def get_data(self, t_min: float, t_max: float) -> np.ndarray:
-        if not self._data.size:
-            return np.array((2, 0))
-        min_idx = max(0, int(np.searchsorted(self._data[0, :], t_min)) - 1)
-        max_idx = self._data.shape[1] - 1
-        if math.isfinite(t_max):
-            max_idx = min(
-                int(np.searchsorted(self._data[0, :], t_max, side="right")), max_idx
-            )
-
-        min_idx = min(min_idx, max_idx)
-        return self._get_sample(min_idx, max_idx, self._data)
 
 
 class _PropertyPlotInfo(PlotInfo):
@@ -112,18 +107,6 @@ class _PropertyPlotInfo(PlotInfo):
         self._data = np.empty((2, ndata))
         self._data[0, :] = np.arange(ndata) * self._dt
         self._data[1, :] = data
-
-    def get_data(self, t_min: float, t_max: float) -> np.ndarray:
-        ndata = self._data.shape[1]
-        if not ndata:
-            return np.array((0, 2))
-        min_idx = max(0, math.floor(t_min / self._dt)) if self._dt > 0 else 0
-        max_idx = (
-            min(math.ceil(t_max / self._dt), ndata - 1)
-            if math.isfinite(t_max) and self._dt > 0
-            else ndata - 1
-        )
-        return self._get_sample(min_idx, max_idx, self._data)
 
 
 class PlotInfoList:
