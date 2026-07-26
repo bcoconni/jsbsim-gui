@@ -138,7 +138,10 @@ class PlotLabelManager:
 
         # Prevent overlap/collision between labels
         bounding_boxes = [(label, label.bounding_box) for label in self._labels]
-        sorted_boxes = sorted(bounding_boxes, key=lambda b: b[1].y1, reverse=True)
+        sorted_boxes = [bounding_boxes[0]]  # Time label is always on top
+        sorted_boxes.extend(
+            sorted(bounding_boxes[1:], key=lambda b: b[1].y1, reverse=True)
+        )
 
         _, prev_box = sorted_boxes[0]
         for label, box in sorted_boxes[1:]:
