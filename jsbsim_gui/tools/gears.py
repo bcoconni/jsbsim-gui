@@ -15,15 +15,16 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
+import math
 import os
 import re
 import tkinter as tk
-from tkinter import ttk
 import xml.etree.ElementTree as et
+from tkinter import ttk
 
-from jsbsim import FGPropertyNode
 import numpy as np
 import scipy
+from jsbsim import FGPropertyNode
 
 from ..controller import Controller
 from ..plotinfo_list import PlotInfo, PlotInfoList
@@ -90,13 +91,15 @@ class ContactsTool(tk.Toplevel):
         self._active_contacts: list[
             tuple[FGPropertyNode, ttk.Entry, ttk.Entry, ttk.Label]
         ] = []
+        self._contact_names: list[str] = []
 
         for num, prop in self._contacts.items():
             wow_node = prop.get_node("WOW")
             assert wow_node is not None
             if wow_node.get_double_value() != 0:
                 xml_contact = xml_contacts[num]
-                name_label = ttk.Label(frame, text=xml_contact.attrib["name"])
+                self._contact_names.append(xml_contact.attrib["name"])
+                name_label = ttk.Label(frame, text=self._contact_names[-1])
                 name_label.grid(column=0, row=contact_row, sticky=tk.W)
                 stiffness_entry = ttk.Entry(frame)
                 xml_spring_coeff = xml_contact.find("spring_coeff")
@@ -119,6 +122,40 @@ class ContactsTool(tk.Toplevel):
 
         frame.pack(padx=5)
         self._plots_view = PlotsView(self, controller)
+        pinfo = PlotInfo()
+        pinfo.name = ""
+        pinfo.line_style = "-"
+        pinfo._data = np.zeros((2, 1))
+        plist = PlotInfoList(controller)
+        plist._plotinfos = [pinfo]
+        self._plots_view.plots = [plist, plist]
+        self._plots_view.initialize_canvas()
+        self._plots_view.pack(padx=5, pady=5)
+
+        result_frame = ttk.Frame(self)
+        ttk.Label(result_frame, text="Mode 1").grid(column=1, row=0, sticky=tk.EW)
+        ttk.Label(result_frame, text="Mode 2").grid(column=2, row=0, sticky=tk.EW)
+        ttk.Label(result_frame, text="Mode 3").grid(column=3, row=0, sticky=tk.EW)
+        ttk.Label(result_frame, text="Frequency(Hz)").grid(
+            column=0, row=1, sticky=tk.EW
+        )
+        self._freq: list[ttk.Label] = []
+        for i in range(3):
+            self._freq.append(ttk.Label(result_frame, relief=tk.SUNKEN))
+            self._freq[-1].grid(column=i + 1, row=1, sticky=tk.EW)
+
+        ttk.Label(result_frame, text="Height (ft)").grid(column=1, row=2, sticky=tk.EW)
+        ttk.Label(result_frame, text="Pitch (deg)").grid(column=2, row=2, sticky=tk.EW)
+        ttk.Label(result_frame, text="Roll (deg)").grid(column=3, row=2, sticky=tk.EW)
+        ttk.Label(result_frame, text="Amplitude").grid(column=0, row=3, sticky=tk.EW)
+        self._h_amplitude = ttk.Label(result_frame, relief=tk.SUNKEN)
+        self._h_amplitude.grid(column=1, row=3, sticky=tk.EW)
+        self._pitch_amplitude = ttk.Label(result_frame, relief=tk.SUNKEN)
+        self._pitch_amplitude.grid(column=2, row=3, sticky=tk.EW)
+        self._roll_amplitude = ttk.Label(result_frame, relief=tk.SUNKEN)
+        self._roll_amplitude.grid(column=3, row=3, sticky=tk.EW)
+        result_frame.pack(padx=5)
+
         ttk.Button(self, text="Compute", command=self._compute).pack(pady=5)
 
     def _compute(self) -> None:
@@ -150,21 +187,26 @@ class ContactsTool(tk.Toplevel):
         val, _ = scipy.linalg.eig(A, B)
         positive_imaginary_mask = np.imag(val) > 0
         eigval = val[positive_imaginary_mask]
-        freq = np.imag(eigval) / (2.0 * np.pi)
-        print(freq)
+        frequencies = np.imag(eigval) / (2.0 * np.pi)
+
+        for label, freq in zip(self._freq, np.sort(frequencies)):
+            label.config(text=f"{freq:.5f}")
+
         x_sol = np.linalg.solve(K, [-mass, 0.0, 0.0])
-        print(x_sol)
+        self._h_amplitude.config(text=f"{x_sol[0]:.5f}")
+        self._pitch_amplitude.config(text=f"{math.degrees(x_sol[1]):.5f}")
+        self._roll_amplitude.config(text=f"{math.degrees(x_sol[2]):.5f}")
 
         for i, contact in enumerate(self._active_contacts):
             du = -np.dot(x_sol, T[i, :])
             contact[3].config(text=f"{du:.6f}")
 
-        freq_range = np.arange(0, 4.0 * np.max(freq), 0.01)
+        freq_range = np.arange(0, 4.0 * np.max(frequencies), 0.01)
         bode_amplitude = [PlotInfo(), PlotInfo(), PlotInfo()]
         bode_phase = [PlotInfo(), PlotInfo(), PlotInfo()]
 
         for i, bode in enumerate(bode_amplitude + bode_phase):
-            bode.name = f"DOF #{i%3}"
+            bode.name = self._contact_names[i % 3]
             bode.line_style = "-"
             bode._data = np.vstack([freq_range, np.zeros(freq_range.shape)])
 
