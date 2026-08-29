@@ -43,6 +43,8 @@ class App(tk.Tk):
         self.main: Optional[EditableFrame] = None
         self.title(f"JSBSim {Controller.get_version()}")
         self.resizable(False, False)
+        self._style = ttk.Style()
+        self._style.theme_use("clam")
 
         if root_dir:
             self.root_dir = root_dir
