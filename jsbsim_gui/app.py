@@ -25,6 +25,7 @@ from typing import Callable, Optional
 
 from PIL import Image, ImageTk
 
+from . import __version__
 from .consoles_panel import ConsolesPanel
 from .controller import Controller, get_path_relative_to_root
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditableFrame, EditAction
@@ -41,7 +42,7 @@ class App(tk.Tk):
         self._controller: Optional[Controller] = None
         self._statusbar = AutoClearLabel(self)
         self.main: Optional[EditableFrame] = None
-        self.title(f"JSBSim {Controller.get_version()}")
+        self.title(f"JSBSim GUI {__version__}")
         self.resizable(False, False)
         self._style = ttk.Style()
         self._style.theme_use("clam")
@@ -239,7 +240,7 @@ class App(tk.Tk):
         load_file: Callable[[Controller, str], bool],
     ) -> bool:
         self.resizable(True, True)
-        self.title(f"JSBSim {Controller.get_version()} - {aircraft_name}")
+        self.title(f"JSBSim GUI {__version__} - {aircraft_name}")
 
         if self._consoles_panel:
             self._consoles_panel.destroy()

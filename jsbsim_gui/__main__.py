@@ -16,14 +16,15 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import argparse
+
+from . import __version__
 from .app import App
-from .controller import Controller
 
 
 def run():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
-        "--version", action="version", version=f"JSBSim UI {Controller.get_version()}"
+        "--version", action="version", version=f"JSBSim GUI {__version__}"
     )
     parser.add_argument(
         "--root",
