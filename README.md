@@ -25,19 +25,19 @@ This project is in its early stages of development. While the core functionality
 Clone the repository
 
 ```bash
-git clone https://github.com/JSBSim-Team/jsbsim-gui.git
+git clone https://github.com/bcoconni/jsbsim-gui.git
 ```
 
 The project requires Python and the necessary libraries (Tkinter and Matplotlib) to be installed. You can install them using pip:
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Run the application
 
 ```bash
-python -m jsbsim_gui
+jsbsim-gui
 ```
 
 ## Contributions Welcome

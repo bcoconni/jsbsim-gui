@@ -41,17 +41,9 @@ Tests use `jsbsim.FGPropertyManager` for property node mocking. No external fixt
 - **jsbsim** (≥1.3.0): Python bindings to JSBSim C++ library (includes aircraft/engines/scripts data for testing)
 - **matplotlib**: Plotting with TkAgg backend
 - **PIL/Pillow**: Logo image loading (implicit dependency)
-- **Tkinter**: Ships with Python, not in requirements.txt
+- **Tkinter**: Ships with Python
 
 **Dependency Policy**: ALWAYS prefer Python standard library over PyPI packages. Do NOT add new dependencies without explicit approval. This keeps the project lightweight and reduces maintenance burden.
-
-### Logo Assets
-Logo images are managed via git submodule from `https://github.com/JSBSim-Team/jsbsim-logo.git`:
-```bash
-git submodule init
-git submodule update
-```
-Logo path is hardcoded to `logo/wizard_installer/logo_JSBSIM_globe_410x429.bmp` in `app.py`.
 
 ## Project-Specific Conventions
 
