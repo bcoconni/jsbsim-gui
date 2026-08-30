@@ -35,11 +35,9 @@ class LabeledWidget(EditableFrame):
     def __init__(self, master: tk.Widget, label: str):
         super().__init__(master)
         self.widget: Optional[EditableFrame] = None
-        self.header_frame = ttk.Frame(self)
-        self.header_frame.grid(column=0, row=0, sticky="ew", pady=5, padx=5)
-        self.label = ttk.Label(self.header_frame, text=label, anchor="center")
-        self.label.grid(column=0, row=0, sticky="ew")
-        self.header_frame.columnconfigure(0, weight=1)
+        self.label = ttk.Label(self, text=label, anchor="center")
+        self.label.grid(column=0, row=0, sticky="nsew", ipadx=5, ipady=5)
+        self.label.columnconfigure(0, weight=1)
 
     def set_widget(self, widget: EditableFrame) -> None:
         self.widget = widget
