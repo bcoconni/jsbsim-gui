@@ -21,7 +21,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import EW, NSEW
 from tkinter.messagebox import askyesnocancel, showerror
-from typing import Callable, Optional
+from typing import Callable, Dict, Optional
 
 from PIL import Image, ImageTk
 
@@ -40,8 +40,11 @@ class App(tk.Tk):
         super().__init__()
         self._consoles_panel: Optional[ConsolesPanel] = None
         self._controller: Optional[Controller] = None
+        self._console_sash = tk.PanedWindow(
+            self, orient=tk.VERTICAL, sashwidth=4, sashrelief=tk.RAISED
+        )
         self._statusbar = AutoClearLabel(self)
-        self.main: Optional[EditableFrame] = None
+        self.main: EditableFrame | ttk.Label | None = None
         self.title(f"JSBSim GUI {__version__}")
         self.resizable(False, False)
         self._style = ttk.Style()
@@ -153,13 +156,15 @@ class App(tk.Tk):
 
         w = self.main.winfo_width()
         h = self.main.winfo_height()
+        self._console_sash.remove(self.main)
         self.main.destroy()
         self.menubar.update_save_menu_state(False)
-        self.main = Run(self, self._controller, self._statusbar, width=w, height=h)
-        self.main.grid_propagate(0)
+        self.main = Run(self._console_sash, self._controller, self._statusbar)
+        self._console_sash.add(
+            self.main, before=self._consoles_panel, width=w, height=h
+        )
 
         # Window layout
-        self.main.grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -177,18 +182,28 @@ class App(tk.Tk):
         return False
 
     def edit(self) -> None:
+        add_options: Dict[str, int | ConsolesPanel] = {}
         if self.main:
+            if isinstance(self.main, EditableFrame):
+                assert self._consoles_panel
+                self._console_sash.remove(self.main)
+                add_options["width"] = self.main.winfo_width()
+                add_options["height"] = self.main.winfo_height()
+                add_options["before"] = self._consoles_panel
             self.main.destroy()
 
         # Open the file in a text widget
         assert self._controller is not None
         self.main = SourceEditor(
-            self, self._controller, self.mark_title_modified, self._reload_controller
+            self._console_sash,
+            self._controller,
+            self.mark_title_modified,
+            self._reload_controller,
         )
+        self._console_sash.add(self.main, **add_options)
         self.menubar.update_save_menu_state(True)
 
         # Window layout
-        self.main.grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -244,8 +259,9 @@ class App(tk.Tk):
 
         if self._consoles_panel:
             self._consoles_panel.destroy()
+
         self._consoles_panel = ConsolesPanel(
-            self, on_file_link_click=self._on_file_link_click, height=10
+            self._console_sash, on_file_link_click=self._on_file_link_click, height=10
         )
         console_logger = self._consoles_panel.get_logger(
             lambda name: get_path_relative_to_root(name, self.root_dir)
@@ -258,10 +274,11 @@ class App(tk.Tk):
         success = load_file(self._controller, filename)
 
         if success:
-            self._consoles_panel.grid(column=0, row=1, sticky=EW)
-            self._statusbar.grid(column=0, row=2, sticky=EW)
-            self._statusbar.set_text("Ready.")
             self.edit()
+            self._console_sash.add(self._consoles_panel)
+            self._console_sash.grid(column=0, row=0, sticky=NSEW)
+            self._statusbar.grid(column=0, row=1, sticky=EW)
+            self._statusbar.set_text("Ready.")
         else:
             self._controller.close()
             self._controller = None  # Delete the FGFDMExec instance.
