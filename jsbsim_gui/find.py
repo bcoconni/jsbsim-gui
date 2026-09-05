@@ -352,7 +352,7 @@ class FindWindow(tk.Toplevel):
 
         # Search mode selector
         mode_frame = ttk.Frame(self)
-        mode_frame.grid(column=0, row=0, sticky=EW, padx=5, pady=5)
+        mode_frame.grid(column=0, row=0, sticky=NSEW, padx=5, pady=5)
         ttk.Label(mode_frame, text="Type:").grid(column=0, row=0, padx=10, sticky=tk.W)
         self._type_combo = ttk.Combobox(
             mode_frame,
@@ -377,8 +377,10 @@ class FindWindow(tk.Toplevel):
         self._xml_tree.tkraise()
         self._xml_tree.focus_search()
 
+        mode_frame.grid_columnconfigure(1, weight=1)
+        mode_frame.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
     def find_property(self, property_name: str) -> None:
         self._type_combo.current(1)
