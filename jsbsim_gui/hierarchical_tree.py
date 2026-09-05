@@ -282,6 +282,9 @@ class SearchableTree(EditableFrame):
     def collapse(self, parent_id: str = "") -> None:
         self.tree.collapse(parent_id)
 
+    def focus_search(self) -> None:
+        self._search_box.focus_set()
+
     def _search(self, _: Optional[tk.Event]) -> None:
         self.tree.unfilter()
         pattern = self._search_box.get()

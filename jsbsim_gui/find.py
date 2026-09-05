@@ -375,6 +375,7 @@ class FindWindow(tk.Toplevel):
         )
         self._occurrences_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
         self._xml_tree.tkraise()
+        self._xml_tree.focus_search()
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
@@ -383,10 +384,13 @@ class FindWindow(tk.Toplevel):
         self._type_combo.current(1)
         self._occurrences_tree.tkraise()
         self._occurrences_tree.set_search_text(property_name)
+        self._occurrences_tree.focus_search()
 
     def _on_mode_change(self, _: tk.Event) -> None:
         mode = self._type_combo.get()
         if mode == "XML":
             self._xml_tree.tkraise()
+            self._xml_tree.focus_search()
         else:
             self._occurrences_tree.tkraise()
+            self._occurrences_tree.focus_search()
