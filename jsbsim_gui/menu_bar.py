@@ -29,73 +29,79 @@ from .textview import OptionsWindow
 class MenuBar(tk.Menu):
     def __init__(self, master: tk.Widget, root_dir: str):
         super().__init__(master)
-        self.root_dir = root_dir
+        self._root_dir = root_dir
 
-        self.file_menu = tk.Menu(self, tearoff=False)
-        self.file_menu.add_command(label="Root...", command=self.set_root_dir)
-        self.file_menu.add_command(label="Open...", command=self.select_script_file)
-        self.file_menu.add_separator()
-        self.file_menu.add_command(
+        self._file_menu = tk.Menu(self, tearoff=False)
+        self._file_menu.add_command(label="Root...", command=self.set_root_dir)
+        self._file_menu.add_command(label="Open...", command=self.select_script_file)
+        self._file_menu.add_separator()
+        self._file_menu.add_command(
+            label="Reload Model",
+            accelerator=f"{SHORTCUT_MODIFIER}+R",
+            command=master.reload_controller,
+        )
+        self._file_menu.entryconfig("Reload Model", state=tk.DISABLED)
+        self._file_menu.add_separator()
+        self._file_menu.add_command(
             label="Save",
             accelerator=f"{SHORTCUT_MODIFIER}+S",
             command=master.save_file,
             state=tk.DISABLED,
         )
-        self.file_menu.add_command(
+        self._file_menu.add_command(
             label="Save All", command=master.save_all, state=tk.DISABLED
         )
-        self.file_menu.add_separator()
-        self.file_menu.add_command(
+        self._file_menu.add_separator()
+        self._file_menu.add_command(
             label="Exit",
             accelerator=f"{SHORTCUT_MODIFIER}+Q",
             command=master.on_closing,
         )
-        self.add_cascade(label="File", menu=self.file_menu)
+        self.add_cascade(label="File", menu=self._file_menu)
 
-        self.edit_menu = tk.Menu(self, tearoff=False)
-        self.edit_menu.add_command(
+        edit_menu = tk.Menu(self, tearoff=False)
+        edit_menu.add_command(
             label="Undo",
             accelerator=f"{SHORTCUT_MODIFIER}+Z",
             command=lambda: master.edit_action(EditAction.UNDO),
         )
-        self.edit_menu.add_command(
+        edit_menu.add_command(
             label="Redo",
             accelerator=REDO_SHORTCUT,
             command=lambda: master.edit_action(EditAction.REDO),
         )
-        self.edit_menu.add_separator()
-        self.edit_menu.add_command(
+        edit_menu.add_separator()
+        edit_menu.add_command(
             label="Select All",
             accelerator=f"{SHORTCUT_MODIFIER}+A",
             command=lambda: master.edit_action(EditAction.SELECT_ALL),
         )
-        self.edit_menu.add_command(
+        edit_menu.add_command(
             label="Cut",
             accelerator=f"{SHORTCUT_MODIFIER}+X",
             command=lambda: master.edit_action(EditAction.CUT),
         )
-        self.edit_menu.add_command(
+        edit_menu.add_command(
             label="Copy",
             accelerator=f"{SHORTCUT_MODIFIER}+C",
             command=lambda: master.edit_action(EditAction.COPY),
         )
-        self.edit_menu.add_command(
+        edit_menu.add_command(
             label="Paste",
             accelerator=f"{SHORTCUT_MODIFIER}+V",
             command=lambda: master.edit_action(EditAction.PASTE),
         )
-        self.edit_menu.add_separator()
-        self.edit_menu.add_command(
+        edit_menu.add_separator()
+        edit_menu.add_command(
             label="Find...",
             accelerator=f"{SHORTCUT_MODIFIER}+F",
             command=lambda: master.edit_action(EditAction.FIND),
         )
-        self.edit_menu.add_separator()
-        self.edit_menu.add_command(
-            label="Options...",
-            command=lambda: OptionsWindow(master).grab_set(),
+        edit_menu.add_separator()
+        edit_menu.add_command(
+            label="Options...", command=lambda: OptionsWindow(master).grab_set()
         )
-        self.add_cascade(label="Edit", menu=self.edit_menu)
+        self.add_cascade(label="Edit", menu=edit_menu)
         self.entryconfig("Edit", state=tk.DISABLED)
 
         view_menu = tk.Menu(self, tearoff=False)
@@ -107,7 +113,7 @@ class MenuBar(tk.Menu):
     def select_script_file(self) -> None:
         filename = fd.askopenfilename(
             title="Open a script, aircraft or CSV file",
-            initialdir=self.root_dir,
+            initialdir=self._root_dir,
             filetypes=(
                 ("script and aircraft files", "*.xml"),
                 ("CSV files", "*.csv"),
@@ -135,10 +141,9 @@ class MenuBar(tk.Menu):
             )
 
         if success:
-            self.entryconfig("Edit", state=tk.NORMAL)
-            self.entryconfig("View", state=tk.NORMAL)
+            self.enable_menus()
         else:
-            name = os.path.relpath(filename, self.root_dir)
+            name = os.path.relpath(filename, self._root_dir)
             showerror(
                 "Error",
                 message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
@@ -147,13 +152,18 @@ class MenuBar(tk.Menu):
     def set_root_dir(self) -> None:
         directory = fd.askdirectory(
             title="Select Root Directory",
-            initialdir=self.root_dir,
+            initialdir=self._root_dir,
         )
         if directory:
-            self.root_dir = directory
+            self._root_dir = directory
             self.master.root_dir = directory
+
+    def enable_menus(self):
+        self._file_menu.entryconfig("Reload Model", state=tk.NORMAL)
+        self.entryconfig("Edit", state=tk.NORMAL)
+        self.entryconfig("View", state=tk.NORMAL)
 
     def update_save_menu_state(self, enable: bool) -> None:
         state = tk.NORMAL if enable else tk.DISABLED
-        self.file_menu.entryconfig("Save", state=state)
-        self.file_menu.entryconfig("Save All", state=state)
+        self._file_menu.entryconfig("Save", state=state)
+        self._file_menu.entryconfig("Save All", state=state)

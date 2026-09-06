@@ -20,7 +20,7 @@ import unittest
 import sys
 import os
 
-import jsbsim_gui.edit_actions as edit_actions
+from jsbsim_gui import edit_actions
 from jsbsim_gui.menu_bar import MenuBar
 from jsbsim_gui.textview import XMLSourceCodeView
 
@@ -51,6 +51,9 @@ class TestRoot(tk.Tk):
     def open_find_window(self) -> None:
         return None
 
+    def reload_controller(self) -> None:
+        return None
+
 
 class TestEditMenuCommands(unittest.TestCase):
     def setUp(self):
@@ -62,16 +65,17 @@ class TestEditMenuCommands(unittest.TestCase):
 
     def test_edit_menu_commands_delegate_to_master_methods(self):
         menubar = MenuBar(self.root, ".")
+        edit_menu = menubar.nametowidget(menubar.entrycget("Edit", "menu"))
 
         for index in [0, 1, 3, 4, 5, 6, 8]:
-            menubar.edit_menu.invoke(index)
+            edit_menu.invoke(index)
 
         self.assertEqual(
             self.root.calls,
             ["UNDO", "REDO", "SELECT_ALL", "CUT", "COPY", "PASTE", "FIND"],
         )
-        self.assertEqual(menubar.edit_menu.type(9), "separator")
-        self.assertEqual(menubar.edit_menu.entrycget(10, "label"), "Options...")
+        self.assertEqual(edit_menu.type(9), "separator")
+        self.assertEqual(edit_menu.entrycget(10, "label"), "Options...")
 
 
 class TestXMLSourceCodeViewEditActions(unittest.TestCase):

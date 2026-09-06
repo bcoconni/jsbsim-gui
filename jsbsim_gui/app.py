@@ -77,6 +77,9 @@ class App(tk.Tk):
             f"<{REDO_SHORTCUT}>", lambda _event: self.edit_action(EditAction.REDO)
         )
         self.bind_all(f"<{SHORTCUT_MODIFIER}-q>", lambda _event: self.on_closing())
+        self.bind_all(
+            f"<{SHORTCUT_MODIFIER}-r>", lambda _event: self.reload_controller()
+        )
 
     def on_closing(self) -> None:
         if not self._prompt_save_if_modified(
@@ -117,8 +120,7 @@ class App(tk.Tk):
         )
         success = self.open_file(filename, model_name, Controller.load_aircraft)
         if success:
-            self.menubar.entryconfig("Edit", state=tk.NORMAL)
-            self.menubar.entryconfig("View", state=tk.NORMAL)
+            self.menubar.enable_menus()
             return
 
         self.display_logo()
@@ -129,8 +131,7 @@ class App(tk.Tk):
         try:
             success = self.open_file(filename, script_name, Controller.load_script)
             if success:
-                self.menubar.entryconfig("Edit", state=tk.NORMAL)
-                self.menubar.entryconfig("View", state=tk.NORMAL)
+                self.menubar.enable_menus()
                 return
 
             error_msg = f'"{script_name}" is not a script file'
@@ -142,6 +143,7 @@ class App(tk.Tk):
 
     def run(self) -> None:
         assert self.main
+        assert self._controller
 
         has_modified_files = (
             isinstance(self.main, SourceEditor) and self.main.has_modified_files()
@@ -152,7 +154,7 @@ class App(tk.Tk):
         ):
             return
 
-        if has_modified_files and not self._reload_controller():
+        if has_modified_files and not self.reload_controller():
             return
 
         w = self.main.winfo_width()
@@ -169,7 +171,7 @@ class App(tk.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-    def _reload_controller(self) -> bool:
+    def reload_controller(self) -> bool:
         assert self._controller is not None and self._consoles_panel is not None
         self._consoles_panel.reset()
         if self._controller.reload():
@@ -199,7 +201,7 @@ class App(tk.Tk):
             self._console_sash,
             self._controller,
             self.mark_title_modified,
-            self._reload_controller,
+            self.reload_controller,
         )
         self._console_sash.add(self.main, **add_options)
         self.menubar.update_save_menu_state(True)
