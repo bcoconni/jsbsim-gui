@@ -23,6 +23,7 @@ from tkinter.messagebox import showerror
 
 from .controller import Controller
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
+from .textview import OptionsWindow
 
 
 class MenuBar(tk.Menu):
@@ -84,6 +85,11 @@ class MenuBar(tk.Menu):
             label="Find...",
             accelerator=f"{SHORTCUT_MODIFIER}+F",
             command=lambda: master.edit_action(EditAction.FIND),
+        )
+        self.edit_menu.add_separator()
+        self.edit_menu.add_command(
+            label="Options...",
+            command=lambda: OptionsWindow(master).grab_set(),
         )
         self.add_cascade(label="Edit", menu=self.edit_menu)
         self.entryconfig("Edit", state=tk.DISABLED)

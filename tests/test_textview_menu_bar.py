@@ -63,13 +63,15 @@ class TestEditMenuCommands(unittest.TestCase):
     def test_edit_menu_commands_delegate_to_master_methods(self):
         menubar = MenuBar(self.root, ".")
 
-        for index in [0, 1, 3, 4, 5, 6]:
+        for index in [0, 1, 3, 4, 5, 6, 8]:
             menubar.edit_menu.invoke(index)
 
         self.assertEqual(
             self.root.calls,
-            ["UNDO", "REDO", "SELECT_ALL", "CUT", "COPY", "PASTE"],
+            ["UNDO", "REDO", "SELECT_ALL", "CUT", "COPY", "PASTE", "FIND"],
         )
+        self.assertEqual(menubar.edit_menu.type(9), "separator")
+        self.assertEqual(menubar.edit_menu.entrycget(10, "label"), "Options...")
 
 
 class TestXMLSourceCodeViewEditActions(unittest.TestCase):
