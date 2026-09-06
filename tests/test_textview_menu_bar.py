@@ -51,6 +51,9 @@ class TestRoot(tk.Tk):
     def open_find_window(self) -> None:
         return None
 
+    def reload_controller(self) -> None:
+        return None
+
 
 class TestEditMenuCommands(unittest.TestCase):
     def setUp(self):

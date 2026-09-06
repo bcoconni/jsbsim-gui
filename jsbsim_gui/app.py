@@ -77,6 +77,9 @@ class App(tk.Tk):
             f"<{REDO_SHORTCUT}>", lambda _event: self.edit_action(EditAction.REDO)
         )
         self.bind_all(f"<{SHORTCUT_MODIFIER}-q>", lambda _event: self.on_closing())
+        self.bind_all(
+            f"<{SHORTCUT_MODIFIER}-r>", lambda _event: self.reload_controller()
+        )
 
     def on_closing(self) -> None:
         if not self._prompt_save_if_modified(
@@ -151,7 +154,7 @@ class App(tk.Tk):
         ):
             return
 
-        if has_modified_files and not self._reload_controller():
+        if has_modified_files and not self.reload_controller():
             return
 
         w = self.main.winfo_width()
@@ -168,7 +171,7 @@ class App(tk.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-    def _reload_controller(self) -> bool:
+    def reload_controller(self) -> bool:
         assert self._controller is not None and self._consoles_panel is not None
         self._consoles_panel.reset()
         if self._controller.reload():
@@ -196,7 +199,7 @@ class App(tk.Tk):
             self._console_sash,
             self._controller,
             self.mark_title_modified,
-            self._reload_controller,
+            self.reload_controller,
         )
 
         assert self._consoles_panel

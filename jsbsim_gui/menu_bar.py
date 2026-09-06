@@ -36,6 +36,13 @@ class MenuBar(tk.Menu):
         self._file_menu.add_command(label="Open...", command=self.select_script_file)
         self._file_menu.add_separator()
         self._file_menu.add_command(
+            label="Reload Model",
+            accelerator=f"{SHORTCUT_MODIFIER}+R",
+            command=master.reload_controller,
+        )
+        self._file_menu.entryconfig("Reload Model", state=tk.DISABLED)
+        self._file_menu.add_separator()
+        self._file_menu.add_command(
             label="Save",
             accelerator=f"{SHORTCUT_MODIFIER}+S",
             command=master.save_file,
@@ -152,6 +159,7 @@ class MenuBar(tk.Menu):
             self.master.root_dir = directory
 
     def enable_menus(self):
+        self._file_menu.entryconfig("Reload Model", state=tk.NORMAL)
         self.entryconfig("Edit", state=tk.NORMAL)
         self.entryconfig("View", state=tk.NORMAL)
 
