@@ -45,7 +45,11 @@ class MenuBar(tk.Menu):
             label="Save All", command=master.save_all, state=tk.DISABLED
         )
         self.file_menu.add_separator()
-        self.file_menu.add_command(label="Exit", command=master.on_closing)
+        self.file_menu.add_command(
+            label="Exit",
+            accelerator=f"{SHORTCUT_MODIFIER}+Q",
+            command=master.on_closing,
+        )
         self.add_cascade(label="File", menu=self.file_menu)
 
         self.edit_menu = tk.Menu(self, tearoff=False)

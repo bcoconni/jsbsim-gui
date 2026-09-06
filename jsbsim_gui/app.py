@@ -76,6 +76,7 @@ class App(tk.Tk):
         self.bind_all(
             f"<{REDO_SHORTCUT}>", lambda _event: self.edit_action(EditAction.REDO)
         )
+        self.bind_all(f"<{SHORTCUT_MODIFIER}-q>", lambda _event: self.on_closing())
 
     def on_closing(self) -> None:
         if not self._prompt_save_if_modified(
