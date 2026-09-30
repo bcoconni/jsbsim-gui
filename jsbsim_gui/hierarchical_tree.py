@@ -76,7 +76,7 @@ class HierarchicalTree(EditableFrame):
         self.selection = self._tree.selection
         self.selection_set = self._tree.selection_set
         self.set = self._tree.set
-        self.yview = self._tree.yview
+        self.yscrollbar_set = self._yscrollbar.set
 
     def create_tree_nodes(self, nodes: List[str], is_open: bool = True) -> None:
         for node in nodes:
@@ -262,13 +262,13 @@ class SearchableTree(EditableFrame):
         self.grid_rowconfigure(1, weight=1)
 
         self._search_box.bind("<KeyRelease>", self._search)
-        self.tree._yscrollbar.configure(command=self._yview)
+        self.tree.configure_tree(yscrollcommand=self._yview)
 
         self.apply_edit_action = self.tree.apply_edit_action
 
     def _yview(self, *args) -> None:
+        self.tree.yscrollbar_set(*args)
         self._update_visible_items(None)
-        return self.tree.yview(*args)
 
     def get_search_text(self) -> str:
         return self._search_box.get()
