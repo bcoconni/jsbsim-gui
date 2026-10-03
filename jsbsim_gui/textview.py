@@ -200,7 +200,13 @@ class SourceCodeView(TextView):
         self._lexer: Optional[Lexer] = None
 
         self._line_numbers = tk.Text(
-            self, width=1, bg="#eeeeee", borderwidth=0, relief=FLAT, wrap=NONE
+            self,
+            width=1,
+            height=int(self._text.cget("height")),
+            bg="#eeeeee",
+            borderwidth=0,
+            relief=FLAT,
+            wrap=NONE,
         )
         # Even when empty, the first line is where the cursor is so we need a number
         self._line_numbers.insert("1.0", "1")
@@ -437,11 +443,8 @@ SAMPLE_XML = """<!-- Example XML script -->
 
 
 class OptionsWindow(tk.Toplevel):
-    def __init__(
-        self,
-        master: Union[tk.Tk, tk.Toplevel],
-    ):
-        super().__init__(master)
+    def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
+        super().__init__(master, **kw)
         self.title("Options")
         self.resizable(False, False)
 

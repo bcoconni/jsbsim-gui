@@ -120,7 +120,12 @@ class TestOptionsWindow(unittest.TestCase):
 
     def test_options_window_init(self):
         window = OptionsWindow(self.root)
+        window.update_idletasks()
         self.assertEqual(window.title(), "Options")
+        self.assertEqual(
+            window._preview._line_numbers.winfo_reqheight(),
+            window._preview._text.winfo_reqheight(),
+        )
         default_colors = XMLSyntaxColors()
         for tag in asdict(default_colors):
             self.assertIn(tag, window._swatches)
