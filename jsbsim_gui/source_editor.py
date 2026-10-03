@@ -35,9 +35,9 @@ class LabeledWidget(EditableFrame):
     def __init__(self, master: tk.Widget, label: str):
         super().__init__(master)
         self.widget: Optional[EditableFrame] = None
-        self.label = ttk.Label(self, text=label, anchor="center")
-        self.label.grid(column=0, row=0, sticky="nsew", ipadx=5, ipady=5)
-        self.label.columnconfigure(0, weight=1)
+        self._label = ttk.Label(self, text=label, anchor="center")
+        self._label.grid(column=0, row=0, sticky="nsew", ipadx=5, ipady=5)
+        self._label.columnconfigure(0, weight=1)
 
     def set_widget(self, widget: EditableFrame) -> None:
         self.widget = widget
@@ -46,7 +46,7 @@ class LabeledWidget(EditableFrame):
         self.grid_rowconfigure(1, weight=1)
 
     def set_label(self, label: str) -> None:
-        self.label.config(text=label)
+        self._label.config(text=label)
 
     def apply_edit_action(self, action: EditAction) -> None:
         if self.widget is not None:
@@ -62,9 +62,9 @@ class SourceEditor(EditableFrame):
         file_updated: Callable[[], None],
     ):
         super().__init__(master)
-        self.root_dir = controller.get_root_dir()
-        self.controller = controller
-        self.file_states: Dict[str, FileState] = {}
+        self._root_dir = controller.get_root_dir()
+        self._controller = controller
+        self._file_states: Dict[str, FileState] = {}
         self._find_window: Optional[FindWindow] = None
         self._has_dirty_files = has_dirty_files
         self._files_updated = file_updated
@@ -80,13 +80,13 @@ class SourceEditor(EditableFrame):
         fileview = LabeledWidget(left_frame, "Project Files")
         self.fileview = FileTree(fileview, input_files)
         self.fileview.bind_selection(
-            lambda filepath: self.open_source_file(self.file_states[filepath])
+            lambda filepath: self.open_source_file(self._file_states[filepath])
         )
         fileview.set_widget(self.fileview)
 
         for filepath in input_files:
             with open(
-                os.path.join(self.root_dir, filepath), "r", encoding="utf-8"
+                os.path.join(self._root_dir, filepath), "r", encoding="utf-8"
             ) as f:
                 contents = f.read()
                 # Source files are having a trailing carriage return (CR) that shall not
@@ -94,10 +94,10 @@ class SourceEditor(EditableFrame):
                 if contents and contents[-1] == "\n":
                     contents = contents[:-1]  # Remove the last trailing CR
 
-                self.file_states[filepath] = FileState(filepath, contents)
+                self._file_states[filepath] = FileState(filepath, contents)
 
         file_relpath = controller.get_relative_path(controller.filename)
-        self.current_file = self.file_states[file_relpath]
+        self.current_file = self._file_states[file_relpath]
         self.codeview = LabeledWidget(self, file_relpath)
         editor = XMLSourceCodeView(
             self.codeview, self.current_file.content, width=80, height=30, wrap=NONE
@@ -108,10 +108,10 @@ class SourceEditor(EditableFrame):
         editor.bind(f"<{SHORTCUT_MODIFIER}-s>", lambda e: self._on_save_shortcut())
 
         self.property_view = LabeledWidget(left_frame, "Property Explorer")
+        property_root = controller.get_property_root()
+        assert property_root is not None
         property_tree = PropertyTree(
-            self.property_view,
-            controller.get_property_list(),
-            controller.get_property_root(),
+            self.property_view, controller.get_property_list(), property_root
         )
         property_tree.tree.bind(f"<{SHORTCUT_MODIFIER}-f>", self._find_property)
         self.property_view.set_widget(property_tree)
@@ -126,8 +126,12 @@ class SourceEditor(EditableFrame):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+    def get_file_state(self, rel_path: str) -> Optional[FileState]:
+        return self._file_states.get(rel_path)
+
     def open_source_file(self, file_state: FileState) -> None:
-        editor: XMLSourceCodeView = self.codeview.widget
+        editor = self.codeview.widget
+        assert isinstance(editor, XMLSourceCodeView)
         if file_state is not self.current_file:
             self.current_file.content = editor.get_content()
             self.codeview.set_label(file_state.filepath)
@@ -145,7 +149,8 @@ class SourceEditor(EditableFrame):
 
     def _find_property(self, _: Optional[tk.Event]) -> str:
         self._open_find_window()
-        tree: PropertyTree = self.property_view.widget
+        tree = self.property_view.widget
+        assert isinstance(tree, PropertyTree)
         property_names = tree.get_selected_property_names(False)
         if self._find_window is not None and len(property_names) == 1:
             self._find_window.find_property(property_names[0])
@@ -200,12 +205,12 @@ class SourceEditor(EditableFrame):
         editor.apply_edit_action(action)
 
     def has_modified_files(self) -> bool:
-        return any(file_state.is_modified for file_state in self.file_states.values())
+        return any(file_state.is_modified for file_state in self._file_states.values())
 
     def get_modified_files(self) -> List[FileState]:
         return [
             file_state
-            for file_state in self.file_states.values()
+            for file_state in self._file_states.values()
             if file_state.is_modified
         ]
 
@@ -221,8 +226,8 @@ class SourceEditor(EditableFrame):
 
         self._find_window = FindWindow(
             self.winfo_toplevel(),
-            self.controller,
-            self.file_states,
+            self._controller,
+            self._file_states,
             self.select_text,
             lambda file_state, col, line: self.move_to(file_state, True, col, line),
         )
@@ -231,7 +236,8 @@ class SourceEditor(EditableFrame):
         if not self.current_file.is_modified:
             return True
 
-        editor: XMLSourceCodeView = self.codeview.widget
+        editor = self.codeview.widget
+        assert isinstance(editor, XMLSourceCodeView)
         self.current_file.content = editor.get_content()
 
         error = self.current_file.validate_xml()
@@ -239,7 +245,7 @@ class SourceEditor(EditableFrame):
             self.move_to(self.current_file, True, *error)
             return False
 
-        if self.current_file.write(self.root_dir):
+        if self.current_file.write(self._root_dir):
             self.fileview.clear_highlight(self.current_file.filepath)
             self._has_dirty_files(self.has_modified_files())
             self._files_updated()
@@ -253,7 +259,8 @@ class SourceEditor(EditableFrame):
             return True
 
         if self.current_file.is_modified:
-            editor: XMLSourceCodeView = self.codeview.widget
+            editor = self.codeview.widget
+            assert isinstance(editor, XMLSourceCodeView)
             self.current_file.content = editor.get_content()
 
         for file_state in modified_files:
@@ -264,7 +271,7 @@ class SourceEditor(EditableFrame):
 
         # Save AFTER all the files have been validated
         for file_state in modified_files:
-            if not file_state.write(self.root_dir):
+            if not file_state.write(self._root_dir):
                 showerror("Error", message=f'Could not save "{file_state.filepath}"')
                 return False
             self.fileview.clear_highlight(file_state.filepath)

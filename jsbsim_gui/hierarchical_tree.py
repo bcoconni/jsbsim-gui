@@ -109,7 +109,7 @@ class HierarchicalTree(EditableFrame):
     def bind(
         self,
         sequence: Optional[str],
-        func: Callable[[tk.Event], None],
+        func: Callable[[tk.Event], object],
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> None:
         self._tree.bind(sequence, func, add)

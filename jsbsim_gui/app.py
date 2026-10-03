@@ -117,8 +117,7 @@ class App(tk.Tk):
         )
         success = self.open_file(filename, model_name, Controller.load_aircraft)
         if success:
-            self.menubar.entryconfig("Edit", state=tk.NORMAL)
-            self.menubar.entryconfig("View", state=tk.NORMAL)
+            self.menubar.enable_menus()
             return
 
         self.display_logo()
@@ -129,8 +128,7 @@ class App(tk.Tk):
         try:
             success = self.open_file(filename, script_name, Controller.load_script)
             if success:
-                self.menubar.entryconfig("Edit", state=tk.NORMAL)
-                self.menubar.entryconfig("View", state=tk.NORMAL)
+                self.menubar.enable_menus()
                 return
 
             error_msg = f'"{script_name}" is not a script file'
@@ -142,6 +140,7 @@ class App(tk.Tk):
 
     def run(self) -> None:
         assert self.main
+        assert self._controller
 
         has_modified_files = (
             isinstance(self.main, SourceEditor) and self.main.has_modified_files()
@@ -212,7 +211,7 @@ class App(tk.Tk):
         if not isinstance(self.main, SourceEditor):
             self.edit()
         assert isinstance(self.main, SourceEditor)
-        file_state = self.main.file_states.get(rel_path)
+        file_state = self.main.get_file_state(rel_path)
         if file_state is not None:
             self.main.move_to(file_state, True, 0, line)
 
@@ -247,6 +246,7 @@ class App(tk.Tk):
 
     def edit_action(self, action: EditAction) -> None:
         if self.main is not None:
+            assert isinstance(self.main, EditableFrame)
             self.main.apply_edit_action(action)
 
     def open_file(
