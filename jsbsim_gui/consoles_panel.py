@@ -87,10 +87,11 @@ class Console(TextView):
         self._text.tag_configure(LogTags.BOLD, font=bold_font)
         self._text.tag_configure(LogTags.UNDERLINE, underline=True)
 
-    def reset_content(self):
+    def reset_content(self) -> None:
         self._text.configure(state=NORMAL)
         self._text.delete("1.0", END)
         self._text.configure(state=DISABLED)
+        self._file_link_counter = 0
 
     def write(self, contents: str) -> None:
         self._text.configure(state=NORMAL)
@@ -149,6 +150,11 @@ class ConsoleWithMessagesCounter(Console):
         if segments:
             self._increment_messages_counter()
             super().write_formatted(segments)
+
+    def reset_content(self):
+        super().reset_content()
+        self._messages_count = 0
+        self._on_count_update(0)
 
 
 class ConsoleLogger(FGLogger):
@@ -256,6 +262,8 @@ class ConsolesPanel(ttk.Notebook):
         if count > 0:
             self.tab(self._problems_console, text=f"Problems ({count})")
             self.select(self._problems_console)
+        else:
+            self.tab(self._problems_console, text="Problems")
 
     def get_logger(self, get_relative_path: Callable[[str], str]) -> ConsoleLogger:
         return ConsoleLogger(
@@ -264,4 +272,5 @@ class ConsolesPanel(ttk.Notebook):
 
     def reset(self):
         self._output_console.reset_content()
+        self.select(self._output_console)
         self._problems_console.reset_content()

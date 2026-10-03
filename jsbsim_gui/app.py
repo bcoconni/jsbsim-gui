@@ -186,11 +186,9 @@ class App(tk.Tk):
         add_options: Dict[str, int | ConsolesPanel] = {}
         if self.main:
             if isinstance(self.main, EditableFrame):
-                assert self._consoles_panel
                 self._console_sash.remove(self.main)
                 add_options["width"] = self.main.winfo_width()
                 add_options["height"] = self.main.winfo_height()
-                add_options["before"] = self._consoles_panel
             self.main.destroy()
 
         # Open the file in a text widget
@@ -201,7 +199,9 @@ class App(tk.Tk):
             self.mark_title_modified,
             self._reload_controller,
         )
-        self._console_sash.add(self.main, **add_options)
+
+        assert self._consoles_panel
+        self._console_sash.add(self.main, before=self._consoles_panel, **add_options)
         self.menubar.update_save_menu_state(True)
 
         # Window layout
@@ -259,11 +259,15 @@ class App(tk.Tk):
         self.title(f"JSBSim GUI {__version__} - {aircraft_name}")
 
         if self._consoles_panel:
-            self._consoles_panel.destroy()
+            self._consoles_panel.reset()
+        else:
+            self._consoles_panel = ConsolesPanel(
+                self._console_sash,
+                on_file_link_click=self._on_file_link_click,
+                height=10,
+            )
+            self._console_sash.add(self._consoles_panel)
 
-        self._consoles_panel = ConsolesPanel(
-            self._console_sash, on_file_link_click=self._on_file_link_click, height=10
-        )
         console_logger = self._consoles_panel.get_logger(
             lambda name: get_path_relative_to_root(name, self.root_dir)
         )
@@ -276,7 +280,6 @@ class App(tk.Tk):
 
         if success:
             self.edit()
-            self._console_sash.add(self._consoles_panel)
             self._console_sash.grid(column=0, row=0, sticky=NSEW)
             self._statusbar.grid(column=0, row=1, sticky=EW)
             self._statusbar.set_text("Ready.")
