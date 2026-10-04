@@ -101,9 +101,49 @@ class LabeledWidget(EditableFrame):
 
 
 class TextBox(ttk.Entry):
-    def __init__(self, master: tk.Widget, **kw):
+    def __init__(self, master: tk.Widget, hint_message: str = "", **kw):
+        if hint_message and "textvariable" not in kw:
+            kw["textvariable"] = tk.StringVar(master)
         super().__init__(master, **kw)
         self.bind(f"<{SHORTCUT_MODIFIER}-a>", self._select_all)
+        if hint_message:
+            # The hint is a label laid over the entry so that the entry content
+            # (and its textvariable) never contains the default text.
+            field_background = ttk.Style(master).lookup("TEntry", "fieldbackground")
+            self._hint = tk.Label(
+                self,
+                text=hint_message,
+                foreground="gray75",
+                background=field_background or "white",
+                anchor=tk.W,
+                cursor="xterm",
+            )
+            self._hint.bind("<Button-1>", lambda _: self.focus_set())
+            self._textvariable = kw["textvariable"]
+            self._trace_id = self._textvariable.trace_add("write", self._update_hint)
+            self._has_focus = False
+            self.bind("<FocusIn>", self._on_focus_in, add="+")
+            self.bind("<FocusOut>", self._on_focus_out, add="+")
+            self.bind("<Destroy>", self._on_destroy, add="+")
+            self._update_hint()
+
+    def _update_hint(self, *_) -> None:
+        if self.get() or self._has_focus:
+            self._hint.place_forget()
+        else:
+            self._hint.place(x=2, y=2, relwidth=1.0, width=-4, relheight=1.0, height=-4)
+
+    def _on_focus_in(self, *_) -> None:
+        self._has_focus = True
+        self._hint.place_forget()
+
+    def _on_focus_out(self, *_) -> None:
+        self._has_focus = False
+        self._update_hint()
+
+    def _on_destroy(self, event: tk.Event) -> None:
+        if event.widget is self:
+            self._textvariable.trace_remove("write", self._trace_id)
 
     def _select_all(self, *_) -> str:
         self.selection_range(0, tk.END)
