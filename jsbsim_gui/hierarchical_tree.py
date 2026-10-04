@@ -26,6 +26,7 @@ import numpy as np
 from jsbsim import FGPropertyNode
 
 from .edit_actions import SHORTCUT_MODIFIER, EditableFrame, EditAction
+from .widget import TextBox
 
 
 def _natural_sort_key(path: str) -> List[Tuple[str, int]]:
@@ -201,17 +202,6 @@ class HierarchicalTree(EditableFrame):
             self._copy_selected_items_to_clipboard(None)
         else:
             super().apply_edit_action(action)
-
-
-class TextBox(ttk.Entry):
-    def __init__(self, master: tk.Widget, **kw):
-        super().__init__(master, **kw)
-        self.bind(f"<{SHORTCUT_MODIFIER}-a>", self._select_all)
-
-    def _select_all(self, *_) -> str:
-        self.selection_range(0, tk.END)
-        # Return break to interrupt the default key binding.
-        return "break"
 
 
 class CellEntry(TextBox):

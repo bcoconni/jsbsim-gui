@@ -42,7 +42,7 @@ from pygments.lexers import get_lexer_by_name
 from pygments.token import Comment, Name, String, Text, _TokenType
 
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction, EditableFrame
-from .options import get_options
+from .options import get_options, OptionsTab
 
 
 class TextView(EditableFrame):
@@ -179,7 +179,7 @@ class TextView(EditableFrame):
     def bind(
         self,
         sequence: str,
-        func: Callable[[tk.Event], str],
+        func: Callable[[tk.Event], object],
         add: Union[bool, Literal["", "+"], None] = None,
     ) -> str:
         return self._text.bind(sequence, func, add)
@@ -368,7 +368,7 @@ class XMLSourceCodeView(SourceCodeView):
         super().__init__(master, contents, **kw)
 
         self._load_syntax_colors()
-        get_options().subscribe(self._load_syntax_colors)
+        get_options().subscribe("xml_syntax_colors", self._load_syntax_colors)
         self.bind("<Destroy>", self._on_destroy, add="+")
 
         self._lexer = get_lexer_by_name("xml")
@@ -388,7 +388,7 @@ class XMLSourceCodeView(SourceCodeView):
 
     def _on_destroy(self, event: tk.Event) -> None:
         if event.widget == self._text:
-            get_options().unsubscribe(self._load_syntax_colors)
+            get_options().unsubscribe("xml_syntax_colors", self._load_syntax_colors)
 
     def _get_highlight_tags(self) -> List[str]:
         return ["XML_" + tag for tag in asdict(XMLSyntaxColors()).keys()]
@@ -442,23 +442,14 @@ SAMPLE_XML = """<!-- Example XML script -->
 </channel>"""
 
 
-class OptionsWindow(tk.Toplevel):
+class XMLSyntaxOptionsTab(OptionsTab):
     def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
-        super().__init__(master, **kw)
-        self.title("Options")
-        self.resizable(False, False)
-
+        super().__init__(master, padding=10, **kw)
         options_color = get_options().get("xml_syntax_colors")
         self._initial_colors = XMLSyntaxColors(**options_color)
         self._current_colors = XMLSyntaxColors(**options_color)
 
-        notebook = ttk.Notebook(self)
-        notebook.pack(fill=tk.BOTH, expand=True)
-
-        syntax_tab = ttk.Frame(notebook, padding=10)
-        notebook.add(syntax_tab, text="XML Syntax")
-
-        colors_frame = ttk.LabelFrame(syntax_tab, text="Colors", padding=10)
+        colors_frame = ttk.LabelFrame(self, text="Colors", padding=10)
         colors_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self._swatches: Dict[str, tk.Canvas] = {}
@@ -502,30 +493,12 @@ class OptionsWindow(tk.Toplevel):
         colors_frame.grid_columnconfigure(0, weight=1)
 
         # Preview section
-        preview_frame = ttk.LabelFrame(syntax_tab, text="Preview", padding=5)
+        preview_frame = ttk.LabelFrame(self, text="Preview", padding=5)
         preview_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self._preview = XMLSourceCodeView(preview_frame, SAMPLE_XML, width=45, height=6)
         self._preview._text.configure(state=tk.DISABLED)
         self._preview.pack(fill=tk.BOTH, expand=True)
-
-        # Buttons frame
-        button_frame = ttk.Frame(self, padding=10)
-        button_frame.pack(fill=tk.X, side=tk.BOTTOM)
-
-        ttk.Button(
-            button_frame, text="Restore Defaults", command=self._restore_defaults
-        ).pack(side=tk.LEFT)
-
-        ttk.Button(button_frame, text="Cancel", command=self._cancel).pack(
-            side=tk.RIGHT, padx=5
-        )
-        ttk.Button(button_frame, text="Apply", command=self._apply).pack(
-            side=tk.RIGHT, padx=5
-        )
-        ttk.Button(button_frame, text="OK", command=self._ok).pack(
-            side=tk.RIGHT, padx=5
-        )
 
     def _choose_color(self, tag: str) -> None:
         current_color = getattr(self._current_colors, tag)
@@ -542,7 +515,7 @@ class OptionsWindow(tk.Toplevel):
             self._hex_labels[tag].configure(text=hex_color)
             self._preview.set_syntax_colors(self._current_colors)
 
-    def _restore_defaults(self) -> None:
+    def restore_defaults(self) -> None:
         self._current_colors = XMLSyntaxColors()
         for tag, color in asdict(self._current_colors).items():
             if tag in self._swatches:
@@ -551,17 +524,8 @@ class OptionsWindow(tk.Toplevel):
                 self._hex_labels[tag].configure(text=color)
         self._preview.set_syntax_colors(self._current_colors)
 
-    def _apply(self) -> None:
-        options = get_options()
-        options.set("xml_syntax_colors", asdict(self._current_colors))
-        options.notify()
+    def apply(self) -> None:
+        get_options().set("xml_syntax_colors", asdict(self._current_colors))
 
-    def _ok(self) -> None:
-        self._apply()
-        get_options().save()
-        self.destroy()
-
-    def _cancel(self) -> None:
-        self._current_colors = self._initial_colors
-        self._apply()
-        self.destroy()
+    def cancel(self) -> None:
+        get_options().set("xml_syntax_colors", asdict(self._initial_colors))

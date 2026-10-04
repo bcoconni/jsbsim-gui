@@ -23,11 +23,10 @@ from tkinter.messagebox import showerror
 
 from .controller import Controller
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
-from .textview import OptionsWindow
 
 
 class MenuBar(tk.Menu):
-    def __init__(self, master: tk.Widget, root_dir: str):
+    def __init__(self, master: tk.Tk, root_dir: str):
         super().__init__(master)
         self._root_dir = root_dir
 
@@ -91,9 +90,7 @@ class MenuBar(tk.Menu):
             command=lambda: master.edit_action(EditAction.FIND),
         )
         edit_menu.add_separator()
-        edit_menu.add_command(
-            label="Options...", command=lambda: OptionsWindow(master).grab_set()
-        )
+        edit_menu.add_command(label="Options...", command=lambda: master.show_options())
         self.add_cascade(label="Edit", menu=edit_menu)
         self.entryconfig("Edit", state=tk.DISABLED)
 

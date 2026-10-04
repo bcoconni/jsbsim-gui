@@ -19,28 +19,34 @@ import copy
 import math
 import os
 import platform
-from abc import ABC, abstractmethod
-from typing import Dict, Iterator, List, Set
+import tkinter as tk
+from dataclasses import asdict, dataclass
+from tkinter import ttk
+from tkinter.messagebox import showerror
+from typing import Dict, Iterator, List, Set, Union
 
 import numpy as np
 from jsbsim import FGPropertyNode
 
 from .controller import Controller
 from .csv_tree import CsvData
+from .options import OptionsTab, get_options
+from .widget import TextBox
 
 
-class PlotInfo(ABC):
-    max_points = 256
+class PlotInfo:
     name: str
     line_style: str
-    _data = np.empty((2, 0))
+
+    def __init__(self):
+        options_pltinfo = get_options().get("plot_info_list")
+        plt_info_options = PlotInfoListOptions(**options_pltinfo)
+        self.max_points = plt_info_options.samples
+        self._data = np.empty((2, 0))
 
     @property
-    @abstractmethod
-    def default_name(self) -> str: ...
-
-    @abstractmethod
-    def get_data(self, t_min: float, t_max: float) -> np.ndarray: ...
+    def default_name(self) -> str:
+        return self.name
 
     def t_max(self) -> float:
         return self._data[0, -1] if self._data.size else 0.0
@@ -49,6 +55,9 @@ class PlotInfo(ABC):
         pass
 
     def _get_sample(self, min_idx: int, max_idx: int, data: np.ndarray) -> np.ndarray:
+        if self.max_points <= 0:
+            return data[:, min_idx:max_idx]
+
         ndata = data.shape[1]
         if ndata:
             max_idx = max(max_idx, ndata - 1)
@@ -61,21 +70,6 @@ class PlotInfo(ABC):
             return sample_data
         else:
             return data
-
-
-class _CsvPlotInfo(PlotInfo):
-    def __init__(self, csv_data: CsvData):
-        self.csv_path = csv_data.path
-        self._column_name = csv_data.name
-        self.name = csv_data.name
-        self.line_style = "--"
-        self._data = np.empty((2, csv_data.data.size))
-        self._data[0, :] = csv_data.time
-        self._data[1, :] = csv_data.data
-
-    @property
-    def default_name(self) -> str:
-        return self._column_name
 
     def get_data(self, t_min: float, t_max: float) -> np.ndarray:
         if not self._data.size:
@@ -91,8 +85,25 @@ class _CsvPlotInfo(PlotInfo):
         return self._get_sample(min_idx, max_idx, self._data)
 
 
+class _CsvPlotInfo(PlotInfo):
+    def __init__(self, csv_data: CsvData):
+        super().__init__()
+        self.csv_path = csv_data.path
+        self._column_name = csv_data.name
+        self.name = csv_data.name
+        self.line_style = "--"
+        self._data = np.empty((2, csv_data.data.size))
+        self._data[0, :] = csv_data.time
+        self._data[1, :] = csv_data.data
+
+    @property
+    def default_name(self) -> str:
+        return self._column_name
+
+
 class _PropertyPlotInfo(PlotInfo):
     def __init__(self, node: FGPropertyNode, controller: Controller):
+        super().__init__()
         self.node = node
         self.name = node.get_name()
         self._controller = controller
@@ -112,18 +123,6 @@ class _PropertyPlotInfo(PlotInfo):
         self._data = np.empty((2, ndata))
         self._data[0, :] = np.arange(ndata) * self._dt
         self._data[1, :] = data
-
-    def get_data(self, t_min: float, t_max: float) -> np.ndarray:
-        ndata = self._data.shape[1]
-        if not ndata:
-            return np.array((0, 2))
-        min_idx = max(0, math.floor(t_min / self._dt)) if self._dt > 0 else 0
-        max_idx = (
-            min(math.ceil(t_max / self._dt), ndata - 1)
-            if math.isfinite(t_max) and self._dt > 0
-            else ndata - 1
-        )
-        return self._get_sample(min_idx, max_idx, self._data)
 
 
 class PlotInfoList:
@@ -204,3 +203,51 @@ class PlotInfoList:
             for p in self._plotinfos:
                 p.name = p.default_name
         return prop
+
+    def set_samples(self, samples: int) -> None:
+        for pinfo in self._plotinfos:
+            pinfo.max_points = samples
+
+
+@dataclass
+class PlotInfoListOptions:
+    samples: int = 9999
+
+
+class PlotInfoListOptionsTab(OptionsTab):
+    def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
+        super().__init__(master, padding=10, **kw)
+
+        ttk.Label(self, text="Plots samples").grid(
+            column=0, row=0, padx=10, sticky=tk.W
+        )
+        self._samples = TextBox(self, width=5, justify=tk.RIGHT)
+        self._samples.grid(column=1, row=0)
+        options_pltinfo = get_options().get("plot_info_list")
+        self._initial_pinfo = PlotInfoListOptions(**options_pltinfo)
+        self._current_pinfo = PlotInfoListOptions(**options_pltinfo)
+        self._samples.insert(0, str(self._current_pinfo.samples))
+
+    def apply(self) -> None:
+        try:
+            samples_input = self._samples.get()
+            samples = int(samples_input)
+            if samples < 0:
+                raise ValueError
+
+            self._current_pinfo.samples = samples
+            get_options().set("plot_info_list", asdict(self._current_pinfo))
+        except ValueError:
+            showerror(
+                "Error",
+                f"Plot samples must be a positive number\nbut {samples_input} was given.",
+            )
+
+    def cancel(self) -> None:
+        get_options().set("plot_info_list", asdict(self._initial_pinfo))
+
+    def restore_defaults(self) -> None:
+        default_pinfo = PlotInfoListOptions()
+        self._samples.delete(0, tk.END)
+        self._samples.insert(0, str(default_pinfo.samples))
+        get_options().set("plot_info_list", asdict(default_pinfo))

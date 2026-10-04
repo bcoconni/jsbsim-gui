@@ -23,8 +23,8 @@ import tkinter as tk
 import unittest
 from unittest.mock import patch
 
-from jsbsim_gui.options import Options, set_options, get_options
-from jsbsim_gui.textview import XMLSourceCodeView, OptionsWindow, XMLSyntaxColors
+from jsbsim_gui.options import Options, OptionsWindow, set_options, get_options
+from jsbsim_gui.textview import XMLSourceCodeView, XMLSyntaxColors, XMLSyntaxOptionsTab
 
 
 class TestOptions(Options):
@@ -97,12 +97,12 @@ class TestOptionsModel(unittest.TestCase):
         def callback():
             notified.append(1)
 
-        options.subscribe(callback)
-        options.notify()
+        options.subscribe("test", callback)
+        options.set("test", {"a": 1})
         self.assertEqual(len(notified), 1)
 
-        options.unsubscribe(callback)
-        options.notify()
+        options.unsubscribe("test", callback)
+        options.set("test", {})
         self.assertEqual(len(notified), 1)
 
 
@@ -120,49 +120,57 @@ class TestOptionsWindow(unittest.TestCase):
 
     def test_options_window_init(self):
         window = OptionsWindow(self.root)
+        xml_tab = XMLSyntaxOptionsTab(window)
+        window.add_option_tab(xml_tab, "XML Syntax")
         window.update_idletasks()
         self.assertEqual(window.title(), "Options")
         self.assertEqual(
-            window._preview._line_numbers.winfo_reqheight(),
-            window._preview._text.winfo_reqheight(),
+            xml_tab._preview._line_numbers.winfo_reqheight(),
+            xml_tab._preview._text.winfo_reqheight(),
         )
         default_colors = XMLSyntaxColors()
         for tag in asdict(default_colors):
-            self.assertIn(tag, window._swatches)
-            self.assertIn(tag, window._hex_labels)
+            self.assertIn(tag, xml_tab._swatches)
+            self.assertIn(tag, xml_tab._hex_labels)
             self.assertEqual(
-                window._hex_labels[tag].cget("text"),
+                xml_tab._hex_labels[tag].cget("text"),
                 getattr(default_colors, tag),
             )
         window.destroy()
 
     def test_choose_color_updates_preview(self):
         window = OptionsWindow(self.root)
+        xml_tab = XMLSyntaxOptionsTab(window)
+        window.add_option_tab(xml_tab, "XML Syntax")
         with patch(
             "tkinter.colorchooser.askcolor", return_value=((18, 52, 86), "#123456")
         ):
-            window._choose_color("tag")
+            xml_tab._choose_color("tag")
 
-        self.assertEqual(window._current_colors.tag, "#123456")
-        self.assertEqual(window._hex_labels["tag"].cget("text"), "#123456")
+        self.assertEqual(xml_tab._current_colors.tag, "#123456")
+        self.assertEqual(xml_tab._hex_labels["tag"].cget("text"), "#123456")
         self.assertEqual(
-            window._preview._text.tag_cget("XML_tag", "foreground"), "#123456"
+            xml_tab._preview._text.tag_cget("XML_tag", "foreground"), "#123456"
         )
         window.destroy()
 
     def test_restore_defaults(self):
         window = OptionsWindow(self.root)
-        window._current_colors.tag = "#123456"
-        window._restore_defaults()
+        xml_tab = XMLSyntaxOptionsTab(window)
+        window.add_option_tab(xml_tab, "XML Syntax")
+        xml_tab._current_colors.tag = "#123456"
+        xml_tab.restore_defaults()
         default_colors = XMLSyntaxColors()
-        self.assertEqual(window._current_colors.tag, default_colors.tag)
-        self.assertEqual(window._hex_labels["tag"].cget("text"), default_colors.tag)
+        self.assertEqual(xml_tab._current_colors.tag, default_colors.tag)
+        self.assertEqual(xml_tab._hex_labels["tag"].cget("text"), default_colors.tag)
         window.destroy()
 
     def test_apply_and_ok(self):
         window = OptionsWindow(self.root)
-        window._current_colors.tag = "#abcdef"
-        window._apply()
+        xml_tab = XMLSyntaxOptionsTab(window)
+        window.add_option_tab(xml_tab, "XML Syntax")
+        xml_tab._current_colors.tag = "#abcdef"
+        xml_tab.apply()
 
         options_colors = get_options().get("xml_syntax_colors")
         color = XMLSyntaxColors(**options_colors)
@@ -200,7 +208,6 @@ class TestXMLSourceCodeViewOptionsIntegration(unittest.TestCase):
         new_colors = XMLSyntaxColors()
         new_colors.tag = "#654321"
         self.options.set("xml_syntax_colors", asdict(new_colors))
-        self.options.notify()
 
         self.assertEqual(editor._text.tag_cget("XML_tag", "foreground"), "#654321")
         editor.destroy()

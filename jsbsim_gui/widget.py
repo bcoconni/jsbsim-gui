@@ -19,6 +19,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Optional
 
+from .edit_actions import SHORTCUT_MODIFIER
+
 
 def widget_is_descendant(
     widget: Optional[tk.Misc], container: Optional[tk.Widget]
@@ -30,7 +32,7 @@ def widget_is_descendant(
 
 
 class AutoClearLabel(ttk.Label):
-    def __init__(self, master: tk.Widget, **kw):
+    def __init__(self, master: tk.Tk, **kw):
         super().__init__(master, **kw)
         self._clear_timer_id: Optional[str] = None
 
@@ -44,3 +46,14 @@ class AutoClearLabel(ttk.Label):
     def _clear_text(self):
         self.config(text="")
         self._clear_timer_id = None
+
+
+class TextBox(ttk.Entry):
+    def __init__(self, master: tk.Widget, **kw):
+        super().__init__(master, **kw)
+        self.bind(f"<{SHORTCUT_MODIFIER}-a>", self._select_all)
+
+    def _select_all(self, *_) -> str:
+        self.selection_range(0, tk.END)
+        # Return break to interrupt the default key binding.
+        return "break"

@@ -16,8 +16,13 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import json
+import tkinter as tk
+
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from tkinter import ttk
+from typing import Any, Callable, List, Optional, Union
+
 import platformdirs
 
 
@@ -29,7 +34,7 @@ class Options:
     def __init__(self):
         self._file_path = get_options_file_path()
         self._options: dict[str, Any] = {"version": "0.1"}
-        self._subscribers: List[Callable[[], None]] = []
+        self._subscribers: dict[str, List[Callable[[], None]]] = {}
         self.load()
 
     def get(self, name: str) -> Any:
@@ -38,17 +43,21 @@ class Options:
     def set(self, name: str, value: dict[str, Any]) -> None:
         self._options[name] = value
 
-    def subscribe(self, callback: Callable[[], None]) -> None:
-        if callback not in self._subscribers:
-            self._subscribers.append(callback)
+        if name in self._subscribers:
+            for callback in self._subscribers[name]:
+                callback()
 
-    def unsubscribe(self, callback: Callable[[], None]) -> None:
-        assert callback in self._subscribers
-        self._subscribers.remove(callback)
+    def subscribe(self, name: str, callback: Callable[[], None]) -> None:
+        if name not in self._subscribers:
+            self._subscribers[name] = [callback]
+            return
 
-    def notify(self) -> None:
-        for callback in list(self._subscribers):
-            callback()
+        if callback not in self._subscribers[name]:
+            self._subscribers[name].append(callback)
+
+    def unsubscribe(self, name: str, callback: Callable[[], None]) -> None:
+        assert name in self._subscribers and callback in self._subscribers[name]
+        self._subscribers[name].remove(callback)
 
     def load(self) -> None:
         if not self._file_path.is_file():
@@ -63,6 +72,74 @@ class Options:
         self._file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self._file_path, "w", encoding="utf-8") as f:
             json.dump(self._options, f, indent=4)
+
+
+class OptionsTab(ttk.Frame, ABC):
+    def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
+        super().__init__(master, **kw)
+
+    @abstractmethod
+    def apply(self) -> None: ...
+
+    @abstractmethod
+    def cancel(self) -> None: ...
+
+    @abstractmethod
+    def restore_defaults(self) -> None: ...
+
+
+class OptionsWindow(tk.Toplevel):
+    def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
+        super().__init__(master, **kw)
+        self.title("Options")
+        self.resizable(False, False)
+
+        self._notebook = ttk.Notebook(self)
+        self._notebook.pack(fill=tk.BOTH, expand=True)
+
+        # Buttons frame
+        button_frame = ttk.Frame(self, padding=10)
+        button_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        ttk.Button(
+            button_frame, text="Restore Defaults", command=self._restore_defaults
+        ).pack(side=tk.LEFT)
+
+        ttk.Button(button_frame, text="Cancel", command=self._cancel).pack(
+            side=tk.RIGHT, padx=5
+        )
+        ttk.Button(button_frame, text="Apply", command=self._apply).pack(
+            side=tk.RIGHT, padx=5
+        )
+        ttk.Button(button_frame, text="OK", command=self._ok).pack(
+            side=tk.RIGHT, padx=5
+        )
+
+    def _ok(self) -> None:
+        active_tab = self._notebook.nametowidget(self._notebook.select())
+        assert isinstance(active_tab, OptionsTab)
+        active_tab.apply()
+        get_options().save()
+        self.destroy()
+
+    def _apply(self) -> None:
+        active_tab = self._notebook.nametowidget(self._notebook.select())
+        assert isinstance(active_tab, OptionsTab)
+        active_tab.apply()
+
+    def _cancel(self) -> None:
+        active_tab = self._notebook.nametowidget(self._notebook.select())
+        assert isinstance(active_tab, OptionsTab)
+        active_tab.cancel()
+        self.destroy()
+
+    def _restore_defaults(self) -> None:
+        active_tab = self._notebook.nametowidget(self._notebook.select())
+        assert isinstance(active_tab, OptionsTab)
+        active_tab.restore_defaults()
+
+    def add_option_tab(self, option_tab: tk.Widget, title: str) -> None:
+        self._notebook.add(option_tab, text=title)
 
 
 _global_options: Optional[Options] = None

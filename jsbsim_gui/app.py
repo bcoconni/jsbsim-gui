@@ -30,8 +30,11 @@ from .consoles_panel import ConsolesPanel
 from .controller import Controller, get_path_relative_to_root
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditableFrame, EditAction
 from .menu_bar import MenuBar
+from .options import OptionsWindow
+from .plotinfo_list import PlotInfoListOptionsTab
 from .run import Run
 from .source_editor import SourceEditor
+from .textview import XMLSyntaxOptionsTab
 from .widget import AutoClearLabel
 
 
@@ -87,6 +90,11 @@ class App(tk.Tk):
             self._controller.close()
             self._controller = None
         self.destroy()
+
+    def show_options(self):
+        options_window = OptionsWindow(self)
+        options_window.add_option_tab(PlotInfoListOptionsTab(options_window), "Plots")
+        options_window.add_option_tab(XMLSyntaxOptionsTab(options_window), "XML Syntax")
 
     def _prompt_save_if_modified(self, message: str) -> bool:
         if isinstance(self.main, SourceEditor) and self.main.has_modified_files():

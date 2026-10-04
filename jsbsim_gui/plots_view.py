@@ -39,8 +39,9 @@ from matplotlib.figure import Figure
 from .controller import Controller
 from .csv_tree import CsvData
 from .edit_actions import Command, EditableFrame
+from .options import get_options
 from .plot_labels import PlotLabelManager
-from .plotinfo_list import PlotInfoList
+from .plotinfo_list import PlotInfoList, PlotInfoListOptions
 
 
 class SelectedLine:
@@ -119,6 +120,22 @@ class PlotsView(EditableFrame):
         self.pan_xref: float = 0.0
         self.t_hover: Optional[float] = None
         self.motion_handlers: List[Callable[[MouseEvent], None]] = []
+        get_options().subscribe("plot_info_list", self._update_plot_options)
+        self.bind("<Destroy>", self._on_destroy, add="+")
+
+    def _on_destroy(self, event: tk.Event) -> None:
+        if event.widget == self._helper_message:
+            get_options().unsubscribe("xml_syntax_colors", self._update_plot_options)
+
+    def _update_plot_options(self) -> None:
+        options_pltinfo = get_options().get("plot_info_list")
+        plt_info_options = PlotInfoListOptions(**options_pltinfo)
+        samples = int(plt_info_options.samples)
+
+        for plots in self.plots:
+            plots.set_samples(samples)
+
+        self.update_plots()
 
     def _redo_from_helper_message(self, _event: tk.Event) -> str:
         self.redo()
