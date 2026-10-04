@@ -235,7 +235,9 @@ class SearchableTree(EditableFrame):
         search_frame.grid(column=0, row=0, sticky=EW)
         search_label = ttk.Label(search_frame, text="Search:")
         search_label.grid(column=0, row=0, padx=10, sticky=tk.W)
-        self._search_box = TextBox(search_frame)
+        self._search_pattern = tk.StringVar()
+        self._search_pattern.trace_add("write", lambda *_: self._search())
+        self._search_box = TextBox(search_frame, textvariable=self._search_pattern)
         self._search_box.grid(column=1, row=0, sticky=EW)
         self.tree = create_tree(self)
         self.tree.grid(column=0, row=1, columnspan=3, sticky=NSEW)
@@ -243,7 +245,7 @@ class SearchableTree(EditableFrame):
         collapse_button = ttk.Button(
             search_frame, text="Collapse", command=self.collapse
         )
-        collapse_button.grid(column=2, row=0, padx=5)
+        collapse_button.grid(column=2, row=0, padx=(5, 0))
 
         # Widget layout
         search_frame.grid_columnconfigure(1, weight=1)
@@ -251,7 +253,6 @@ class SearchableTree(EditableFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        self._search_box.bind("<KeyRelease>", self._search)
         self.tree.configure_tree(yscrollcommand=self._yview)
 
         self.apply_edit_action = self.tree.apply_edit_action
@@ -261,13 +262,12 @@ class SearchableTree(EditableFrame):
         self._update_visible_items(None)
 
     def get_search_text(self) -> str:
-        return self._search_box.get()
+        return self._search_pattern.get()
 
     def set_search_text(self, text: str) -> None:
-        self._search_box.selection_range(0, tk.END)
-        self._search_box.select_clear()
-        self._search_box.insert(0, text)
-        self._search(None)
+        self._search_pattern.set(text)
+        self._search_box.icursor(tk.END)
+        self._search()
 
     def collapse(self, parent_id: str = "") -> None:
         self.tree.collapse(parent_id)
@@ -275,14 +275,14 @@ class SearchableTree(EditableFrame):
     def focus_search(self) -> None:
         self._search_box.focus_set()
 
-    def _search(self, _: Optional[tk.Event]) -> None:
+    def _search(self) -> None:
         self.tree.unfilter()
-        pattern = self._search_box.get()
+        pattern = self._search_pattern.get()
         if pattern:
             self.tree.filter(pattern)
 
-        self._update_visible_items(None)
         self.tree.move_to_top()
+        self._update_visible_items(None)
 
     def _update_visible_items(self, _: Optional[tk.Event]) -> None:
         self._visible_items = []
@@ -386,10 +386,6 @@ class PropertyTree(SearchableTree):
             assert node is not None
             self._properties[child_id] = node
             self._bind_ids_to_nodes(child_id, node)
-
-    def _search(self, event: tk.Event) -> None:
-        super()._search(event)
-        self._update_visible_items(None)
 
     def _edit_property_value(self, event: tk.Event) -> None:
         tree = self.tree

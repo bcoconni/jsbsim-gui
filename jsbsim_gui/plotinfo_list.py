@@ -221,33 +221,27 @@ class PlotInfoListOptionsTab(OptionsTab):
         ttk.Label(self, text="Plots samples").grid(
             column=0, row=0, padx=10, sticky=tk.W
         )
-        self._samples = TextBox(self, width=5, justify=tk.RIGHT)
-        self._samples.grid(column=1, row=0)
+        self._samples = tk.IntVar()
+        TextBox(self, textvariable=self._samples, width=5, justify=tk.RIGHT).grid(
+            column=1, row=0
+        )
         options_pltinfo = get_options().get("plot_info_list")
         self._initial_pinfo = PlotInfoListOptions(**options_pltinfo)
         self._current_pinfo = PlotInfoListOptions(**options_pltinfo)
-        self._samples.insert(0, str(self._current_pinfo.samples))
+        self._samples.set(self._current_pinfo.samples)
 
     def apply(self) -> None:
         try:
-            samples_input = self._samples.get()
-            samples = int(samples_input)
-            if samples < 0:
-                raise ValueError
-
+            samples = self._samples.get()
             self._current_pinfo.samples = samples
             get_options().set("plot_info_list", asdict(self._current_pinfo))
-        except ValueError:
-            showerror(
-                "Error",
-                f"Plot samples must be a positive number\nbut {samples_input} was given.",
-            )
+        except tk.TclError as e:
+            showerror("Error", f"{str(e)}")
 
     def cancel(self) -> None:
         get_options().set("plot_info_list", asdict(self._initial_pinfo))
 
     def restore_defaults(self) -> None:
         default_pinfo = PlotInfoListOptions()
-        self._samples.delete(0, tk.END)
-        self._samples.insert(0, str(default_pinfo.samples))
+        self._samples.set(default_pinfo.samples)
         get_options().set("plot_info_list", asdict(default_pinfo))
