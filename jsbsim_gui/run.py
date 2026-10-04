@@ -30,8 +30,7 @@ from .csv_tree import CsvData, CsvTree
 from .edit_actions import EditAction, EditableFrame
 from .hierarchical_tree import PropertyTree, SearchableTree
 from .plots_view import PlotsView
-from .source_editor import LabeledWidget
-from .widget import AutoClearLabel, widget_is_descendant
+from .widget import AutoClearLabel, LabeledWidget, widget_is_descendant
 
 
 class DragNDropManager(ABC):
@@ -50,7 +49,9 @@ class DragNDropManager(ABC):
         self.offset_y = root.winfo_rooty()
 
     @abstractmethod
-    def create_source_widget(self, master: tk.Widget) -> tk.Widget:
+    def create_source_widget(
+        self, master: tk.Widget | tk.Tk | tk.Toplevel
+    ) -> tk.Widget:
         pass
 
     def drag(self, event: tk.Event):
@@ -144,6 +145,7 @@ class Run(EditableFrame):
         self.property_view.set_widget(
             PropertyTree(self.property_view, controller.get_property_list(), root)
         )
+        assert isinstance(self.property_view.widget, PropertyTree)
         self.property_view.widget.grid(sticky=NS)
         self.property_view.grid(column=0, row=0, sticky=NS)
         self.controller = controller
@@ -156,38 +158,41 @@ class Run(EditableFrame):
         self.init_button = ttk.Button(
             controls_frame, text="Initialize", command=self.run_ic
         )
-        self.init_button.grid(column=0, row=0, columnspan=3, sticky=EW, padx=5, pady=5)
+        self.init_button.grid(column=0, row=0, columnspan=3, sticky=EW)
 
         # Trim button
         self._trim_button = ttk.Button(
             controls_frame, text="Trim", command=self._trim, state=tk.DISABLED
         )
-        self._trim_button.grid(column=0, row=1, sticky=EW, padx=5)
+        self._trim_button.grid(column=0, row=1, sticky=EW, padx=(0, 2), pady=4)
         self._trim_mode = tk.StringVar()
         self._trim_options = ttk.Combobox(
             controls_frame, textvariable=self._trim_mode, state=tk.DISABLED
         )
         self._trim_options["values"] = ["Full Trim", "Ground Trim"]
         self._trim_options.current(0)
-        self._trim_options.grid(column=1, row=1, sticky=EW, padx=5)
+        self._trim_options.grid(column=1, row=1, sticky=NSEW, padx=(2, 0), pady=4)
         # Step button
         self.step_button = ttk.Button(
             controls_frame, text="Step", command=self.step, state=tk.DISABLED
         )
-        self.step_button.grid(column=0, row=2, sticky=EW, padx=5, pady=5)
-        button_pos = self._trim_button.grid_info()
-        controls_frame.columnconfigure(button_pos["column"], weight=1)
+        self.step_button.grid(column=0, row=2, sticky=EW, padx=(0, 2))
+        controls_frame.columnconfigure(0, weight=1, uniform="controls")
+        controls_frame.columnconfigure(1, weight=1, uniform="controls")
 
         # Run/Pause button
         self.run_pause_button = ttk.Button(
             controls_frame, text="Run", command=self.run, state=tk.DISABLED
         )
-        self.run_pause_button.grid(column=1, row=2, sticky=EW, padx=5, pady=5)
-        button_pos = self._trim_options.grid_info()
-        controls_frame.columnconfigure(button_pos["column"], weight=1)
-        controls_frame.grid(column=0, row=2, sticky=EW)
+        self.run_pause_button.grid(column=1, row=2, sticky=EW, padx=(2, 0))
+        controls_frame.grid(column=0, row=2, sticky=EW, pady=(4, 0))
 
-        self.csv_view = LabeledWidget(self, "CSV Data")
+        self.csv_view = LabeledWidget(
+            self,
+            "CSV Data",
+            collapsable=True,
+            on_toggle=self._on_csv_view_toggle,
+        )
         self.csv_tree = CsvTree(self.csv_view)
         self.csv_view.set_widget(self.csv_tree)
         self.csv_view.grid(column=0, row=1, sticky=NSEW)
@@ -206,7 +211,16 @@ class Run(EditableFrame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=0)
 
+    def _on_csv_view_toggle(self, collapsed: bool) -> None:
+        if collapsed:
+            self.grid_rowconfigure(0, weight=1)
+            self.grid_rowconfigure(1, weight=0)
+        else:
+            self.grid_rowconfigure(0, weight=2)
+            self.grid_rowconfigure(1, weight=1)
+
     def run_ic(self):
+        assert isinstance(self.property_view.widget, PropertyTree)
         self.controller.run_ic()
         self.property_view.widget.update_values()
         self.init_button.config(state=tk.DISABLED)
@@ -216,6 +230,7 @@ class Run(EditableFrame):
         self.run_pause_button.config(state=tk.NORMAL)
 
     def step(self):
+        assert isinstance(self.property_view.widget, PropertyTree)
         self.controller.run()
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
@@ -242,11 +257,13 @@ class Run(EditableFrame):
                 self.REALTIME_UPDATE_INTERVAL_ms, self.update_plots
             )
 
+        assert isinstance(self.property_view.widget, PropertyTree)
         self.property_view.widget.update_values()
         self.plots_view.update_plots()
         self._status_bar.set_text(f"Simulated time: {sim_time:.3f}s")
 
     def pause(self) -> None:
+        assert self.update_id is not None
         self.after_cancel(self.update_id)
         self.update_id = None
         self.step_button.config(state=tk.NORMAL)
@@ -266,7 +283,8 @@ class Run(EditableFrame):
 
     def update_properties(self, _) -> None:
         sim_time = self.plots_view.t_hover
-        prop_view: PropertyTree = self.property_view.widget
+        prop_view = self.property_view.widget
+        assert isinstance(prop_view, PropertyTree)
         if sim_time:
             props = prop_view.get_visible_properties()
             values = self.controller.get_time_snapshot(sim_time, props)

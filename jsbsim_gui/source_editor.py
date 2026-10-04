@@ -28,29 +28,7 @@ from .file_state import FileState
 from .find import FindWindow
 from .hierarchical_tree import FileTree, PropertyTree
 from .textview import XMLSourceCodeView
-from .widget import widget_is_descendant
-
-
-class LabeledWidget(EditableFrame):
-    def __init__(self, master: tk.Widget, label: str):
-        super().__init__(master)
-        self.widget: Optional[EditableFrame] = None
-        self._label = ttk.Label(self, text=label, anchor="center")
-        self._label.grid(column=0, row=0, sticky="nsew", ipadx=5, ipady=5)
-        self._label.columnconfigure(0, weight=1)
-
-    def set_widget(self, widget: EditableFrame) -> None:
-        self.widget = widget
-        self.widget.grid(column=0, row=1, sticky=NSEW)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
-
-    def set_label(self, label: str) -> None:
-        self._label.config(text=label)
-
-    def apply_edit_action(self, action: EditAction) -> None:
-        if self.widget is not None:
-            self.widget.apply_edit_action(action)
+from .widget import LabeledWidget, widget_is_descendant
 
 
 class SourceEditor(EditableFrame):
