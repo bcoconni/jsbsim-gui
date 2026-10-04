@@ -50,9 +50,9 @@ class App(tk.Tk):
         self.main: EditableFrame | ttk.Label | None = None
         self.title(f"JSBSim GUI {__version__}")
         self.resizable(False, False)
-        self._style = ttk.Style()
-        self._style.theme_use("clam")
-        self._style.configure("Flat.TButton", relief=tk.FLAT)
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Flat.TButton", relief=tk.FLAT)
 
         if root_dir:
             self.root_dir = root_dir
