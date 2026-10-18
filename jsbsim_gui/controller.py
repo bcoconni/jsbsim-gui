@@ -45,6 +45,12 @@ def get_path_relative_to_root(filename: str, root_dir: str) -> str:
     return path
 
 
+def print_console(msg: str) -> None:
+    logger = jsbsim.get_logger()
+    logger.message(msg)
+    logger.flush()
+
+
 class Controller:
     @staticmethod
     def get_version() -> str:
@@ -92,6 +98,21 @@ class Controller:
     def run_ic(self) -> bool:
         ret = self.fdm.run_ic()
         self.dt = self.fdm.get_delta_t()
+
+        self.fdm.print_simulation_configuration()
+        self.fdm.get_propagate().dump_state()
+        print_console("\n" + "-" * 80 + "\n\n")
+
+        ic_trim_requested = self.fdm.get_ic().trim_requested()
+        if ic_trim_requested != jsbsim.TrimMode.NONE:
+            trimmer = jsbsim.FGTrim(self.fdm, ic_trim_requested)
+            trimmer.do_trim()
+
+            if self.fdm.get_debug_level() > 0:
+                trimmer.report()
+
+            print_console("\n" + "-" * 80 + "\n\n")
+
         self.property_history.record()
         return ret
 
