@@ -17,6 +17,7 @@
 
 import copy
 import tkinter as tk
+from itertools import chain
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -24,8 +25,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 from .controller import Controller
 from .file_state import FileState
 from .hierarchical_tree import HierarchicalTree, SearchableTree
-from .textview import XMLSourceCodeView
-from .tree_node import TreeNode, XMLNode
+from .tree_node import TextRegion, TreeNode, XMLNode
 
 
 class XMLTree(SearchableTree):
@@ -103,6 +103,7 @@ def _node_in_text(
     match_start: int = -1,
     match_end: int = -1,
 ) -> Optional[Tuple[int, int]]:
+    end_column = -1
     for child in tree.children:
         name = child.name if relative_path else "/" + child.name
         if name[-1] != "]":
@@ -127,9 +128,17 @@ def _node_in_text(
                     continue
                 start_column = column if match_start == -1 else match_start
                 if child.children:
-                    return _node_in_text(child, text, False, start_column, end_column)
+                    position = _node_in_text(
+                        child, text, False, start_column, end_column
+                    )
+                    if position is not None:
+                        return position
                 else:
                     return (start_column, end_column)
+    if end_column >= 0 and match_start == -1:
+        position = _node_in_text(tree, text[end_column:], relative_path)
+        if position is not None:
+            return (position[0] + end_column, position[1] + end_column)
     return None
 
 
@@ -153,49 +162,41 @@ def _nodes_in_text(
 
 
 def _search_property_occurrences(
-    property_tree: TreeNode, root: Optional[TreeNode], file_states: List[FileState]
-) -> Dict[FileState, List[Tuple[int, int, str]]]:
-    results: Dict[FileState, List[Tuple[int, int, str]]] = {}
+    property_tree: TreeNode, root: Optional[TreeNode], xml_trees: List[XMLNode]
+) -> Dict[str, List[TextRegion]]:
+    results: Dict[str, List[TextRegion]] = {}
 
-    dummy_frame = tk.Frame()
-    dummy_editor = XMLSourceCodeView(dummy_frame)
+    for xml_tree in xml_trees:
+        for node in xml_tree:
+            assert isinstance(node, XMLNode)
+            for region in chain(node.attrs.values(), node.data):
+                paths = _nodes_in_text(property_tree, region.text, False)
+                if root is not None:
+                    paths += _nodes_in_text(root, region.text, True)
 
-    for file_state in file_states:
-        file_occurrences: List[Tuple[int, int, str]] = []
-
-        dummy_editor.new_content(file_state.content)
-        data_regions = dummy_editor.extract_tagged_regions("XML_data")
-        attr_regions = dummy_editor.extract_tagged_regions("XML_attr_value")
-        attr_regions = [
-            (line, col + 1, text.strip('"')) for line, col, text in attr_regions
-        ]
-
-        all_regions = data_regions + attr_regions
-
-        for line, column, text in all_regions:
-            paths = _nodes_in_text(property_tree, text, False)
-            if root is not None:
-                paths += _nodes_in_text(root, text, True)
-
-            for property_column, column_end in paths:
-                node_path = text[property_column:column_end]
-                property_line = line
-                for l in text.split("\n"):
-                    length = len(l)
-                    if length < property_column:
-                        property_column -= length + 1  # Including '\n
-                        property_line += 1
+                for column_start, column_end in paths:
+                    property_name = region.text[column_start:column_end]
+                    prefix = region.text[:column_start]
+                    lines = prefix.split("\n")
+                    property_line = region.line
+                    if len(lines) == 1:
+                        property_column = region.column + len(prefix)
                     else:
-                        break
-                if property_line == line:
-                    property_column += column
-                file_occurrences.append((property_line, property_column, node_path))
+                        property_column = len(lines[-1])
+                        property_line += len(lines) - 1
 
-        if file_occurrences:
-            results[file_state] = sorted(file_occurrences)
+                    property_region = TextRegion(
+                        property_name, property_column, property_line
+                    )
+                    if node.filepath in results:
+                        results[node.filepath].append(property_region)
+                    else:
+                        results[node.filepath] = [property_region]
 
-    dummy_frame.destroy()
-    return results
+    return {
+        file_path: sorted(regions, key=lambda r: r.line)
+        for file_path, regions in results.items()
+    }
 
 
 class PropertyOccurrencesTree(SearchableTree):
@@ -203,15 +204,17 @@ class PropertyOccurrencesTree(SearchableTree):
         self,
         master: tk.Widget,
         controller: Controller,
+        xml_trees: List[XMLNode],
         file_states: Dict[str, FileState],
         select_text: Callable[[str, FileState, int, int], None],
     ):
         super().__init__(
             master, lambda parent: HierarchicalTree(parent, [], ["content"], True)
         )
-        self._occurrence_data: Dict[str, Tuple[FileState, int, int, str]] = {}
+        self._occurrence_data: Dict[str, Tuple[FileState, TextRegion]] = {}
         self._controller = controller
         self._file_states = file_states
+        self._xml_trees = xml_trees
         self._select_text = select_text
         self._entries: List[str] = []
         self._num_entries = 0
@@ -231,39 +234,33 @@ class PropertyOccurrencesTree(SearchableTree):
         )
         buttons_frame.grid(column=0, row=2)
 
-    def set_occurrences(
-        self, occurrences: Dict[FileState, List[Tuple[int, int, str]]]
-    ) -> None:
+    def set_occurrences(self, occurrences: Dict[str, List[TextRegion]]) -> None:
         self._occurrence_data = {}
         self.tree.clear()
 
         input_files: List[str] = []
-        for file_state in occurrences.keys():
-            if file_state.filepath not in input_files:
-                input_files.append(file_state.filepath)
+        for file_path in occurrences.keys():
+            if file_path not in input_files:
+                input_files.append(file_path)
 
         self.tree.create_tree_nodes(input_files)
 
-        for file_state, file_occurrences in occurrences.items():
-            file_id = self.tree.get_id_from_path(file_state.filepath)
+        for file_path, node_occurrences in occurrences.items():
+            file_id = self.tree.get_id_from_path(file_path)
             if file_id is None:
                 continue
 
+            file_state = self._file_states[file_path]
             lines = file_state.content.split("\n")
 
-            for line, column, prop_name in file_occurrences:
+            for occurence in node_occurrences:
                 occurrence_id = self.tree.insert(
                     file_id,
                     tk.END,
-                    text=f"line {line}",
-                    values=(lines[line - 1].strip(),),
+                    text=f"line {occurence.line}",
+                    values=(lines[occurence.line - 1].strip(),),
                 )
-                self._occurrence_data[occurrence_id] = (
-                    file_state,
-                    column,
-                    line,
-                    prop_name,
-                )
+                self._occurrence_data[occurrence_id] = (file_state, occurence)
 
     def _search(self) -> None:
         property_path = self.get_search_text().strip()
@@ -272,10 +269,10 @@ class PropertyOccurrencesTree(SearchableTree):
             return
 
         property_tree, root = self._find_matching_properties(property_path)
-        occurrences: Dict[FileState, List[Tuple[int, int, str]]] = {}
+        occurrences: Dict[str, List[TextRegion]] = {}
         if property_tree.children:
             occurrences = _search_property_occurrences(
-                property_tree, root, list(self._file_states.values())
+                property_tree, root, self._xml_trees
             )
 
         self.set_occurrences(occurrences)
@@ -312,8 +309,8 @@ class PropertyOccurrencesTree(SearchableTree):
         selection = self.tree.selection()
         if selection and selection[0] in self._occurrence_data:
             self._selected_entry = self._entries.index(selection[0])
-            file_state, column, line, prop_name = self._occurrence_data[selection[0]]
-            self._select_text(prop_name, file_state, column, line)
+            file_state, region = self._occurrence_data[selection[0]]
+            self._select_text(region.text, file_state, region.column, region.line)
 
     def _cycle_entries(self):
         if self._num_entries == 0:
@@ -371,7 +368,7 @@ class FindWindow(tk.Toplevel):
 
         # Property panel
         self._occurrences_tree = PropertyOccurrencesTree(
-            mode_frame, controller, file_states, select_text
+            mode_frame, controller, xml_trees, file_states, select_text
         )
         self._occurrences_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
         self._xml_tree.tkraise()

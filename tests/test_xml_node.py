@@ -16,8 +16,10 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from jsbsim_gui.controller import XMLNode
+from jsbsim_gui.tree_node import TextRegion, XMLNode, XMLNodeBuilder
 
 
 def make_node(name: str = "node") -> XMLNode:
@@ -26,9 +28,10 @@ def make_node(name: str = "node") -> XMLNode:
 
 class TestXMLNodeInit(unittest.TestCase):
     def test_attributes_are_stored(self):
-        node = XMLNode("tag", {"k": "v"}, "dir/file.xml", 3, 7)
+        tr = TextRegion("v")
+        node = XMLNode("tag", {"k": tr}, "dir/file.xml", 3, 7)
         self.assertEqual(node.name, "tag")
-        self.assertEqual(node.attrs, {"k": "v"})
+        self.assertEqual(node.attrs, {"k": tr})
         self.assertEqual(node.filepath, "dir/file.xml")
         self.assertEqual(node.column, 3)
         self.assertEqual(node.line, 7)
@@ -248,6 +251,37 @@ class TestXMLNodeIteration(unittest.TestCase):
         for n in nodes:
             n.parent = root
         self.assertEqual(len(list(iter(root))), 6)  # root + 5 children
+
+
+class TestXMLNodeBuilderAttributePositions(unittest.TestCase):
+    def test_attribute_value_positions_are_recorded(self):
+        source = (
+            '<toto first="same" label=\'name="fake"\' name="value" third=\'same\'/>\n'
+        )
+        with TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "test.xml"
+            filepath.write_text(source, encoding="utf-8")
+            root = XMLNodeBuilder("test.xml", str(filepath)).root
+
+        self.assertIsNotNone(root)
+        assert root is not None
+        self.assertEqual(root.attrs["first"].column, source.index("same"))
+        self.assertEqual(root.attrs["label"].column, source.index('name="fake"'))
+        self.assertEqual(root.attrs["name"].column, source.index("value"))
+        self.assertEqual(root.attrs["third"].column, source.rindex("same"))
+        self.assertEqual(root.attrs["name"].line, 1)
+
+    def test_attribute_value_position_in_multiline_tag(self):
+        source = '<toto\n  name="value"/>\n'
+        with TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "test.xml"
+            filepath.write_text(source, encoding="utf-8")
+            root = XMLNodeBuilder("test.xml", str(filepath)).root
+
+        self.assertIsNotNone(root)
+        assert root is not None
+        self.assertEqual(root.attrs["name"].column, 8)
+        self.assertEqual(root.attrs["name"].line, 2)
 
 
 if __name__ == "__main__":

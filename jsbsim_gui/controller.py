@@ -32,7 +32,7 @@ def _get_included_files(root: XMLNode) -> List[Tuple[XMLNode, str]]:
     included_files: List[Tuple[XMLNode, str]] = []
     for node in root:
         if "file" in node.attrs:
-            filename = append_xml(node.attrs["file"])
+            filename = append_xml(node.attrs["file"].text)
             included_files.append((node, filename))
 
     return included_files
@@ -128,9 +128,11 @@ class Controller:
         return get_path_relative_to_root(filename, self.get_root_dir())
 
     def get_relative_name(self, name: str) -> str:
-        root = self.get_property_root().get_fully_qualified_name()
-        if name.startswith(root + "/"):
-            return name[len(root) + 1 :]
+        root = self.get_property_root()
+        assert root is not None
+        root_name = root.get_fully_qualified_name()
+        if name.startswith(root_name + "/"):
+            return name[len(root_name) + 1 :]
         return name
 
     def get_xml_trees(self) -> List[XMLNode]:
@@ -144,20 +146,21 @@ class Controller:
         if root.name == "runscript":
             for node in root:
                 if node.name == "use":
-                    aircraft_name = node.attrs["aircraft"]
+                    aircraft_name = node.attrs["aircraft"].text
                     break
             aircraft_path = os.path.join(aircraft_path, aircraft_name)
             aircraft_filename = os.path.join(aircraft_path, append_xml(aircraft_name))
             root = XMLNodeBuilder(
                 self.get_relative_path(aircraft_filename), aircraft_filename
             ).root
-
-            IC_file = node.attrs["initialize"]
-            fullpath = os.path.join(aircraft_path, append_xml(IC_file))
-            xml_trees.append(
-                XMLNodeBuilder(self.get_relative_path(fullpath), fullpath).root
-            )
+            assert root
             xml_trees.append(root)
+
+            IC_file = node.attrs["initialize"].text
+            fullpath = os.path.join(aircraft_path, append_xml(IC_file))
+            ic_root = XMLNodeBuilder(self.get_relative_path(fullpath), fullpath).root
+            assert ic_root
+            xml_trees.append(ic_root)
         elif root.name == "fdm_config":
             aircraft_name = os.path.splitext(os.path.basename(self.filename))[0]
             aircraft_path = os.path.join(aircraft_path, aircraft_name)
@@ -192,6 +195,7 @@ class Controller:
             root_include = XMLNodeBuilder(
                 self.get_relative_path(fullpath), fullpath
             ).root
+            assert root_include is not None
 
             included_files.extend(_get_included_files(root_include))
 
