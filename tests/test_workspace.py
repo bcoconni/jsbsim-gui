@@ -40,6 +40,10 @@ class TestWorkspace(unittest.TestCase):
         self.app.destroy()
 
     def test_application_owns_notebook_and_sidebar_widgets(self):
+        self.assertEqual(
+            tuple(str(pane) for pane in self.app._workspace_sash.panes()),
+            (str(self.app.left_frame), str(self.app.notebook)),
+        )
         self.assertIs(self.editor.master, self.app.notebook)
         self.assertIs(self.app.plots_view.master, self.app.notebook)
         self.assertIs(self.files.master, self.app.left_frame)
@@ -68,6 +72,18 @@ class TestWorkspace(unittest.TestCase):
             self.assertFalse(hasattr(self.editor, name))
         for name in ("csv_tree", "plots_view", "property_view"):
             self.assertFalse(hasattr(controls, name))
+
+    def test_property_tree_expands_with_sidebar(self):
+        self.app.deiconify()
+        self.app.update_idletasks()
+        initial_width = self.app.property_tree.winfo_width()
+        sash_x, sash_y = self.app._workspace_sash.sash_coord(0)
+
+        self.app._workspace_sash.sash_place(0, sash_x + 100, sash_y)
+        self.app.update_idletasks()
+
+        self.assertGreater(self.app.left_frame.winfo_width(), initial_width)
+        self.assertGreater(self.app.property_tree.winfo_width(), initial_width)
 
     def test_tabs_preserve_editor_and_navigation_selects_editor(self):
         editor = self.editor

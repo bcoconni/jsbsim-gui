@@ -21,7 +21,7 @@ import tkinter as tk
 import xml.etree.ElementTree as et
 from xml.parsers.expat import ExpatError
 from tkinter import ttk
-from tkinter.constants import EW, NS, NSEW
+from tkinter.constants import EW, NSEW
 from tkinter.messagebox import askyesno, showerror
 from typing import Callable, Dict, Optional
 
@@ -302,8 +302,11 @@ class App(tk.Tk):
 
         assert self._controller is not None
         self.main = ttk.Frame(self._console_sash)
-        self.left_frame = ttk.Frame(self.main)
-        self.notebook = ttk.Notebook(self.main)
+        self._workspace_sash = tk.PanedWindow(
+            self.main, orient=tk.HORIZONTAL, sashwidth=4, sashrelief=tk.RAISED
+        )
+        self.left_frame = ttk.Frame(self._workspace_sash)
+        self.notebook = ttk.Notebook(self._workspace_sash)
         self.project_files = ProjectFiles(
             self.left_frame,
             self._controller,
@@ -326,7 +329,7 @@ class App(tk.Tk):
         self.notebook.add(self.plots_view, text="Plots")
 
         self.property_view = LabeledWidget(self.left_frame, "Property Explorer")
-        self.property_view.grid(column=0, row=1, sticky=NS)
+        self.property_view.grid(column=0, row=1, sticky=NSEW)
         self._create_property_tree()
 
         self.csv_view = LabeledWidget(
@@ -347,11 +350,12 @@ class App(tk.Tk):
         self.simulation_controls.grid(column=0, row=3, sticky=EW, pady=(4, 0))
         self.plots_view.bind_motion_handler(self._update_properties)
 
-        self.left_frame.grid(column=0, row=0, sticky=NS)
+        self._workspace_sash.add(self.left_frame)
+        self._workspace_sash.add(self.notebook, stretch="always")
+        self._workspace_sash.grid(column=0, row=0, sticky=NSEW)
         self.left_frame.grid_columnconfigure(0, weight=1)
         self.left_frame.grid_rowconfigure(1, weight=1)
-        self.notebook.grid(column=1, row=0, sticky=NSEW)
-        self.main.grid_columnconfigure(1, weight=1)
+        self.main.grid_columnconfigure(0, weight=1)
         self.main.grid_rowconfigure(0, weight=1)
 
         assert self._consoles_panel
