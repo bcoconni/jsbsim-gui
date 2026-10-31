@@ -57,6 +57,8 @@ class TextView(EditableFrame):
     ):
         super().__init__(master)
         self._text = tk.Text(self, **kw)
+        self._focus_timer: Optional[str] = None
+        self._text.bind("<Destroy>", self._cancel_pending_focus, add="+")
         self._text.grid(column=frame_column, row=0, sticky=NSEW)
 
         # Vertical scrollbar
@@ -141,11 +143,22 @@ class TextView(EditableFrame):
     def focus_text(self) -> None:
         self._text.focus_set()
 
+    def _cancel_pending_focus(self, event: tk.Event) -> None:
+        if event.widget is self._text and self._focus_timer is not None:
+            self.after_cancel(self._focus_timer)
+            self._focus_timer = None
+
+    def _focus_after_idle(self) -> None:
+        self._focus_timer = None
+        self._text.focus_set()
+
     def move_cursor(self, position: str, focus: bool = True) -> None:
         self._text.mark_set(tk.INSERT, f"{position}")
         self._text.see(tk.INSERT)
         if focus:
-            self.after_idle(self._text.focus_set)
+            if self._focus_timer is not None:
+                self.after_cancel(self._focus_timer)
+            self._focus_timer = self.after_idle(self._focus_after_idle)
 
     def select_text(self, text: str, position: str) -> None:
         self._text.tag_remove(tk.SEL, "1.0", tk.END)
@@ -222,9 +235,15 @@ class SourceCodeView(TextView):
         self._modified_event_id = self._text.bind(
             "<<Modified>>", self._on_text_modified
         )
+        self._text.bind("<Destroy>", self._cancel_highlighting, add="+")
 
         if contents:
             self.new_content(contents)
+
+    def _cancel_highlighting(self, event: tk.Event) -> None:
+        if event.widget is self._text and self._highlight_timer:
+            self.after_cancel(self._highlight_timer)
+            self._highlight_timer = None
 
     def bind_modified_text(
         self, func: Callable[[bool], None], add: bool = False

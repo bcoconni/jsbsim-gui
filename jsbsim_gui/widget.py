@@ -35,6 +35,12 @@ class AutoClearLabel(ttk.Label):
     def __init__(self, master: tk.Tk, **kw):
         super().__init__(master, **kw)
         self._clear_timer_id: Optional[str] = None
+        self.bind("<Destroy>", self._on_destroy, add="+")
+
+    def _on_destroy(self, event: tk.Event) -> None:
+        if event.widget is self and self._clear_timer_id is not None:
+            self.after_cancel(self._clear_timer_id)
+            self._clear_timer_id = None
 
     def set_text(self, message: str, duration_ms=2000) -> None:
         if self._clear_timer_id is not None:

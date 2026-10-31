@@ -124,8 +124,11 @@ class PlotsView(EditableFrame):
         self.bind("<Destroy>", self._on_destroy, add="+")
 
     def _on_destroy(self, event: tk.Event) -> None:
-        if event.widget == self._helper_message:
-            get_options().unsubscribe("xml_syntax_colors", self._update_plot_options)
+        if event.widget == self:
+            get_options().unsubscribe("plot_info_list", self._update_plot_options)
+            if self.canvas and self.canvas._idle_draw_id:
+                self.canvas.get_tk_widget().after_cancel(self.canvas._idle_draw_id)
+                self.canvas._idle_draw_id = None
 
     def _update_plot_options(self) -> None:
         options_pltinfo = get_options().get("plot_info_list")
