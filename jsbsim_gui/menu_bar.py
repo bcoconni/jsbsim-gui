@@ -43,6 +43,13 @@ class MenuBar(tk.Menu):
         self._file_menu.add_command(
             label="Save All", command=master.save_all, state=tk.DISABLED
         )
+        self._file_menu.add_command(
+            label="Reload",
+            accelerator=f"{SHORTCUT_MODIFIER}+R",
+            command=master.reload_model,
+            state=tk.DISABLED,
+        )
+        self._reload_menu_index = self._file_menu.index(tk.END)
         self._file_menu.add_separator()
         self._file_menu.add_command(
             label="Exit",
@@ -94,12 +101,6 @@ class MenuBar(tk.Menu):
         self.add_cascade(label="Edit", menu=edit_menu)
         self.entryconfig("Edit", state=tk.DISABLED)
 
-        view_menu = tk.Menu(self, tearoff=False)
-        view_menu.add_command(label="Edit", command=self.master.edit)
-        view_menu.add_command(label="Run", command=self.master.run)
-        self.add_cascade(label="View", menu=view_menu)
-        self.entryconfig("View", state=tk.DISABLED)
-
     def select_script_file(self) -> None:
         filename = fd.askopenfilename(
             title="Open a script, aircraft or CSV file",
@@ -130,6 +131,8 @@ class MenuBar(tk.Menu):
                 filename, aircraft_name, Controller.load_aircraft
             )
 
+        if success is None:
+            return
         if success:
             self.enable_menus()
         else:
@@ -150,7 +153,7 @@ class MenuBar(tk.Menu):
 
     def enable_menus(self):
         self.entryconfig("Edit", state=tk.NORMAL)
-        self.entryconfig("View", state=tk.NORMAL)
+        self._file_menu.entryconfig(self._reload_menu_index, state=tk.NORMAL)
 
     def update_save_menu_state(self, enable: bool) -> None:
         state = tk.NORMAL if enable else tk.DISABLED

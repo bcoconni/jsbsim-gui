@@ -208,6 +208,12 @@ class PlotInfoList:
         for pinfo in self._plotinfos:
             pinfo.max_points = samples
 
+    def remove_properties(self) -> None:
+        self._plotinfos = [
+            pinfo for pinfo in self._plotinfos if isinstance(pinfo, _CsvPlotInfo)
+        ]
+        self._update_csv_names()
+
 
 @dataclass
 class PlotInfoListOptions:

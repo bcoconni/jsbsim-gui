@@ -36,6 +36,9 @@ class TestRoot(tk.Tk):
     def save_all(self) -> None:
         return None
 
+    def reload_model(self) -> None:
+        return None
+
     def on_closing(self) -> None:
         return None
 

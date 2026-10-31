@@ -17,6 +17,7 @@
 import os
 import platform
 import xml.etree.ElementTree as et
+from xml.parsers.expat import ExpatError
 from typing import List, Optional, Tuple
 
 import jsbsim
@@ -61,8 +62,9 @@ class Controller:
         return jsbsim.get_default_root_dir()
 
     def __init__(self, root_dir: str, logger: jsbsim.FGLogger):
-        jsbsim.set_logger(logger)
-        self._logger_registered = True
+        self._logger = logger
+        self._logger_registered = False
+        self.activate_logger()
         self.dt = 1.0 / 120.0
         self.filename = ""
         self.property_history = PropertyHistory([])
@@ -71,6 +73,10 @@ class Controller:
 
     def __del__(self):
         self.close()
+
+    def activate_logger(self) -> None:
+        jsbsim.set_logger(self._logger)
+        self._logger_registered = True
 
     def close(self) -> None:
         if self._logger_registered:
@@ -247,6 +253,7 @@ class Controller:
 
     def reload(self) -> bool:
         old_fdm = self.fdm
+        old_history = self.property_history
         root_dir = self.fdm.get_root_dir()
         output_path = self.fdm.get_output_path()
         success = False
@@ -254,12 +261,19 @@ class Controller:
         self.fdm = jsbsim.FGFDMExec(root_dir)
         self.fdm.set_output_path(output_path)
 
-        root = et.parse(self.filename).getroot()
-        if root.tag == "runscript":
-            success = self.load_script(self.filename)
-        elif root.tag == "fdm_config":
-            success = self.load_aircraft(self.filename)
-
+        try:
+            root = et.parse(self.filename).getroot()
+            if root.tag == "runscript":
+                success = self.load_script(self.filename)
+            elif root.tag == "fdm_config":
+                success = self.load_aircraft(self.filename)
+            if success:
+                self.get_xml_trees()
+        except (OSError, et.ParseError, ExpatError, RuntimeError, ValueError, KeyError):
+            self.fdm = old_fdm
+            self.property_history = old_history
+            raise
         if not success:
             self.fdm = old_fdm
+            self.property_history = old_history
         return success

@@ -147,6 +147,15 @@ class PlotsView(EditableFrame):
     def bind_motion_handler(self, handler: Callable[[MouseEvent], None]) -> None:
         self.motion_handlers.append(handler)
 
+    def clear_simulation_plots(self) -> None:
+        for plots in self.plots:
+            plots.remove_properties()
+        self.plots = [plots for plots in self.plots if plots]
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        if self.canvas:
+            self.initialize_canvas()
+
     def on_leave_figure(self, event: Event):
         assert isinstance(event, LocationEvent)
 

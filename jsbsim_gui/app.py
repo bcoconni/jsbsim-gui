@@ -18,9 +18,11 @@
 import os
 import sys
 import tkinter as tk
+import xml.etree.ElementTree as et
+from xml.parsers.expat import ExpatError
 from tkinter import ttk
-from tkinter.constants import EW, NSEW
-from tkinter.messagebox import askyesnocancel, showerror
+from tkinter.constants import EW, NS, NSEW
+from tkinter.messagebox import askyesno, showerror
 from typing import Callable, Dict, Optional
 
 from PIL import Image, ImageTk
@@ -28,14 +30,21 @@ from PIL import Image, ImageTk
 from . import __version__
 from .consoles_panel import ConsolesPanel
 from .controller import Controller, get_path_relative_to_root
-from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditableFrame, EditAction
+from .csv_tree import CsvTree
+from .drag_n_drop import DnDCsvColumns, DnDProperties
+from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
+from .file_state import FileState
+from .find import FindWindow
+from .hierarchical_tree import PropertyTree
 from .menu_bar import MenuBar
 from .options import OptionsWindow
 from .plotinfo_list import PlotInfoListOptionsTab
-from .run import Run
+from .plots_view import PlotsView
+from .project_files import ProjectFiles
+from .simulation_controls import SimulationControls
 from .source_editor import SourceEditor
 from .textview import XMLSyntaxOptionsTab
-from .widget import AutoClearLabel
+from .widget import AutoClearLabel, LabeledWidget, widget_is_descendant
 
 
 class App(tk.Tk):
@@ -47,7 +56,10 @@ class App(tk.Tk):
             self, orient=tk.VERTICAL, sashwidth=4, sashrelief=tk.RAISED
         )
         self._statusbar = AutoClearLabel(self)
-        self.main: EditableFrame | ttk.Label | None = None
+        self.main: ttk.Frame | ttk.Label | None = None
+        self.editor: Optional[SourceEditor] = None
+        self.project_files: Optional[ProjectFiles] = None
+        self._find_window: Optional[FindWindow] = None
         self.title(f"JSBSim GUI {__version__}")
         self.resizable(False, False)
         style = ttk.Style()
@@ -80,10 +92,12 @@ class App(tk.Tk):
         self.bind_all(
             f"<{REDO_SHORTCUT}>", lambda _event: self.edit_action(EditAction.REDO)
         )
+        self.bind_all(f"<{SHORTCUT_MODIFIER}-r>", lambda _: self.reload_model())
         self.bind_all(f"<{SHORTCUT_MODIFIER}-q>", lambda _event: self.on_closing())
 
     def on_closing(self) -> None:
-        if not self._prompt_save_if_modified(
+        project_files = self.project_files
+        if project_files and not project_files.prompt_save_if_modified(
             "You have unsaved changes. Do you want to save them before exiting?"
         ):
             return
@@ -96,16 +110,6 @@ class App(tk.Tk):
         options_window = OptionsWindow(self)
         options_window.add_option_tab(PlotInfoListOptionsTab(options_window), "Plots")
         options_window.add_option_tab(XMLSyntaxOptionsTab(options_window), "XML Syntax")
-
-    def _prompt_save_if_modified(self, message: str) -> bool:
-        if isinstance(self.main, SourceEditor) and self.main.has_modified_files():
-            result = askyesnocancel("Unsaved Changes", message=message)
-            if result is None:
-                return False
-            elif result:
-                if not self.main.save_all():
-                    return False
-        return True
 
     def display_logo(self) -> None:
         self.menubar.update_save_menu_state(False)
@@ -147,66 +151,208 @@ class App(tk.Tk):
         self.display_logo()
         showerror("Error", message=error_msg)
 
-    def run(self) -> None:
-        assert self.main
-        assert self._controller
-
-        has_modified_files = (
-            isinstance(self.main, SourceEditor) and self.main.has_modified_files()
-        )
-
-        if not self._prompt_save_if_modified(
-            "You have unsaved changes. Do you want to save them before switching to run view?"
-        ):
-            return
-
-        if has_modified_files and not self._reload_controller():
-            return
-
-        w = self.main.winfo_width()
-        h = self.main.winfo_height()
-        self._console_sash.remove(self.main)
-        self.main.destroy()
-        self.menubar.update_save_menu_state(False)
-        self.main = Run(self._console_sash, self._controller, self._statusbar)
-        self._console_sash.add(
-            self.main, before=self._consoles_panel, width=w, height=h
-        )
-
-        # Window layout
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-    def _reload_controller(self) -> bool:
+    def reload_model(self) -> None:
         assert self._controller is not None and self._consoles_panel is not None
-        self._consoles_panel.reset()
-        if self._controller.reload():
-            self._statusbar.set_text("Model reloaded.")
-            return True
+        assert self.editor is not None and self.project_files is not None
+        if self.project_files.has_modified_files():
+            showerror("Reload Model", "Save all modified files before reloading.")
+            return
+        if self.simulation_controls.is_running:
+            if not askyesno(
+                "Reload Model",
+                "Reloading will stop and reset the simulation. Continue?",
+            ):
+                return
+            self.simulation_controls.pause()
 
-        showerror(
-            "Reload Error",
-            message="Failed to reload the model. Please check the console for errors.",
+        self._consoles_panel.reset()
+        old_fdm = self._controller.fdm
+        old_history = self._controller.property_history
+        try:
+            success = self._controller.reload()
+            if success:
+                self._close_find_window()
+                self.project_files.refresh_model()
+                self.editor.refresh_model(self.project_files.current_file)
+                self._create_property_tree()
+                self.plots_view.clear_simulation_plots()
+                self.simulation_controls.reset_for_reload()
+        except (
+            OSError,
+            et.ParseError,
+            ExpatError,
+            RuntimeError,
+            ValueError,
+            KeyError,
+        ) as error:
+            self._controller.fdm = old_fdm
+            self._controller.property_history = old_history
+            showerror("Reload Error", message=str(error))
+            return
+        if success:
+            self._statusbar.set_text("Model reloaded.")
+        else:
+            showerror(
+                "Reload Error",
+                message="Failed to reload the model. Please check the console for errors.",
+            )
+
+    def _mark_reload_pending(self) -> None:
+        self._statusbar.set_text("Files saved. Reload the model to apply changes.")
+
+    def _create_property_tree(self) -> None:
+        assert self._controller is not None
+        if self.property_view.widget is not None:
+            self.property_view.widget.destroy()
+        root = self._controller.get_property_root()
+        assert root is not None
+        self.property_tree = PropertyTree(
+            self.property_view, self._controller.get_property_list(), root
         )
-        return False
+        self.property_tree.tree.bind(f"<{SHORTCUT_MODIFIER}-f>", self._find_property)
+        self.property_view.set_widget(self.property_tree)
+        self.dnd_properties = DnDProperties(self.property_tree, self.plots_view)
+
+    def _select_source_file(self, file_state: FileState) -> None:
+        assert self.editor is not None and self.project_files is not None
+        if file_state is not None:
+            self.notebook.select(self.editor)
+            self.project_files.select_file(file_state)
+            self.editor.open_source_file(file_state)
+
+    def _on_editor_file_opened(self, file_state: FileState) -> None:
+        assert self.project_files is not None
+        self.project_files.show_file(file_state.filepath)
+        self._select_source_file(file_state)
+
+    def _on_editor_modified(self, modified: bool) -> None:
+        assert self.project_files is not None
+        self.project_files.mark_current_modified(modified)
+
+    def _get_editor_content(self) -> str:
+        assert self.editor is not None
+        return self.editor.get_content()
+
+    def _on_invalid_file(self, file_state: FileState, column: int, line: int) -> None:
+        assert self.editor is not None
+        self.editor.move_to(file_state, True, column, line)
+
+    def _close_find_window(self) -> None:
+        if self._find_window is not None and self._find_window.winfo_exists():
+            self._find_window.destroy()
+        self._find_window = None
+
+    def _open_find_window(self) -> FindWindow:
+        assert self._controller is not None
+        assert self.project_files is not None and self.editor is not None
+        editor = self.editor
+        if self._find_window is not None and self._find_window.winfo_exists():
+            self._find_window.lift()
+        else:
+            self._find_window = FindWindow(
+                self,
+                self._controller,
+                self.project_files.get_file_states(),
+                editor.select_text,
+                lambda file_state, col, line: editor.move_to(
+                    file_state, True, col, line
+                ),
+            )
+        return self._find_window
+
+    def _find_property(self, _: Optional[tk.Event]) -> str:
+        names = self.property_tree.get_selected_property_names(False)
+        find_window = self._open_find_window()
+        if len(names) == 1:
+            find_window.find_property(names[0])
+        return "break"
+
+    def _on_csv_toggle(self, collapsed: bool) -> None:
+        self.left_frame.grid_rowconfigure(1, weight=1 if collapsed else 2)
+        self.left_frame.grid_rowconfigure(2, weight=0 if collapsed else 1)
+
+    def _update_simulation(self) -> None:
+        assert self._controller is not None
+        self.property_tree.update_values()
+        self.plots_view.update_plots()
+        sim_time = self._controller.fdm.get_sim_time()
+        self._statusbar.set_text(f"Simulated time: {sim_time:.3f}s")
+
+    def _update_properties(self, _) -> None:
+        assert self._controller is not None
+        sim_time = self.plots_view.t_hover
+        if sim_time:
+            properties = self.property_tree.get_visible_properties()
+            values = self._controller.get_time_snapshot(sim_time, properties)
+            self.property_tree.update_values(values)
+        else:
+            self.property_tree.update_values()
+            sim_time = self._controller.fdm.get_sim_time()
+        self._statusbar.set_text(f"Simulated time: {sim_time:.3f}s")
 
     def edit(self) -> None:
         add_options: Dict[str, int | ConsolesPanel] = {}
+        self._close_find_window()
         if self.main:
-            if isinstance(self.main, EditableFrame):
+            if isinstance(self.main, ttk.Frame):
                 self._console_sash.remove(self.main)
                 add_options["width"] = self.main.winfo_width()
                 add_options["height"] = self.main.winfo_height()
             self.main.destroy()
 
-        # Open the file in a text widget
         assert self._controller is not None
-        self.main = SourceEditor(
-            self._console_sash,
+        self.main = ttk.Frame(self._console_sash)
+        self.left_frame = ttk.Frame(self.main)
+        self.notebook = ttk.Notebook(self.main)
+        self.project_files = ProjectFiles(
+            self.left_frame,
             self._controller,
+            self._select_source_file,
+            self._get_editor_content,
+            self._on_invalid_file,
             self.mark_title_modified,
-            self._reload_controller,
+            self._mark_reload_pending,
         )
+        self.project_files.grid(column=0, row=0, sticky=NSEW)
+        self.editor = SourceEditor(
+            self.notebook,
+            self.project_files.current_file,
+            self._on_editor_file_opened,
+            self._on_editor_modified,
+        )
+        self.editor.bind(f"<{SHORTCUT_MODIFIER}-s>", lambda e: self.save_file())
+        self.notebook.add(self.editor, text="Editor")
+        self.plots_view = PlotsView(self.notebook, self._controller)
+        self.notebook.add(self.plots_view, text="Plots")
+
+        self.property_view = LabeledWidget(self.left_frame, "Property Explorer")
+        self.property_view.grid(column=0, row=1, sticky=NS)
+        self._create_property_tree()
+
+        self.csv_view = LabeledWidget(
+            self.left_frame, "CSV Data", collapsable=True, on_toggle=self._on_csv_toggle
+        )
+        self.csv_tree = CsvTree(self.csv_view)
+        self.csv_view.set_widget(self.csv_tree)
+        self.csv_view.grid(column=0, row=2, sticky=NSEW)
+        self.csv_view.grid_remove()
+        self.dnd_csv_columns = DnDCsvColumns(self.csv_tree, self.plots_view)
+
+        self.simulation_controls = SimulationControls(
+            self.left_frame,
+            self._controller,
+            self._update_simulation,
+            lambda: self._update_properties(None),
+        )
+        self.simulation_controls.grid(column=0, row=3, sticky=EW, pady=(4, 0))
+        self.plots_view.bind_motion_handler(self._update_properties)
+
+        self.left_frame.grid(column=0, row=0, sticky=NS)
+        self.left_frame.grid_columnconfigure(0, weight=1)
+        self.left_frame.grid_rowconfigure(1, weight=1)
+        self.notebook.grid(column=1, row=0, sticky=NSEW)
+        self.main.grid_columnconfigure(1, weight=1)
+        self.main.grid_rowconfigure(0, weight=1)
 
         assert self._consoles_panel
         self._console_sash.add(self.main, before=self._consoles_panel, **add_options)
@@ -217,12 +363,11 @@ class App(tk.Tk):
         self.grid_rowconfigure(0, weight=1)
 
     def _on_file_link_click(self, rel_path: str, line: int) -> None:
-        if not isinstance(self.main, SourceEditor):
-            self.edit()
-        assert isinstance(self.main, SourceEditor)
-        file_state = self.main.get_file_state(rel_path)
+        if self.editor is None or self.project_files is None:
+            return
+        file_state = self.project_files.get_file_state(rel_path)
         if file_state is not None:
-            self.main.move_to(file_state, True, 0, line)
+            self.editor.move_to(file_state, True, 0, line)
 
     def mark_title_modified(self, is_modified: bool) -> None:
         current_title = self.title()
@@ -234,46 +379,62 @@ class App(tk.Tk):
             self.title(current_title)
 
     def save_file(self) -> None:
-        if isinstance(self.main, SourceEditor):
-            self.main.save_file()
+        if self.project_files is not None:
+            self.project_files.save_file()
 
     def save_all(self) -> None:
-        if isinstance(self.main, SourceEditor):
-            self.main.save_all()
+        if self.project_files is not None:
+            self.project_files.save_all()
 
     def load_csv(self, path: str) -> None:
-        if not isinstance(self.main, Run):
-            if self._controller is None:
-                showerror(
-                    "Error",
-                    message="Please open an aircraft or script before loading a CSV file.",
-                )
-                return
-            self.run()
-        if isinstance(self.main, Run):
-            self.main.load_csv(path)
+        if self.editor is None:
+            showerror(
+                "Error",
+                message="Please open an aircraft or script before loading a CSV file.",
+            )
+            return
+        was_empty = not self.csv_tree.has_loaded_files()
+        self.csv_tree.load_csv(path)
+        if was_empty and self.csv_tree.has_loaded_files():
+            self.csv_view.grid()
+            self._on_csv_toggle(False)
 
     def edit_action(self, action: EditAction) -> None:
-        if self.main is not None:
-            assert isinstance(self.main, EditableFrame)
-            self.main.apply_edit_action(action)
+        if self.editor is None or self.project_files is None:
+            return
+        focused = self.focus_get()
+        if action == EditAction.FIND:
+            if widget_is_descendant(focused, self.property_view):
+                self._find_property(None)
+            else:
+                self._open_find_window()
+        elif widget_is_descendant(focused, self.property_view):
+            self.property_view.apply_edit_action(action)
+        elif widget_is_descendant(focused, self.project_files):
+            self.project_files.apply_edit_action(action)
+        elif self.notebook.select() == str(self.plots_view):
+            self.plots_view.apply_edit_action(action)
+        else:
+            self.editor.apply_edit_action(action)
 
     def open_file(
         self,
         filename: str,
         aircraft_name: str,
         load_file: Callable[[Controller, str], bool],
-    ) -> bool:
-        self.resizable(True, True)
-        self.title(f"JSBSim GUI {__version__} - {aircraft_name}")
-
+    ) -> Optional[bool]:
+        project_files = self.project_files
+        if project_files and not project_files.prompt_save_if_modified(
+            "You have unsaved changes. Do you want to save them before opening another model?"
+        ):
+            return None
         if self._consoles_panel:
             self._consoles_panel.reset()
         else:
             self._consoles_panel = ConsolesPanel(
                 self._console_sash,
                 on_file_link_click=self._on_file_link_click,
-                height=10,
+                height=8,
             )
             self._console_sash.add(self._consoles_panel)
 
@@ -281,19 +442,26 @@ class App(tk.Tk):
             lambda name: get_path_relative_to_root(name, self.root_dir)
         )
 
-        if self._controller:
-            self._controller.close()
-
-        self._controller = Controller(self.root_dir, console_logger)
-        success = load_file(self._controller, filename)
+        old_controller = self._controller
+        controller = Controller(self.root_dir, console_logger)
+        success = False
+        try:
+            success = load_file(controller, filename)
+        finally:
+            if not success:
+                controller.close()
+                if old_controller:
+                    old_controller.activate_logger()
 
         if success:
+            if old_controller:
+                old_controller.close()
+                controller.activate_logger()
+            self._controller = controller
+            self.resizable(True, True)
+            self.title(f"JSBSim GUI {__version__} - {aircraft_name}")
             self.edit()
             self._console_sash.grid(column=0, row=0, sticky=NSEW)
             self._statusbar.grid(column=0, row=1, sticky=EW)
             self._statusbar.set_text("Ready.")
-        else:
-            self._controller.close()
-            self._controller = None  # Delete the FGFDMExec instance.
-
         return success
