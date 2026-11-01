@@ -64,86 +64,85 @@ class XMLTree(SearchableTree):
             self._move_cursor(file_state, node.column, node.line)
 
 
-def _tree_node_from_property_name(node_name: str) -> TreeNode:
-    names = node_name.split("/", maxsplit=1)
-    tree = TreeNode(names[0])
-    if len(names) == 2:
-        child = _tree_node_from_property_name(names[1])
-        child.parent = tree
-    return tree
+class PropertyTreeNode(TreeNode):
+    def __init__(self, node_name: str):
+        names = node_name.split("/", maxsplit=1)
+        super().__init__(names[0])
+        if len(names) == 2:
+            child = PropertyTreeNode(names[1])
+            child.parent = self
 
+    def add(self, node_name: str) -> None:
+        names = node_name.split("/", maxsplit=1)
+        child_names = names[1].split("/", maxsplit=1)
+        for child in self.children:
+            assert isinstance(child, PropertyTreeNode)
+            if child.name == child_names[0]:
+                if len(child_names) == 2:
+                    child.add(names[1])
+                return
+        child = PropertyTreeNode(names[1])
+        child.parent = self
 
-def _add_node(tree: TreeNode, node_name: str) -> None:
-    names = node_name.split("/", maxsplit=1)
-    child_names = names[1].split("/", maxsplit=1)
-    for child in tree.children:
-        if child.name == child_names[0]:
-            if len(child_names) == 2:
-                _add_node(child, names[1])
-            return
-    child = _tree_node_from_property_name(names[1])
-    child.parent = tree
-
-
-def _find_node(tree: TreeNode, node_name: str) -> Optional[TreeNode]:
-    names = node_name.split("/", maxsplit=1)
-    child_names = names[1].split("/", maxsplit=1)
-    for child in tree.children:
-        if child.name == child_names[0]:
-            if len(child_names) == 2:
-                return _find_node(child, names[1])
-            return child
-    return None
+    def find(self, node_name: str) -> Optional[TreeNode]:
+        names = node_name.split("/", maxsplit=1)
+        child_names = names[1].split("/", maxsplit=1)
+        for child in self.children:
+            assert isinstance(child, PropertyTreeNode)
+            if child.name == child_names[0]:
+                if len(child_names) == 2:
+                    return child.find(names[1])
+                return child
+        return None
 
 
 def _node_in_text(
-    tree: TreeNode,
+    tree: PropertyTreeNode,
     text: str,
     relative_path: bool,
     match_start: int = -1,
     match_end: int = -1,
 ) -> Optional[Tuple[int, int]]:
-    end_column = -1
+    earliest: Optional[Tuple[int, int]] = None
     for child in tree.children:
+        assert isinstance(child, PropertyTreeNode)
         name = child.name if relative_path else "/" + child.name
-        if name[-1] != "]":
-            # Names without an index may optionally include an explicit '[0]'.
-            # 'name[0]' is tested first because if the order were reversed, the more
-            # generic 'name' pattern would always match, preventing the 'name[0]' case
-            # from ever being evaluated.
-            paths = (name + "[0]", name)
+        if match_end == -1:
+            column = text.find(name)
         else:
-            paths = (name,)
-        for i, path in enumerate(paths):
-            if match_end == -1:
-                column = text.find(path)
-            else:
-                column = match_end if text.startswith(path, match_end) else -1
-            if column >= 0:
-                end_column = column + len(path)
-                # When i == 1, 'name[0]' has failed to match but the unindexed 'name' is
-                # a hit. We must now verify that this does not incorrectly match other
-                # indexed variants like 'name[1]' or 'name[2]'
-                if i == 1 and text.startswith("[", end_column):
-                    continue
+            column = match_end if text.startswith(name, match_end) else -1
+
+        while column >= 0:
+            end_column = column + len(name)
+            valid_index = True
+            if name[-1] != "]" and text.startswith("[", end_column):
+                if text.startswith("[0]", end_column):
+                    end_column += 3
+                else:
+                    valid_index = False
+
+            if valid_index:
                 start_column = column if match_start == -1 else match_start
                 if child.children:
                     position = _node_in_text(
                         child, text, False, start_column, end_column
                     )
-                    if position is not None:
-                        return position
                 else:
-                    return (start_column, end_column)
-    if end_column >= 0 and match_start == -1:
-        position = _node_in_text(tree, text[end_column:], relative_path)
-        if position is not None:
-            return (position[0] + end_column, position[1] + end_column)
-    return None
+                    position = (start_column, end_column)
+                if position is not None:
+                    if earliest is None or position[0] < earliest[0]:
+                        earliest = position
+                    break
+
+            if match_end != -1:
+                break
+            column = text.find(name, column + 1)
+
+    return earliest
 
 
 def _nodes_in_text(
-    tree: TreeNode, text: str, relative_path: bool
+    tree: PropertyTreeNode, text: str, relative_path: bool
 ) -> List[Tuple[int, int]]:
     matching_positions: List[Tuple[int, int]] = []
     position = _node_in_text(tree, text, relative_path)
@@ -162,7 +161,9 @@ def _nodes_in_text(
 
 
 def _search_property_occurrences(
-    property_tree: TreeNode, root: Optional[TreeNode], xml_trees: List[XMLNode]
+    property_tree: PropertyTreeNode,
+    root: Optional[PropertyTreeNode],
+    xml_trees: List[XMLNode],
 ) -> Dict[str, List[TextRegion]]:
     results: Dict[str, List[TextRegion]] = {}
 
@@ -282,8 +283,8 @@ class PropertyOccurrencesTree(SearchableTree):
 
     def _find_matching_properties(
         self, property_path: str
-    ) -> Tuple[TreeNode, Optional[TreeNode]]:
-        property_tree = TreeNode("")
+    ) -> Tuple[PropertyTreeNode, Optional[PropertyTreeNode]]:
+        property_tree = PropertyTreeNode("")
         search_path = property_path.replace("[0]", "")
         properties = self._controller.get_property_list()
 
@@ -292,15 +293,16 @@ class PropertyOccurrencesTree(SearchableTree):
             normalized_path = full_path.replace("[0]", "")
 
             if search_path in normalized_path:
-                _add_node(property_tree, normalized_path)
+                property_tree.add(normalized_path)
 
         property_root = self._controller.get_property_root()
         if property_root is None:
             return (property_tree, None)
 
         root_name = property_root.get_fully_qualified_name()
-        root = _find_node(copy.deepcopy(property_tree), root_name)
+        root = copy.deepcopy(property_tree).find(root_name)
         if root is not None:
+            assert isinstance(root, PropertyTreeNode)
             root.parent = None
             root.name = ""
         return property_tree, root
