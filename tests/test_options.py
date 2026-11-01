@@ -24,7 +24,13 @@ import unittest
 from unittest.mock import patch
 
 from jsbsim_gui.options import Options, OptionsWindow, set_options, get_options
-from jsbsim_gui.textview import XMLSourceCodeView, XMLSyntaxColors, XMLSyntaxOptionsTab
+from jsbsim_gui.textview import (
+    SOURCE_CODE_VIEW_OPTIONS_KEY,
+    SourceCodeViewOptions,
+    XMLSourceCodeView,
+    XMLSyntaxColors,
+    TextViewOptionsTab,
+)
 
 
 class TestOptions(Options):
@@ -60,6 +66,11 @@ class TestOptionsModel(unittest.TestCase):
         self.assertEqual(default_colors.attribute_name, "#00aa00")
         self.assertEqual(default_colors.attribute_value, "#aaaa00")
         self.assertEqual(default_colors.data, "#000000")
+        display_options = SourceCodeViewOptions()
+        self.assertEqual(display_options.active_line_color, "#fff2cc")
+        self.assertEqual(display_options.selection_color, "#c3d9ff")
+        self.assertTrue(display_options.highlight_active_line)
+        self.assertTrue(display_options.bold_line_number)
 
     def test_save_and_load_options(self):
         options = TestOptions(self.config_file)
@@ -120,7 +131,7 @@ class TestOptionsWindow(unittest.TestCase):
 
     def test_options_window_init(self):
         window = OptionsWindow(self.root)
-        xml_tab = XMLSyntaxOptionsTab(window)
+        xml_tab = TextViewOptionsTab(window)
         window.add_option_tab(xml_tab, "XML Syntax")
         window.update_idletasks()
         self.assertEqual(window.title(), "Options")
@@ -136,11 +147,21 @@ class TestOptionsWindow(unittest.TestCase):
                 xml_tab._hex_labels[tag].cget("text"),
                 getattr(default_colors, tag),
             )
+        self.assertIn("active_line_color", xml_tab._color_choosers)
+        self.assertIn("selection_color", xml_tab._color_choosers)
+        self.assertEqual(
+            xml_tab._color_choosers["tag"].master.cget("text"), "XML Colors"
+        )
+        self.assertEqual(
+            xml_tab._color_choosers["active_line_color"].master.cget("text"), "Editor"
+        )
+        self.assertTrue(xml_tab._highlight_active_line_var.get())
+        self.assertTrue(xml_tab._bold_line_number_var.get())
         window.destroy()
 
     def test_choose_color_updates_preview(self):
         window = OptionsWindow(self.root)
-        xml_tab = XMLSyntaxOptionsTab(window)
+        xml_tab = TextViewOptionsTab(window)
         window.add_option_tab(xml_tab, "XML Syntax")
         with patch(
             "tkinter.colorchooser.askcolor", return_value=((18, 52, 86), "#123456")
@@ -154,9 +175,63 @@ class TestOptionsWindow(unittest.TestCase):
         )
         window.destroy()
 
+    def test_cancel_unregisters_preview_option_callbacks(self):
+        window = OptionsWindow(self.root)
+        xml_tab = TextViewOptionsTab(window)
+        window.add_option_tab(xml_tab, "XML Syntax")
+
+        with patch.object(self.root, "report_callback_exception") as report_exception:
+            window._cancel()
+
+        report_exception.assert_not_called()
+        options = get_options()
+        self.assertNotIn(
+            xml_tab._preview._load_syntax_colors,
+            options._subscribers.get("xml_syntax_colors", []),
+        )
+        self.assertNotIn(
+            xml_tab._preview._load_display_options,
+            options._subscribers.get(SOURCE_CODE_VIEW_OPTIONS_KEY, []),
+        )
+
+    def test_display_options_update_preview_and_apply(self):
+        window = OptionsWindow(self.root)
+        xml_tab = TextViewOptionsTab(window)
+        window.add_option_tab(xml_tab, "XML Syntax")
+        with patch(
+            "tkinter.colorchooser.askcolor",
+            side_effect=[
+                ((18, 52, 86), "#123456"),
+                ((101, 67, 33), "#654321"),
+            ],
+        ):
+            xml_tab._choose_color("active_line_color")
+            xml_tab._choose_color("selection_color")
+
+        xml_tab._highlight_active_line_var.set(False)
+        xml_tab._bold_line_number_var.set(False)
+        xml_tab._update_display_options()
+        xml_tab.apply()
+
+        options = SourceCodeViewOptions(
+            **get_options().get(SOURCE_CODE_VIEW_OPTIONS_KEY)
+        )
+        self.assertEqual(options.active_line_color, "#123456")
+        self.assertEqual(options.selection_color, "#654321")
+        self.assertFalse(options.highlight_active_line)
+        self.assertFalse(options.bold_line_number)
+        self.assertEqual(xml_tab._preview._text.cget("selectbackground"), "#654321")
+        self.assertEqual(
+            xml_tab._preview._text.tag_cget("active_line", "background"), ""
+        )
+        self.assertEqual(
+            xml_tab._preview._active_line_number_font.actual("weight"), "normal"
+        )
+        window.destroy()
+
     def test_restore_defaults(self):
         window = OptionsWindow(self.root)
-        xml_tab = XMLSyntaxOptionsTab(window)
+        xml_tab = TextViewOptionsTab(window)
         window.add_option_tab(xml_tab, "XML Syntax")
         xml_tab._current_colors.tag = "#123456"
         xml_tab.restore_defaults()
@@ -167,7 +242,7 @@ class TestOptionsWindow(unittest.TestCase):
 
     def test_apply_and_ok(self):
         window = OptionsWindow(self.root)
-        xml_tab = XMLSyntaxOptionsTab(window)
+        xml_tab = TextViewOptionsTab(window)
         window.add_option_tab(xml_tab, "XML Syntax")
         xml_tab._current_colors.tag = "#abcdef"
         xml_tab.apply()
@@ -210,6 +285,26 @@ class TestXMLSourceCodeViewOptionsIntegration(unittest.TestCase):
         self.options.set("xml_syntax_colors", asdict(new_colors))
 
         self.assertEqual(editor._text.tag_cget("XML_tag", "foreground"), "#654321")
+        editor.destroy()
+
+    def test_xml_source_code_view_reflects_display_options(self):
+        editor = XMLSourceCodeView(self.root, "<root>text</root>")
+        options = SourceCodeViewOptions(
+            active_line_color="#123456",
+            selection_color="#654321",
+            highlight_active_line=True,
+            bold_line_number=False,
+        )
+        self.options.set(SOURCE_CODE_VIEW_OPTIONS_KEY, asdict(options))
+
+        self.assertEqual(editor._text.cget("selectbackground"), "#654321")
+        self.assertEqual(editor._text.cget("inactiveselectbackground"), "#654321")
+        self.assertEqual(editor._text.tag_cget("active_line", "background"), "#123456")
+        self.assertEqual(editor._active_line_number_font.actual("weight"), "normal")
+
+        options.highlight_active_line = False
+        self.options.set(SOURCE_CODE_VIEW_OPTIONS_KEY, asdict(options))
+        self.assertEqual(editor._text.tag_cget("active_line", "background"), "")
         editor.destroy()
 
 

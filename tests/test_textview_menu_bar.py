@@ -22,7 +22,7 @@ import os
 
 from jsbsim_gui import edit_actions
 from jsbsim_gui.menu_bar import MenuBar
-from jsbsim_gui.textview import XMLSourceCodeView
+from jsbsim_gui.textview import SourceCodeViewOptions, XMLSourceCodeView
 
 
 class TestRoot(tk.Tk):
@@ -83,6 +83,7 @@ class TestXMLSourceCodeViewEditActions(unittest.TestCase):
         self.root = tk.Tk()
         self.root.withdraw()
         self.editor = XMLSourceCodeView(self.root, "<root>value</root>")
+        self.editor.set_display_options(SourceCodeViewOptions())
         self.editor.grid(column=0, row=0)
         self.root.update_idletasks()
 
@@ -126,13 +127,13 @@ class TestXMLSourceCodeViewEditActions(unittest.TestCase):
             )
             self.assertEqual(
                 widget.tag_cget(self.editor.ACTIVE_LINE_TAG, "background"),
-                self.editor.ACTIVE_LINE_BACKGROUND,
+                SourceCodeViewOptions().active_line_color,
             )
 
-        self.assertEqual(self.editor._bold_line_number_font.actual("weight"), "bold")
+        self.assertEqual(self.editor._active_line_number_font.actual("weight"), "bold")
         self.assertEqual(
             self.editor._line_numbers.tag_cget(self.editor.ACTIVE_LINE_TAG, "font"),
-            str(self.editor._bold_line_number_font),
+            str(self.editor._active_line_number_font),
         )
 
         self.editor.new_content("<root/>")
@@ -142,7 +143,7 @@ class TestXMLSourceCodeViewEditActions(unittest.TestCase):
                 ("1.0", "2.0"),
             )
 
-    def test_text_selection_stays_above_active_line_highlight(self):
+    def test_text_selection_suppresses_active_line_highlight(self):
         self.editor.new_content("<root>\n  value\n</root>")
         self.editor.select_text("value", "2.2")
 
@@ -150,33 +151,32 @@ class TestXMLSourceCodeViewEditActions(unittest.TestCase):
             tuple(map(str, self.editor._text.tag_ranges(tk.SEL))),
             ("2.2", "2.7"),
         )
-        tag_priorities = self.editor._text.tag_names("2.3")
-        self.assertLess(
-            tag_priorities.index(self.editor.ACTIVE_LINE_TAG),
-            tag_priorities.index(tk.SEL),
+        self.assertNotIn(
+            self.editor.ACTIVE_LINE_TAG, self.editor._text.tag_names("2.3")
         )
         self.assertEqual(
             self.editor._text.tag_cget(self.editor.ACTIVE_LINE_TAG, "background"),
-            "",
+            SourceCodeViewOptions().active_line_color,
         )
         self.assertEqual(
             self.editor._line_numbers.tag_cget(
                 self.editor.ACTIVE_LINE_TAG, "background"
             ),
-            "",
+            SourceCodeViewOptions().active_line_color,
         )
 
         self.editor._text.tag_remove(tk.SEL, "1.0", "end")
         self.editor.move_cursor("2.1", focus=False)
+        self.assertIn(self.editor.ACTIVE_LINE_TAG, self.editor._text.tag_names("2.3"))
         self.assertEqual(
             self.editor._text.tag_cget(self.editor.ACTIVE_LINE_TAG, "background"),
-            self.editor.ACTIVE_LINE_BACKGROUND,
+            SourceCodeViewOptions().active_line_color,
         )
         self.assertEqual(
             self.editor._line_numbers.tag_cget(
                 self.editor.ACTIVE_LINE_TAG, "background"
             ),
-            self.editor.ACTIVE_LINE_BACKGROUND,
+            SourceCodeViewOptions().active_line_color,
         )
 
 

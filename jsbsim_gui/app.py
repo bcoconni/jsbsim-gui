@@ -43,7 +43,7 @@ from .plots_view import PlotsView
 from .project_files import ProjectFiles
 from .simulation_controls import SimulationControls
 from .source_editor import SourceEditor
-from .textview import XMLSyntaxOptionsTab
+from .textview import TextViewOptionsTab
 from .widget import AutoClearLabel, LabeledWidget, widget_is_descendant
 
 
@@ -108,8 +108,8 @@ class App(tk.Tk):
 
     def show_options(self):
         options_window = OptionsWindow(self)
+        options_window.add_option_tab(TextViewOptionsTab(options_window), "Editor")
         options_window.add_option_tab(PlotInfoListOptionsTab(options_window), "Plots")
-        options_window.add_option_tab(XMLSyntaxOptionsTab(options_window), "XML Syntax")
 
     def display_logo(self) -> None:
         self.menubar.update_save_menu_state(False)
