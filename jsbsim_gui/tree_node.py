@@ -23,6 +23,10 @@ _XML_TAG_PATTERN = re.compile(rb"""<(?:[^>"']|"[^"]*"|'[^']*')*>""")
 _XML_ATTRIBUTE_PATTERN = re.compile(rb"""\s+([^\s=/>]+)\s*=\s*(['"])(.*?)\2""", re.S)
 
 
+class _InterruptDescent(Exception):
+    pass
+
+
 class TreeNode:
     def __init__(self, name: str):
         self.name = name
@@ -51,9 +55,34 @@ class TreeNode:
         return "/".join(reversed(names))
 
     def __iter__(self):
-        yield self
-        for child in self.children:
-            yield from child
+        try:
+            yield self
+            for child in self.children:
+                yield from child
+        except _InterruptDescent:
+            pass
+
+
+class TreeNodeConditionalIterator:
+    def __init__(self, tree: TreeNode):
+        self._it = iter(tree)
+        self._skip_children = False
+
+    def __iter__(self):
+        return self
+
+    def skip_current_node_children(self) -> None:
+        self._skip_children = True
+
+    def __next__(self):
+        if self._skip_children:
+            self._skip_children = False
+            try:
+                return self._it.throw(_InterruptDescent)
+            except _InterruptDescent:
+                raise StopIteration
+        else:
+            return next(self._it)
 
 
 @dataclass

@@ -17,6 +17,7 @@
 
 import copy
 import tkinter as tk
+from dataclasses import asdict
 from itertools import chain
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
@@ -25,7 +26,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 from .controller import Controller
 from .file_state import FileState
 from .hierarchical_tree import HierarchicalTree, SearchableTree
-from .tree_node import TextRegion, TreeNode, XMLNode
+from .tree_node import TextRegion, TreeNode, TreeNodeConditionalIterator, XMLNode
 
 
 class XMLTree(SearchableTree):
@@ -171,9 +172,14 @@ def _search_property_occurrences(
         for node in xml_tree:
             assert isinstance(node, XMLNode)
             for region in chain(node.attrs.values(), node.data):
-                paths = _nodes_in_text(property_tree, region.text, False)
+                if isinstance(region, TextSubstitutionRegion):
+                    text = region.substitute_text
+                else:
+                    text = region.text
+
+                paths = _nodes_in_text(property_tree, text, False)
                 if root is not None:
-                    paths += _nodes_in_text(root, region.text, True)
+                    paths += _nodes_in_text(root, text, True)
 
                 for column_start, column_end in paths:
                     property_name = region.text[column_start:column_end]
@@ -200,6 +206,59 @@ def _search_property_occurrences(
     }
 
 
+class TextSubstitutionRegion(TextRegion):
+    substitute_text: str = ""
+
+
+def _compute_substitute_text(
+    region: TextRegion, compute: Callable[[str], str]
+) -> TextSubstitutionRegion:
+    alt_region = TextSubstitutionRegion(**asdict(region))
+    alt_region.substitute_text = compute(region.text)
+    return alt_region
+
+
+def _normalize_attribute_names(xml_trees: List[XMLNode]) -> List[XMLNode]:
+    trees = copy.deepcopy(xml_trees)
+    for tree in trees:
+        tree_traversal = TreeNodeConditionalIterator(tree)
+        for node in tree_traversal:
+            assert isinstance(node, XMLNode)
+            attr_name = node.attrs.get("name")
+            rename: Optional[Callable[[str], str]] = None
+
+            if node.name == "function":
+                rename = lambda s: s.replace(" ", "-")
+
+                for child_tree in node.children:
+                    assert isinstance(child_tree, XMLNode)
+                    for child_node in child_tree:
+                        child_name_attr = child_node.attrs.get("name")
+                        if child_name_attr:
+                            child_node.attrs["name"] = _compute_substitute_text(
+                                child_name_attr, rename
+                            )
+            else:
+                if attr_name is None:
+                    continue
+                elif node.name == "table":
+                    table_type = node.attrs.get("type")
+                    if table_type is None or table_type.text != "internal":
+                        rename = lambda s: s.replace(" ", "-")
+                else:  # FGFCSComponents
+                    p = node.parent
+                    name = attr_name.text
+                    if p and name and p.name == "channel" and name.find("/") == -1:
+                        rename = lambda s: "fcs/" + s.replace(" ", "-").lower()
+
+            if rename is not None:
+                if attr_name is not None:
+                    node.attrs["name"] = _compute_substitute_text(attr_name, rename)
+                tree_traversal.skip_current_node_children()
+
+    return trees
+
+
 class PropertyOccurrencesTree(SearchableTree):
     def __init__(
         self,
@@ -215,7 +274,7 @@ class PropertyOccurrencesTree(SearchableTree):
         self._occurrence_data: Dict[str, Tuple[FileState, TextRegion]] = {}
         self._controller = controller
         self._file_states = file_states
-        self._xml_trees = xml_trees
+        self._xml_trees = _normalize_attribute_names(xml_trees)
         self._select_text = select_text
         self._entries: List[str] = []
         self._num_entries = 0

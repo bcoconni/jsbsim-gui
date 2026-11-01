@@ -19,7 +19,13 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jsbsim_gui.tree_node import TextRegion, XMLNode, XMLNodeBuilder
+from jsbsim_gui.tree_node import (
+    TextRegion,
+    TreeNode,
+    TreeNodeConditionalIterator,
+    XMLNode,
+    XMLNodeBuilder,
+)
 
 
 def make_node(name: str = "node") -> XMLNode:
@@ -251,6 +257,82 @@ class TestXMLNodeIteration(unittest.TestCase):
         for n in nodes:
             n.parent = root
         self.assertEqual(len(list(iter(root))), 6)  # root + 5 children
+
+
+class TestTreeNodeConditionalIterator(unittest.TestCase):
+    def setUp(self):
+        self.root = TreeNode("root")
+        self.left = TreeNode("left")
+        self.left_leaf = TreeNode("left_leaf")
+        self.right = TreeNode("right")
+        self.right_leaf = TreeNode("right_leaf")
+        self.left.parent = self.root
+        self.right.parent = self.root
+        self.left_leaf.parent = self.left
+        self.right_leaf.parent = self.right
+
+    def test_iteration_without_skips_is_depth_first_pre_order(self):
+        iterator = TreeNodeConditionalIterator(self.root)
+
+        self.assertEqual(
+            list(iterator),
+            [self.root, self.left, self.left_leaf, self.right, self.right_leaf],
+        )
+
+    def test_iterator_is_its_own_iterable(self):
+        iterator = TreeNodeConditionalIterator(self.root)
+
+        self.assertIs(iter(iterator), iterator)
+
+    def test_skipping_current_node_skips_its_descendants_and_keeps_siblings(self):
+        iterator = TreeNodeConditionalIterator(self.root)
+        self.assertIs(next(iterator), self.root)
+        self.assertIs(next(iterator), self.left)
+
+        iterator.skip_current_node_children()
+
+        self.assertEqual(list(iterator), [self.right, self.right_leaf])
+
+    def test_skipping_root_children_stops_tree_iteration(self):
+        iterator = TreeNodeConditionalIterator(self.root)
+        self.assertIs(next(iterator), self.root)
+
+        iterator.skip_current_node_children()
+
+        self.assertEqual(list(iterator), [])
+
+    def test_skipping_leaf_keeps_following_sibling(self):
+        iterator = TreeNodeConditionalIterator(self.root)
+        self.assertEqual(
+            [next(iterator), next(iterator), next(iterator)],
+            [self.root, self.left, self.left_leaf],
+        )
+
+        iterator.skip_current_node_children()
+
+        self.assertEqual(list(iterator), [self.right, self.right_leaf])
+
+    def test_skip_is_applied_once_and_can_be_reused_on_next_branch(self):
+        iterator = TreeNodeConditionalIterator(self.root)
+        self.assertEqual([next(iterator), next(iterator)], [self.root, self.left])
+        iterator.skip_current_node_children()
+        self.assertIs(next(iterator), self.right)
+        iterator.skip_current_node_children()
+
+        with self.assertRaises(StopIteration):
+            next(iterator)
+        with self.assertRaises(StopIteration):
+            next(iterator)
+
+    def test_skip_after_exhaustion_remains_exhausted(self):
+        leaf = TreeNode("leaf")
+        iterator = TreeNodeConditionalIterator(leaf)
+        self.assertEqual(list(iterator), [leaf])
+
+        iterator.skip_current_node_children()
+
+        with self.assertRaises(StopIteration):
+            next(iterator)
 
 
 class TestXMLNodeBuilderAttributePositions(unittest.TestCase):

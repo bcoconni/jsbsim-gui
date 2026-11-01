@@ -18,11 +18,14 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Dict, Optional
 
 from jsbsim_gui.find import (
+    TextSubstitutionRegion,
     PropertyTreeNode,
     _node_in_text,
     _nodes_in_text,
+    _normalize_attribute_names,
     _search_property_occurrences,
 )
 from jsbsim_gui.tree_node import TextRegion, XMLNode, XMLNodeBuilder
@@ -309,6 +312,187 @@ class TestSearchPropertyOccurrences(unittest.TestCase):
                     ]
                 },
             )
+
+
+class TestNormalizeAttributeNames(unittest.TestCase):
+    def make_node(
+        self, name: str, attrs: Dict[str, str], parent: Optional[XMLNode] = None
+    ) -> XMLNode:
+        node = XMLNode(
+            name,
+            {key: TextRegion(value, column=4, line=7) for key, value in attrs.items()},
+            "model.xml",
+            0,
+            1,
+        )
+        node.parent = parent
+        return node
+
+    def test_function_and_non_internal_table_names_replace_spaces(self) -> None:
+        function = self.make_node("function", {"name": "gear position"})
+        external_table = self.make_node(
+            "table", {"name": "engine thrust", "type": "external"}
+        )
+        default_table = self.make_node("table", {"name": "engine thrust"})
+
+        normalized = _normalize_attribute_names(
+            [function, external_table, default_table]
+        )
+
+        for node, expected in zip(
+            normalized, ("gear-position", "engine-thrust", "engine-thrust")
+        ):
+            region = node.attrs["name"]
+            self.assertIsInstance(region, TextSubstitutionRegion)
+            self.assertEqual(region.text, expected.replace("-", " "))
+            self.assertEqual(region.substitute_text, expected)
+
+    def test_function_renames_names_on_all_descendants(self) -> None:
+        function = self.make_node("function", {"name": "gear function"})
+        child = self.make_node("product", {"name": "gear position"}, function)
+        nested_child = self.make_node("property", {"name": "engine speed"}, child)
+        unnamed_child = self.make_node("value", {}, child)
+
+        normalized = _normalize_attribute_names([function])[0]
+        normalized_child = normalized.children[0]
+        normalized_nested_child = normalized_child.children[0]
+        normalized_unnamed_child = normalized_child.children[1]
+
+        self.assertEqual(normalized.attrs["name"].substitute_text, "gear-function")
+        self.assertEqual(
+            normalized_child.attrs["name"].substitute_text, "gear-position"
+        )
+        self.assertEqual(
+            normalized_nested_child.attrs["name"].substitute_text, "engine-speed"
+        )
+        self.assertNotIn("name", normalized_unnamed_child.attrs)
+        self.assertEqual(function.attrs["name"].text, "gear function")
+        self.assertEqual(child.attrs["name"].text, "gear position")
+        self.assertEqual(nested_child.attrs["name"].text, "engine speed")
+        self.assertEqual(unnamed_child.attrs, {})
+
+    def test_function_renames_empty_name_attributes_on_descendants(self) -> None:
+        function = self.make_node("function", {"name": "some function"})
+        child = self.make_node("property", {"name": ""}, function)
+
+        normalized = _normalize_attribute_names([function])[0]
+        child_name = normalized.children[0].attrs["name"]
+
+        self.assertIsInstance(child_name, TextSubstitutionRegion)
+        self.assertEqual(child_name.text, "")
+        self.assertEqual(child_name.substitute_text, "")
+
+    def test_function_descendant_rename_precedes_channel_context(self) -> None:
+        function = self.make_node("function", {"name": "some function"})
+        channel = self.make_node("channel", {}, function)
+        child = self.make_node("property", {"name": "Gear Up"}, channel)
+
+        normalized = _normalize_attribute_names([function])[0]
+        normalized_child = normalized.children[0].children[0]
+
+        self.assertEqual(normalized_child.attrs["name"].substitute_text, "Gear-Up")
+
+    def test_function_descendants_are_renamed_when_function_has_no_name(self) -> None:
+        function = self.make_node("function", {})
+        child = self.make_node("property", {"name": "gear position"}, function)
+
+        normalized = _normalize_attribute_names([function])[0]
+
+        self.assertNotIn("name", normalized.attrs)
+        self.assertEqual(
+            normalized.children[0].attrs["name"].substitute_text, "gear-position"
+        )
+
+    def test_internal_table_name_is_not_normalized(self) -> None:
+        table = self.make_node("table", {"name": "engine thrust", "type": "internal"})
+
+        normalized = _normalize_attribute_names([table])[0]
+
+        self.assertNotIsInstance(normalized.attrs["name"], TextSubstitutionRegion)
+        self.assertEqual(normalized.attrs["name"].text, "engine thrust")
+
+    def test_channel_child_name_gets_fcs_prefix_and_lowercase(self) -> None:
+        channel = self.make_node("channel", {})
+        child = self.make_node("summer", {"name": "Gear Up"}, channel)
+
+        (normalized_channel,) = _normalize_attribute_names([channel])
+        normalized_child = normalized_channel.children[0]
+        region = normalized_child.attrs["name"]
+
+        self.assertIsInstance(region, TextSubstitutionRegion)
+        self.assertEqual(region.text, "Gear Up")
+        self.assertEqual(region.substitute_text, "fcs/gear-up")
+        self.assertIs(normalized_child.parent, normalized_channel)
+
+    def test_channel_child_name_with_path_is_not_rewritten(self) -> None:
+        channel = self.make_node("channel", {})
+        child = self.make_node("summer", {"name": "custom/Gear Up"}, channel)
+
+        normalized = _normalize_attribute_names([channel])[0]
+        region = normalized.children[0].attrs["name"]
+
+        self.assertNotIsInstance(region, TextSubstitutionRegion)
+        self.assertEqual(region.text, "custom/Gear Up")
+
+    def test_name_is_only_normalized_in_supported_contexts(self) -> None:
+        node = self.make_node("input", {"name": "Gear Up"})
+
+        normalized = _normalize_attribute_names([node])[0]
+
+        self.assertNotIsInstance(normalized.attrs["name"], TextSubstitutionRegion)
+        self.assertEqual(normalized.attrs["name"].text, "Gear Up")
+
+    def test_function_context_takes_precedence_over_channel_context(self) -> None:
+        channel = self.make_node("channel", {})
+        function = self.make_node("function", {"name": "Gear Up"}, channel)
+
+        normalized = _normalize_attribute_names([channel])[0]
+        region = normalized.children[0].attrs["name"]
+
+        self.assertEqual(region.substitute_text, "Gear-Up")
+
+    def test_normalization_does_not_mutate_original_xml_tree(self) -> None:
+        channel = self.make_node("channel", {})
+        child = self.make_node("summer", {"name": "Gear Up"}, channel)
+
+        normalized = _normalize_attribute_names([channel])
+
+        self.assertEqual(channel.children, [child])
+        self.assertEqual(child.attrs["name"].text, "Gear Up")
+        self.assertEqual(
+            normalized[0].children[0].attrs["name"].substitute_text,
+            "fcs/gear-up",
+        )
+
+    def test_search_reports_original_channel_name_and_source_position(self) -> None:
+        channel = self.make_node("channel", {})
+        channel.attrs.clear()
+        child = self.make_node("summer", {"name": "Gear Up"}, channel)
+        child.attrs["name"].column = 12
+        child.attrs["name"].line = 9
+        property_tree = PropertyTreeNode("")
+        root = PropertyTreeNode("")
+        root.add("/fcs/gear-up")
+
+        occurrences = _search_property_occurrences(
+            property_tree, root, _normalize_attribute_names([channel])
+        )
+
+        self.assertEqual(
+            occurrences,
+            {"model.xml": [TextRegion("Gear Up", column=12, line=9)]},
+        )
+
+    def test_empty_channel_child_name_is_not_given_synthetic_path(self) -> None:
+        channel = self.make_node("channel", {})
+        self.make_node("summer", {"name": ""}, channel)
+
+        normalized = _normalize_attribute_names([channel])[0]
+
+        self.assertNotIsInstance(
+            normalized.children[0].attrs["name"], TextSubstitutionRegion
+        )
+        self.assertEqual(normalized.children[0].attrs["name"].text, "")
 
 
 if __name__ == "__main__":
