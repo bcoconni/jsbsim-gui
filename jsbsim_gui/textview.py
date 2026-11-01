@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass
 import re
 import sys
 import tkinter as tk
-from tkinter import colorchooser, ttk, TclError
+from tkinter import colorchooser, font as tkfont, ttk, TclError
 from tkinter.constants import (
     DISABLED,
     END,
@@ -202,6 +202,8 @@ class SourceCodeView(TextView):
     """Display text with line numbers"""
 
     HIGHLIGHT_DELAY_MS = 300
+    ACTIVE_LINE_TAG = "active_line"
+    ACTIVE_LINE_BACKGROUND = "#fff2cc"
 
     def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
         # Override parameters defined upstream
@@ -224,12 +226,27 @@ class SourceCodeView(TextView):
         # Even when empty, the first line is where the cursor is so we need a number
         self._line_numbers.insert("1.0", "1")
         self._line_numbers.grid(column=0, row=0, sticky=NS)
+        self._bold_line_number_font = tkfont.nametofont(
+            self._line_numbers.cget("font")
+        ).copy()
+        self._bold_line_number_font.configure(weight="bold")
+        self._text.tag_configure(
+            self.ACTIVE_LINE_TAG, background=self.ACTIVE_LINE_BACKGROUND
+        )
+        self._text.tag_lower(self.ACTIVE_LINE_TAG, tk.SEL)
+        self._line_numbers.tag_configure(
+            self.ACTIVE_LINE_TAG,
+            background=self.ACTIVE_LINE_BACKGROUND,
+            font=self._bold_line_number_font,
+        )
         self._line_numbers.bind("<Button-1>", self._goto_line)
         self._line_numbers.bind("<MouseWheel>", self._on_line_numbers_scroll)
         self._line_numbers.bind("<Button-4>", self._on_line_numbers_scroll)
         self._line_numbers.bind("<Button-5>", self._on_line_numbers_scroll)
         self._line_numbers.configure(state=DISABLED)
 
+        self._text.bind("<KeyRelease>", self._update_active_line, add="+")
+        self._text.bind("<ButtonRelease-1>", self._update_active_line, add="+")
         self._text["yscrollcommand"] = self._move_line_numbers
         self._yscrollbar.configure(command=self._yview)
         self._modified_event_id = self._text.bind(
@@ -239,6 +256,7 @@ class SourceCodeView(TextView):
 
         if contents:
             self.new_content(contents)
+        self._update_active_line()
 
     def _cancel_highlighting(self, event: tk.Event) -> None:
         if event.widget is self._text and self._highlight_timer:
@@ -259,6 +277,7 @@ class SourceCodeView(TextView):
             func(modified)
 
         self._update_line_numbers()
+        self._update_active_line()
 
         if self._highlight_timer:
             self.after_cancel(self._highlight_timer)
@@ -320,6 +339,7 @@ class SourceCodeView(TextView):
         self._text.unbind("<<Modified>>", self._modified_event_id)
         super().new_content(contents)
         self._update_line_numbers()
+        self._update_active_line()
         self._modified_event_id = self._text.bind(
             "<<Modified>>", self._on_text_modified
         )
@@ -371,6 +391,33 @@ class SourceCodeView(TextView):
                 ),
             )
         self._line_numbers.configure(state=DISABLED)
+
+    def _update_active_line(self, _event: Optional[tk.Event] = None) -> None:
+        line = self._text.index(f"{tk.INSERT} linestart").split(".", maxsplit=1)[0]
+        background = (
+            "" if self._text.tag_ranges(tk.SEL) else self.ACTIVE_LINE_BACKGROUND
+        )
+        self._text.tag_configure(self.ACTIVE_LINE_TAG, background=background)
+        self._line_numbers.tag_configure(self.ACTIVE_LINE_TAG, background=background)
+        for widget in (self._text, self._line_numbers):
+            widget.tag_remove(self.ACTIVE_LINE_TAG, "1.0", END)
+            widget.tag_add(
+                self.ACTIVE_LINE_TAG,
+                f"{line}.0",
+                f"{line}.end + 1 chars",
+            )
+
+    def move_cursor(self, position: str, focus: bool = True) -> None:
+        super().move_cursor(position, focus)
+        self._update_active_line()
+
+    def select_text(self, text: str, position: str) -> None:
+        super().select_text(text, position)
+        self._update_active_line()
+
+    def apply_edit_action(self, action: EditAction) -> None:
+        super().apply_edit_action(action)
+        self._update_active_line()
 
 
 @dataclass

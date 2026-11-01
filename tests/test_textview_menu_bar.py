@@ -115,6 +115,70 @@ class TestXMLSourceCodeViewEditActions(unittest.TestCase):
         self.root.update()
         self.assertEqual(self.editor.get_content(), "<root>value</root>")
 
+    def test_active_line_and_line_number_are_highlighted(self):
+        self.editor.new_content("<root>\n  value\n</root>")
+        self.editor.move_cursor("2.1", focus=False)
+
+        for widget in (self.editor._text, self.editor._line_numbers):
+            self.assertEqual(
+                tuple(map(str, widget.tag_ranges(self.editor.ACTIVE_LINE_TAG))),
+                ("2.0", "3.0"),
+            )
+            self.assertEqual(
+                widget.tag_cget(self.editor.ACTIVE_LINE_TAG, "background"),
+                self.editor.ACTIVE_LINE_BACKGROUND,
+            )
+
+        self.assertEqual(self.editor._bold_line_number_font.actual("weight"), "bold")
+        self.assertEqual(
+            self.editor._line_numbers.tag_cget(self.editor.ACTIVE_LINE_TAG, "font"),
+            str(self.editor._bold_line_number_font),
+        )
+
+        self.editor.new_content("<root/>")
+        for widget in (self.editor._text, self.editor._line_numbers):
+            self.assertEqual(
+                tuple(map(str, widget.tag_ranges(self.editor.ACTIVE_LINE_TAG))),
+                ("1.0", "2.0"),
+            )
+
+    def test_text_selection_stays_above_active_line_highlight(self):
+        self.editor.new_content("<root>\n  value\n</root>")
+        self.editor.select_text("value", "2.2")
+
+        self.assertEqual(
+            tuple(map(str, self.editor._text.tag_ranges(tk.SEL))),
+            ("2.2", "2.7"),
+        )
+        tag_priorities = self.editor._text.tag_names("2.3")
+        self.assertLess(
+            tag_priorities.index(self.editor.ACTIVE_LINE_TAG),
+            tag_priorities.index(tk.SEL),
+        )
+        self.assertEqual(
+            self.editor._text.tag_cget(self.editor.ACTIVE_LINE_TAG, "background"),
+            "",
+        )
+        self.assertEqual(
+            self.editor._line_numbers.tag_cget(
+                self.editor.ACTIVE_LINE_TAG, "background"
+            ),
+            "",
+        )
+
+        self.editor._text.tag_remove(tk.SEL, "1.0", "end")
+        self.editor.move_cursor("2.1", focus=False)
+        self.assertEqual(
+            self.editor._text.tag_cget(self.editor.ACTIVE_LINE_TAG, "background"),
+            self.editor.ACTIVE_LINE_BACKGROUND,
+        )
+        self.assertEqual(
+            self.editor._line_numbers.tag_cget(
+                self.editor.ACTIVE_LINE_TAG, "background"
+            ),
+            self.editor.ACTIVE_LINE_BACKGROUND,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
