@@ -19,8 +19,10 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Dict, Optional
+from unittest.mock import Mock
 
 from jsbsim_gui.find import (
+    PropertyOccurrencesTree,
     TextSubstitutionRegion,
     PropertyTreeNode,
     _node_in_text,
@@ -29,6 +31,75 @@ from jsbsim_gui.find import (
     _search_property_occurrences,
 )
 from jsbsim_gui.tree_node import TextRegion, XMLNode, XMLNodeBuilder
+
+
+class TestPropertySearch(unittest.TestCase):
+    def test_numeric_index_wildcards_match_optional_zero_and_one_or_more_digits(
+        self,
+    ) -> None:
+        tree = PropertyOccurrencesTree.__new__(PropertyOccurrencesTree)
+        tree._controller = Mock()
+        tree._controller.get_property_list.return_value = [
+            Mock(get_fully_qualified_name=Mock(return_value=path))
+            for path in (
+                "/fdm/engine/blade",
+                "/fdm/engine[0]/blade",
+                "/fdm/engine[1]/blade",
+                "/fdm/engine[12]/blade",
+                "/fdm/engine[a]/blade",
+            )
+        ]
+        tree._controller.get_property_root.return_value = Mock(
+            get_fully_qualified_name=Mock(return_value="/fdm")
+        )
+
+        property_tree, _ = tree._find_matching_properties("engine[#]/blade")
+
+        self.assertEqual(
+            [node.path for node in property_tree],
+            [
+                "",
+                "/fdm",
+                "/fdm/engine",
+                "/fdm/engine/blade",
+                "/fdm/engine[1]",
+                "/fdm/engine[1]/blade",
+                "/fdm/engine[12]",
+                "/fdm/engine[12]/blade",
+            ],
+        )
+
+    def test_terminal_index_wildcard_requires_a_path_boundary(self) -> None:
+        tree = PropertyOccurrencesTree.__new__(PropertyOccurrencesTree)
+        tree._controller = Mock()
+        tree._controller.get_property_list.return_value = [
+            Mock(get_fully_qualified_name=Mock(return_value=path))
+            for path in (
+                "/fdm/n1",
+                "/fdm/n1/gen",
+                "/fdm/n1[23]/gen",
+                "/fdm/n1-gen",
+            )
+        ]
+        tree._controller.get_property_root.return_value = Mock(
+            get_fully_qualified_name=Mock(return_value="/fdm")
+        )
+
+        property_tree, _ = tree._find_matching_properties("n1[#]")
+        self.assertEqual(
+            [node.path for node in property_tree],
+            [
+                "",
+                "/fdm",
+                "/fdm/n1",
+                "/fdm/n1/gen",
+                "/fdm/n1[23]",
+                "/fdm/n1[23]/gen",
+            ],
+        )
+
+        property_tree, _ = tree._find_matching_properties("n1[#]-gen")
+        self.assertEqual([node.path for node in property_tree], [""])
 
 
 class TestPropertyTreeNode(unittest.TestCase):

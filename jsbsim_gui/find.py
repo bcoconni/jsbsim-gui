@@ -16,6 +16,7 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import copy
+import re
 import tkinter as tk
 from dataclasses import asdict
 from itertools import chain
@@ -241,7 +242,8 @@ def _normalize_attribute_names(xml_trees: List[XMLNode]) -> List[XMLNode]:
             else:
                 if attr_name is None:
                     continue
-                elif node.name == "table":
+
+                if node.name == "table":
                     table_type = node.attrs.get("type")
                     if table_type is None or table_type.text != "internal":
                         rename = lambda s: s.replace(" ", "-")
@@ -323,7 +325,7 @@ class PropertyOccurrencesTree(SearchableTree):
                 self._occurrence_data[occurrence_id] = (file_state, occurence)
 
     def _search(self) -> None:
-        property_path = self.get_search_text().strip()
+        property_path = self.get_search_text()
         if not property_path or len(property_path) < 2:
             self.set_occurrences({})
             return
@@ -343,15 +345,24 @@ class PropertyOccurrencesTree(SearchableTree):
     def _find_matching_properties(
         self, property_path: str
     ) -> Tuple[PropertyTreeNode, Optional[PropertyTreeNode]]:
-        property_tree = PropertyTreeNode("")
-        search_path = property_path.replace("[0]", "")
-        properties = self._controller.get_property_list()
 
-        for prop in properties:
+        search_pattern: List[str] = []
+        for item in property_path.split("/"):
+            if item.endswith("[0]"):
+                search_pattern.append(re.escape(item[:-3]))
+            elif item.endswith("[#]"):
+                search_pattern.append(re.escape(item[:-3]) + r"(\[[0-9]+\])?(?=/|$)")
+            else:
+                search_pattern.append(re.escape(item))
+
+        search_path = re.compile(r"/".join(search_pattern))
+        property_tree = PropertyTreeNode("")
+
+        for prop in self._controller.get_property_list():
             full_path = prop.get_fully_qualified_name()
             normalized_path = full_path.replace("[0]", "")
 
-            if search_path in normalized_path:
+            if search_path.search(normalized_path):
                 property_tree.add(normalized_path)
 
         property_root = self._controller.get_property_root()

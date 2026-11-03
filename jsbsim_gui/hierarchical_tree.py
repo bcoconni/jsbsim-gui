@@ -264,7 +264,7 @@ class SearchableTree(EditableFrame):
         self._update_visible_items(None)
 
     def get_search_text(self) -> str:
-        return self._search_pattern.get()
+        return self._search_pattern.get().strip()
 
     def set_search_text(self, text: str) -> None:
         self._search_pattern.set(text)
