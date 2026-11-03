@@ -17,6 +17,7 @@
 
 import re
 import tkinter as tk
+from itertools import chain
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW, VERTICAL
 from tkinter.messagebox import showerror
@@ -130,40 +131,58 @@ class HierarchicalTree(EditableFrame):
 
         return selected_items
 
-    def filter(self, pattern: str, parent_id: str = "") -> bool:
-        """
-        Filters the hierarchical tree based on the given pattern.
-
-        Args:
-            pattern (str): The pattern to filter the tree with.
-            parent_id (str, optional): The ID of the parent item. Defaults to "".
-
-        Returns:
-            bool: True if any item in the tree matches the pattern, False otherwise.
-        """
+    def _get_filtered_nodes(self, pattern: str, parent_id: str = "") -> List[str]:
         tree = self._tree
-        success = False
+        candidates = tree.get_children(parent_id)
+        first_token = True
 
-        for child_id in tree.get_children(parent_id):
-            if pattern in tree.item(child_id, "text"):
-                tree.see(child_id)
-                success = True
-                continue
+        for token in pattern.split("/"):
+            matching_nodes: List[str] = []
+            for child_id in candidates:
+                if token in tree.item(child_id, "text"):
+                    matching_nodes.append(child_id)
 
-            if self.filter(pattern, child_id):
-                success = True
-            else:
-                self._hidden_items.append((child_id, parent_id, tree.index(child_id)))
-                tree.detach(child_id)
-        return success
+                if first_token:
+                    matching_nodes.extend(self._get_filtered_nodes(token, child_id))
+
+            first_token = False
+            candidates = chain.from_iterable(
+                tree.get_children(node_id) for node_id in matching_nodes
+            )
+        return matching_nodes
+
+    def filter(self, pattern: str) -> bool:
+        tree = self._tree
+
+        matching_nodes = set(self._get_filtered_nodes(pattern))
+        for child_id in matching_nodes:
+            tree.see(child_id)
+
+        parent_nodes = set(tree.parent(id) for id in matching_nodes)
+        parent_nodes.discard("")
+        ancestry_nodes = matching_nodes
+
+        while parent_nodes:
+            ancestry_nodes = ancestry_nodes.union(parent_nodes)
+            parent_nodes = set(tree.parent(id) for id in parent_nodes)
+            parent_nodes.discard("")
+
+        parents = set(tree.parent(node) for node in ancestry_nodes)
+        # Don't hide the children of the matching nodes
+        parents = parents.difference(matching_nodes)
+        orphans = set(chain.from_iterable(tree.get_children(p) for p in parents))
+        if "" not in parents:
+            orphans = orphans.union(tree.get_children(""))
+
+        for orphan_id in orphans.difference(ancestry_nodes):
+            self._hidden_items.append(
+                (orphan_id, tree.parent(orphan_id), tree.index(orphan_id))
+            )
+            tree.detach(orphan_id)
+
+        return bool(matching_nodes)
 
     def unfilter(self) -> bool:
-        """
-        Unfilters the hidden items in the hierarchical tree.
-
-        Returns:
-            bool: True if there were hidden items to unfilter, False otherwise.
-        """
         if self._hidden_items:
             for child_params in reversed(self._hidden_items):
                 self._tree.reattach(*child_params)
