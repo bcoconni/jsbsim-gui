@@ -85,6 +85,21 @@ class TestWorkspace(unittest.TestCase):
         self.assertGreater(self.app.left_frame.winfo_width(), initial_width)
         self.assertGreater(self.app.property_tree.winfo_width(), initial_width)
 
+    def test_console_height_stays_constant_when_window_grows(self):
+        self.app.deiconify()
+        self.app.update()
+        initial_height = self.app.winfo_height()
+        initial_console_height = self.app._consoles_panel.winfo_height()
+        initial_main_height = self.app.main.winfo_height()
+
+        self.app.geometry(f"{self.app.winfo_width()}x{initial_height + 120}")
+        self.app.update()
+
+        self.assertEqual(
+            self.app._consoles_panel.winfo_height(), initial_console_height
+        )
+        self.assertGreater(self.app.main.winfo_height(), initial_main_height)
+
     def test_tabs_preserve_editor_and_navigation_selects_editor(self):
         editor = self.editor
         item = self.files._fileview.get_id_from_path(self.files.current_file.filepath)

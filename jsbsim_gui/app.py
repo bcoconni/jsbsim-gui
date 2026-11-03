@@ -359,7 +359,9 @@ class App(tk.Tk):
         self.main.grid_rowconfigure(0, weight=1)
 
         assert self._consoles_panel
-        self._console_sash.add(self.main, before=self._consoles_panel, **add_options)
+        self._console_sash.add(
+            self.main, before=self._consoles_panel, stretch="always", **add_options
+        )
         self.menubar.update_save_menu_state(True)
 
         # Window layout
@@ -440,7 +442,7 @@ class App(tk.Tk):
                 on_file_link_click=self._on_file_link_click,
                 height=8,
             )
-            self._console_sash.add(self._consoles_panel)
+            self._console_sash.add(self._consoles_panel, stretch="never")
 
         console_logger = self._consoles_panel.get_logger(
             lambda name: get_path_relative_to_root(name, self.root_dir)
