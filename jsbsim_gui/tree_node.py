@@ -146,9 +146,37 @@ class XMLNodeBuilder:
         node = self._parent
         if node is not None:
             text = data.replace("\r\n", "\n").replace("\r", "\n").rstrip(" \t\n")
-            region = TextRegion(
-                text, self._parser.CurrentColumnNumber, self._parser.CurrentLineNumber
-            )
+            if text == "":
+                return
+
+            column_number = self._parser.CurrentColumnNumber
+            line_number = self._parser.CurrentLineNumber
+            lines = text.splitlines()
+
+            if len(lines) == 1:
+                for delta, char in enumerate(lines[0]):
+                    if char not in (" ", "\t"):
+                        column_number += delta
+                        text = text[delta:]
+                        break
+                else:
+                    return
+            else:
+                pos0 = 0
+                for line in lines:
+                    for delta, char in enumerate(line):
+                        if char not in (" ", "\t"):
+                            column_number += delta
+                            text = text[pos0 + delta :]
+                            break
+                    else:
+                        line_number += 1
+                        column_number = 0
+                        pos0 += delta + 1  # Including '\n'
+                        continue
+                    break
+
+            region = TextRegion(text, column_number, line_number)
             node.data.append(region)
 
     def _end_element(self, _: str) -> None:
