@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog as fd
 from tkinter.messagebox import showerror
+from typing import Callable
 
 import platformdirs
 
@@ -32,6 +33,7 @@ from .options import get_options
 
 FILE_MANAGEMENT_KEY = "file_management"
 RECENT_FILES_KEY = "recent_files"
+OPEN_RECENT_MENU_ENTRY = "Open recent"
 
 
 @dataclass
@@ -88,6 +90,33 @@ class RecentFiles:
                 if len(self._recent_files) > num_recent_files:
                     self._recent_files = self._recent_files[:num_recent_files]
 
+    def get_menu(
+        self, master: tk.Widget, open_file: Callable[[str, str], None]
+    ) -> tk.Menu:
+        menu = tk.Menu(master, tearoff=False)
+
+        def generate_menu_command(file: list[str]):  # Capture the value of `file`
+            def menu_command(
+                menu: tk.Menu, file_name: Path, open_file: Callable[[str, str], None]
+            ):
+                menu.add_command(label=str(file_name), command=lambda: open_file(*file))
+
+            return menu_command
+
+        for file in self._recent_files:
+            file_name = Path(file[0]).resolve()
+            try:
+                home = Path.home()
+                if file_name.is_relative_to(home):
+                    file_name = "~" / file_name.relative_to(home)
+            except RuntimeError:
+                pass
+
+            menu_add_command = generate_menu_command(file)
+            menu_add_command(menu, file_name, open_file)
+
+        return menu
+
 
 class MenuBar(tk.Menu):
     def __init__(self, master: tk.Tk, root_dir: str):
@@ -97,6 +126,8 @@ class MenuBar(tk.Menu):
         self._file_menu = tk.Menu(self, tearoff=False)
         self._file_menu.add_command(label="Root...", command=self._set_root_dir)
         self._file_menu.add_command(label="Open...", command=self._select_script_file)
+        sub_menu = RecentFiles().get_menu(self._file_menu, self._open_recent_file)
+        self._file_menu.add_cascade(label=OPEN_RECENT_MENU_ENTRY, menu=sub_menu)
         self._file_menu.add_separator()
         self._file_menu.add_command(
             label="Save",
@@ -181,14 +212,23 @@ class MenuBar(tk.Menu):
             self.master.load_csv(filename)
             return
 
+        self._open_file(filename)
+
+    def _open_recent_file(self, filename: str, root_dir: str) -> None:
+        self._root_dir = root_dir
+        self.master.root_dir = root_dir
+        self._open_file(filename)
+
+    def _open_file(self, filename: str) -> None:
         root = et.parse(filename).getroot()
         success = False
         if root.tag == "runscript":
             use_el = root.find("use")
-            aircraft_name = use_el.attrib["aircraft"]
-            success = self.master.open_file(
-                filename, aircraft_name, Controller.load_script
-            )
+            if use_el is not None:
+                aircraft_name = use_el.attrib["aircraft"]
+                success = self.master.open_file(
+                    filename, aircraft_name, Controller.load_script
+                )
         elif root.tag == "fdm_config":
             aircraft_name = os.path.splitext(os.path.basename(filename))[0]
             success = self.master.open_file(
@@ -199,6 +239,8 @@ class MenuBar(tk.Menu):
             return
         if success:
             self.enable_menus()
+            sub_menu = RecentFiles().get_menu(self._file_menu, self._open_recent_file)
+            self._file_menu.entryconfigure(OPEN_RECENT_MENU_ENTRY, menu=sub_menu)
         else:
             name = os.path.relpath(filename, self._root_dir)
             showerror(
