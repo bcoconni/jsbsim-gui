@@ -68,7 +68,10 @@ class RecentFiles(Options):
         self.set(RECENT_FILES_KEY, recent_files)
         self._save()
 
-    def _load(self):
+    def get(self, name: str) -> list[list[str]]:
+        return self._options.get(name, [])
+
+    def _load(self) -> None:
         super()._load()
         recent_files = self.get(RECENT_FILES_KEY)
         num_recent_files = self._file_options.num_recent_files
@@ -225,8 +228,6 @@ class MenuBar(tk.Menu):
             return
         if success:
             self.enable_menus()
-            sub_menu = RecentFiles().get_menu(self._file_menu, self._open_recent_file)
-            self._file_menu.entryconfigure(OPEN_RECENT_MENU_ENTRY, menu=sub_menu)
         else:
             name = os.path.relpath(filename, self._root_dir)
             showerror(
@@ -247,6 +248,8 @@ class MenuBar(tk.Menu):
         assert self._reload_menu_index is not None
         self.entryconfig("Edit", state=tk.NORMAL)
         self._file_menu.entryconfig(self._reload_menu_index, state=tk.NORMAL)
+        sub_menu = RecentFiles().get_menu(self._file_menu, self._open_recent_file)
+        self._file_menu.entryconfigure(OPEN_RECENT_MENU_ENTRY, menu=sub_menu)
 
     def update_save_menu_state(self, enable: bool) -> None:
         state = tk.NORMAL if enable else tk.DISABLED

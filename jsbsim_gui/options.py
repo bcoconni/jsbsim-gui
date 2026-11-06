@@ -36,7 +36,7 @@ class Options:
     def get(self, name: str) -> Any:
         return self._options.get(name, {})
 
-    def set(self, name: str, value: dict[str, Any]) -> None:
+    def set(self, name: str, value: Any) -> None:
         self._options[name] = value
 
         if name in self._subscribers:
