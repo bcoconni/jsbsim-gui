@@ -470,4 +470,5 @@ class App(tk.Tk):
             self._console_sash.grid(column=0, row=0, sticky=NSEW)
             self._statusbar.grid(column=0, row=1, sticky=EW)
             self._statusbar.set_text("Ready.")
+            self.menubar.add_recent_file(filename, self.root_dir)
         return success
