@@ -175,6 +175,7 @@ class Controller:
         systems_path = self.fdm.get_systems_path()
 
         included_files = _get_included_files(root)
+        included_xml_trees: dict[str, XMLNode] = {}
 
         for node, filename in included_files:
             if os.path.exists(os.path.join(aircraft_path, filename)):
@@ -198,16 +199,20 @@ class Controller:
             else:
                 raise FileNotFoundError(f"Could not find {filename}")
 
-            root_include = XMLNodeBuilder(
-                self.get_relative_path(fullpath), fullpath
-            ).root
-            assert root_include is not None
-
-            included_files.extend(_get_included_files(root_include))
-
-            if node.name in ("engine", "thruster"):
-                xml_trees.append(root_include)
+            if fullpath in included_xml_trees:
+                root_include = included_xml_trees[fullpath]
             else:
+                root_include = XMLNodeBuilder(
+                    self.get_relative_path(fullpath), fullpath
+                ).root
+                assert root_include is not None
+                included_xml_trees[fullpath] = root_include
+                included_files.extend(_get_included_files(root_include))
+
+                if node.name in ("engine", "thruster"):
+                    xml_trees.append(root_include)
+
+            if node.name not in ("engine", "thruster"):
                 parent = node.parent
                 node.parent = None
                 root_include.parent = parent
