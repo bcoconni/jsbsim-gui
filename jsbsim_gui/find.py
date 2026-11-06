@@ -322,6 +322,8 @@ class PropertyOccurrencesTree(SearchableTree):
         self.tree.grid(column=0, row=1, sticky=NSEW)
         self.tree.bind("<<TreeviewSelect>>", self._on_entry_selected)
 
+        self._label = ttk.Label(self)
+        self._label.grid(column=0, row=2, sticky=tk.W)
         buttons_frame = ttk.Frame(self, padding=(0, 2))
         ttk.Button(buttons_frame, text="Previous", command=self._prev_entry).grid(
             column=0, row=0, padx=1
@@ -329,7 +331,7 @@ class PropertyOccurrencesTree(SearchableTree):
         ttk.Button(buttons_frame, text="Next", command=self._next_entry).grid(
             column=1, row=0, padx=1
         )
-        buttons_frame.grid(column=0, row=2)
+        buttons_frame.grid(column=0, row=3)
 
     def set_occurrences(self, occurrences: Dict[str, List[TextRegion]]) -> None:
         self._occurrence_data = {}
@@ -373,6 +375,7 @@ class PropertyOccurrencesTree(SearchableTree):
         self.set_occurrences(occurrences)
         self._entries = sorted(self._occurrence_data.keys())
         self._num_entries = len(self._entries)
+        self._label.configure(text=f"{self._num_entries} occurence(s)")
         self._selected_entry = -1
 
     def _find_matching_properties(
