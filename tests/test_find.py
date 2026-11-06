@@ -18,7 +18,6 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Optional
 from unittest.mock import Mock
 
 from jsbsim_gui.find import (
@@ -428,7 +427,7 @@ class TestSearchPropertyOccurrences(unittest.TestCase):
 
 class TestNormalizeAttributeNames(unittest.TestCase):
     def make_node(
-        self, name: str, attrs: Dict[str, str], parent: Optional[XMLNode] = None
+        self, name: str, attrs: dict[str, str], parent: XMLNode | None = None
     ) -> XMLNode:
         node = XMLNode(
             name,

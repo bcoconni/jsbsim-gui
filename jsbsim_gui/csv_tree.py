@@ -20,7 +20,6 @@ import os
 import tkinter as tk
 from dataclasses import dataclass
 from tkinter.messagebox import showerror
-from typing import Dict, List
 
 import numpy as np
 
@@ -42,8 +41,8 @@ class CsvTree(SearchableTree):
             lambda parent: HierarchicalTree(parent, [], [], is_open=True),
         )
         self.tree.configure_tree(show="tree", selectmode="extended")
-        self._item_id_to_column: Dict[str, CsvData] = {}
-        self._loaded_files: List[str] = []
+        self._item_id_to_column: dict[str, CsvData] = {}
+        self._loaded_files: list[str] = []
 
     def has_loaded_files(self) -> bool:
         return bool(self._loaded_files)
@@ -88,8 +87,8 @@ class CsvTree(SearchableTree):
                 csv_path, col_name, time_array, data[:, col_idx]
             )
 
-    def get_selected_csv_columns(self) -> List[CsvData]:
-        result: List[CsvData] = []
+    def get_selected_csv_columns(self) -> list[CsvData]:
+        result: list[CsvData] = []
         for item_id in self.tree.selection():
             children = self.tree.get_children(item_id)
             if children:

@@ -15,8 +15,6 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-from typing import List, Optional, Tuple
-
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -28,7 +26,7 @@ class PlotLabel:
     PADDING_PIXELS = 5
 
     def __init__(
-        self, canvas: FigureCanvasTkAgg, ax: Axes, line: Optional[Line2D], color: str
+        self, canvas: FigureCanvasTkAgg, ax: Axes, line: Line2D | None, color: str
     ):
         self._canvas = canvas
         self._ax = ax
@@ -56,7 +54,7 @@ class PlotLabel:
 
     # Manually update the bounding box position
     def _update_bounding_box(
-        self, bbox_px: Bbox, pos0_px: np.ndarray, pos_px: Tuple[float, float]
+        self, bbox_px: Bbox, pos0_px: np.ndarray, pos_px: tuple[float, float]
     ) -> None:
         delta_pos_px = pos_px - pos0_px
         bbox_xy0 = [bbox_px.x0, bbox_px.y0] + delta_pos_px
@@ -118,9 +116,9 @@ class PlotLabelManager:
 
     def __init__(self, canvas: FigureCanvasTkAgg):
         self._canvas = canvas
-        self._labels: List[PlotLabel] = []
+        self._labels: list[PlotLabel] = []
 
-    def create_labels(self, axes: List[Axes]) -> None:
+    def create_labels(self, axes: list[Axes]) -> None:
         time_label = PlotLabel(self._canvas, axes[0], None, color="0.0")
         self._labels = [time_label]
 

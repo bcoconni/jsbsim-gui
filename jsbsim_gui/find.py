@@ -22,7 +22,7 @@ from dataclasses import asdict
 from itertools import chain
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable
 
 from .controller import Controller
 from .file_state import FileState
@@ -34,14 +34,14 @@ class XMLTree(SearchableTree):
     def __init__(
         self,
         master: tk.Widget,
-        xml_trees: List[XMLNode],
-        file_states: Dict[str, FileState],
+        xml_trees: list[XMLNode],
+        file_states: dict[str, FileState],
         move_cursor: Callable[[FileState, int, int], None],
     ):
         super().__init__(master, lambda parent: HierarchicalTree(parent, [], [], False))
         self._file_states = file_states
         self._move_cursor = move_cursor
-        self.nodes: Dict[str, XMLNode] = {}
+        self.nodes: dict[str, XMLNode] = {}
         tree = self.tree
         tree.configure_tree(show="tree", selectmode=BROWSE)
 
@@ -86,7 +86,7 @@ class PropertyTreeNode(TreeNode):
         child = PropertyTreeNode(names[1])
         child.parent = self
 
-    def find(self, node_name: str) -> Optional[TreeNode]:
+    def find(self, node_name: str) -> TreeNode | None:
         names = node_name.split("/", maxsplit=1)
         child_names = names[1].split("/", maxsplit=1)
         for child in self.children:
@@ -104,8 +104,8 @@ def _node_in_text(
     relative_path: bool,
     match_start: int = -1,
     match_end: int = -1,
-) -> Optional[Tuple[int, int]]:
-    earliest: Optional[Tuple[int, int]] = None
+) -> tuple[int, int] | None:
+    earliest: tuple[int, int] | None = None
     for child in tree.children:
         name = child.name if relative_path else "/" + child.name
         index_start = name.find("[")
@@ -161,8 +161,8 @@ def _node_in_text(
 
 def _nodes_in_text(
     tree: TreeNode, text: str, relative_path: bool
-) -> List[Tuple[int, int]]:
-    matching_positions: List[Tuple[int, int]] = []
+) -> list[tuple[int, int]]:
+    matching_positions: list[tuple[int, int]] = []
     position = _node_in_text(tree, text, relative_path)
     while position:
         matching_positions.append(position)
@@ -179,9 +179,9 @@ def _nodes_in_text(
 
 
 def _search_node_occurrences(
-    tree: TreeNode, sub_tree: Optional[TreeNode], xml_trees: List[XMLNode]
-) -> Dict[str, List[TextRegion]]:
-    occurrences: Dict[str, List[TextRegion]] = {}
+    tree: TreeNode, sub_tree: TreeNode | None, xml_trees: list[XMLNode]
+) -> dict[str, list[TextRegion]]:
+    occurrences: dict[str, list[TextRegion]] = {}
 
     for xml_tree in xml_trees:
         for node in xml_tree:
@@ -246,14 +246,14 @@ _ENGINE_SPECIAL_FUNCTION_NAMES = (
 )
 
 
-def _normalize_attribute_names(xml_trees: List[XMLNode]) -> List[XMLNode]:
+def _normalize_attribute_names(xml_trees: list[XMLNode]) -> list[XMLNode]:
     trees = copy.deepcopy(xml_trees)
     for tree in trees:
         tree_traversal = TreeNodeConditionalIterator(tree)
         for node in tree_traversal:
             assert isinstance(node, XMLNode)
             attr_name = node.attrs.get("name")
-            rename: Optional[Callable[[str], str]] = None
+            rename: Callable[[str], str] | None = None
             p = node.parent
 
             if node.name == "function":
@@ -301,19 +301,19 @@ class PropertyOccurrencesTree(SearchableTree):
         self,
         master: tk.Widget,
         controller: Controller,
-        xml_trees: List[XMLNode],
-        file_states: Dict[str, FileState],
+        xml_trees: list[XMLNode],
+        file_states: dict[str, FileState],
         select_text: Callable[[str, FileState, int, int], None],
     ):
         super().__init__(
             master, lambda parent: HierarchicalTree(parent, [], ["content"], True)
         )
-        self._occurrence_data: Dict[str, Tuple[FileState, TextRegion]] = {}
+        self._occurrence_data: dict[str, tuple[FileState, TextRegion]] = {}
         self._controller = controller
         self._file_states = file_states
         self._xml_trees = _normalize_attribute_names(xml_trees)
         self._select_text = select_text
-        self._entries: List[str] = []
+        self._entries: list[str] = []
         self._num_entries = 0
         self._selected_entry = -1
         self.tree.configure_tree(show="tree headings", selectmode=BROWSE)
@@ -333,11 +333,11 @@ class PropertyOccurrencesTree(SearchableTree):
         )
         buttons_frame.grid(column=0, row=3)
 
-    def set_occurrences(self, occurrences: Dict[str, List[TextRegion]]) -> None:
+    def set_occurrences(self, occurrences: dict[str, list[TextRegion]]) -> None:
         self._occurrence_data = {}
         self.tree.clear()
 
-        input_files: List[str] = []
+        input_files: list[str] = []
         for file_path in occurrences.keys():
             if file_path not in input_files:
                 input_files.append(file_path)
@@ -368,7 +368,7 @@ class PropertyOccurrencesTree(SearchableTree):
             return
 
         property_tree, root = self._find_matching_properties(property_path)
-        occurrences: Dict[str, List[TextRegion]] = {}
+        occurrences: dict[str, list[TextRegion]] = {}
         if property_tree.children:
             occurrences = _search_node_occurrences(property_tree, root, self._xml_trees)
 
@@ -380,9 +380,9 @@ class PropertyOccurrencesTree(SearchableTree):
 
     def _find_matching_properties(
         self, property_path: str
-    ) -> Tuple[TreeNode, Optional[TreeNode]]:
+    ) -> tuple[TreeNode, TreeNode | None]:
 
-        search_pattern: List[str] = []
+        search_pattern: list[str] = []
         for item in property_path.split("/"):
             if item.endswith("[0]"):
                 search_pattern.append(re.escape(item[:-3]))
@@ -409,7 +409,7 @@ class PropertyOccurrencesTree(SearchableTree):
         relative_property_tree = property_tree.find(root_name)
         return property_tree, relative_property_tree
 
-    def _on_entry_selected(self, _event: Optional[tk.Event]) -> None:
+    def _on_entry_selected(self, _event: tk.Event | None) -> None:
         selection = self.tree.selection()
         if selection and selection[0] in self._occurrence_data:
             self._selected_entry = self._entries.index(selection[0])
@@ -441,9 +441,9 @@ class PropertyOccurrencesTree(SearchableTree):
 class FindWindow(tk.Toplevel):
     def __init__(
         self,
-        master: Union[tk.Tk, tk.Toplevel],
+        master: tk.Tk | tk.Toplevel,
         controller: Controller,
-        file_states: Dict[str, FileState],
+        file_states: dict[str, FileState],
         select_text: Callable[[str, FileState, int, int], None],
         move_cursor: Callable[[FileState, int, int], None],
     ):

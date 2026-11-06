@@ -33,7 +33,7 @@ from tkinter.constants import (
     NSEW,
     VERTICAL,
 )
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, Literal
 from xml.parsers import expat
 
 from pygments import lex
@@ -51,13 +51,13 @@ class TextView(EditableFrame):
     def __init__(
         self,
         master: tk.Widget,
-        contents: Optional[str] = None,
+        contents: str | None = None,
         frame_column: int = 0,
         **kw,
     ):
         super().__init__(master)
         self._text = tk.Text(self, **kw)
-        self._focus_timer: Optional[str] = None
+        self._focus_timer: str | None = None
         self._text.bind("<Destroy>", self._cancel_pending_focus, add="+")
         self._text.grid(column=frame_column, row=0, sticky=NSEW)
 
@@ -70,7 +70,7 @@ class TextView(EditableFrame):
 
         # Horizontal scrollbar if the text is not wrapped
         if "wrap" in kw and kw["wrap"] == NONE:
-            self.xscrollbar: Optional[ttk.Scrollbar] = ttk.Scrollbar(
+            self.xscrollbar: ttk.Scrollbar | None = ttk.Scrollbar(
                 self, orient=HORIZONTAL, command=self._text.xview
             )
             self.xscrollbar.grid(column=frame_column, row=1, sticky=EW)
@@ -193,7 +193,7 @@ class TextView(EditableFrame):
         self,
         sequence: str,
         func: Callable[[tk.Event], object],
-        add: Union[bool, Literal["", "+"], None] = None,
+        add: bool | Literal["", "+"] | None = None,
     ) -> str:
         return self._text.bind(sequence, func, add)
 
@@ -215,14 +215,14 @@ class SourceCodeView(TextView):
     HIGHLIGHT_DELAY_MS = 300
     ACTIVE_LINE_TAG = "active_line"
 
-    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
+    def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
         # Override parameters defined upstream
         kw["borderwidth"] = 0
         kw["relief"] = FLAT
         super().__init__(master, frame_column=1, undo=True, **kw)
-        self._modified_text_callbacks: List[Callable[[bool], None]] = []
-        self._highlight_timer: Optional[str] = None
-        self._lexer: Optional[Lexer] = None
+        self._modified_text_callbacks: list[Callable[[bool], None]] = []
+        self._highlight_timer: str | None = None
+        self._lexer: Lexer | None = None
 
         self._line_numbers = tk.Text(
             self,
@@ -344,10 +344,10 @@ class SourceCodeView(TextView):
             if tag_name:
                 self._text.tag_add(tag_name, start, end)
 
-    def _get_highlight_tags(self) -> List[str]:
+    def _get_highlight_tags(self) -> list[str]:
         return []
 
-    def _get_tag_name(self, _token: _TokenType) -> Optional[str]:
+    def _get_tag_name(self, _token: _TokenType) -> str | None:
         return None
 
     def _move_line_numbers(self, first: float, last: float) -> None:
@@ -416,7 +416,7 @@ class SourceCodeView(TextView):
             )
         self._line_numbers.configure(state=DISABLED)
 
-    def _update_active_line(self, _event: Optional[tk.Event] = None) -> None:
+    def _update_active_line(self, _event: tk.Event | None = None) -> None:
         line = self._text.index(f"{tk.INSERT} linestart").split(".", maxsplit=1)[0]
         for widget in (self._text, self._line_numbers):
             widget.tag_remove(self.ACTIVE_LINE_TAG, "1.0", END)
@@ -465,7 +465,7 @@ XML_SYNTAX_COLORS_KEY = "xml_syntax_colors"
 
 
 class XMLSourceCodeView(SourceCodeView):
-    def __init__(self, master: tk.Widget, contents: Optional[str] = None, **kw):
+    def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
         super().__init__(master, contents, **kw)
 
         self._load_syntax_colors()
@@ -496,10 +496,10 @@ class XMLSourceCodeView(SourceCodeView):
         if event.widget == self._text:
             get_options().unsubscribe(XML_SYNTAX_COLORS_KEY, self._load_syntax_colors)
 
-    def _get_highlight_tags(self) -> List[str]:
+    def _get_highlight_tags(self) -> list[str]:
         return ["XML_" + tag for tag in asdict(XMLSyntaxColors()).keys()]
 
-    def _get_tag_name(self, token: _TokenType) -> Optional[str]:
+    def _get_tag_name(self, token: _TokenType) -> str | None:
         if token in Name.Tag:
             return "XML_tag"
         if token in Comment:
@@ -526,7 +526,7 @@ class XMLSourceCodeView(SourceCodeView):
             pass
         self.highlight_text()
 
-    def extract_tagged_regions(self, tag_name: str) -> List[Tuple[int, int, str]]:
+    def extract_tagged_regions(self, tag_name: str) -> list[tuple[int, int, str]]:
         tagged_regions = []
         ranges = self._text.tag_ranges(tag_name)
         for i in range(0, len(ranges), 2):
@@ -603,7 +603,7 @@ class ColorChooser(ttk.Frame):
 
 
 class TextViewOptionsTab(OptionsTab):
-    def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
+    def __init__(self, master: tk.Tk | tk.Toplevel, **kw):
         super().__init__(master, padding=10, **kw)
         options = get_options()
         options_colors = options.get(XML_SYNTAX_COLORS_KEY)
@@ -622,9 +622,9 @@ class TextViewOptionsTab(OptionsTab):
         colors_frame = ttk.LabelFrame(settings_frame, text="XML Colors", padding=10)
         colors_frame.pack(fill=tk.X, pady=(0, 5))
 
-        self._color_choosers: Dict[str, ColorChooser] = {}
-        self._swatches: Dict[str, tk.Canvas] = {}
-        self._hex_labels: Dict[str, ttk.Label] = {}
+        self._color_choosers: dict[str, ColorChooser] = {}
+        self._swatches: dict[str, tk.Canvas] = {}
+        self._hex_labels: dict[str, ttk.Label] = {}
 
         tags = asdict(self._current_colors).keys()
         for row_idx, tag in enumerate(tags):

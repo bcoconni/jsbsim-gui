@@ -18,7 +18,6 @@ import os
 import platform
 import xml.etree.ElementTree as et
 from xml.parsers.expat import ExpatError
-from typing import List, Optional, Tuple
 
 import jsbsim
 import numpy as np
@@ -29,8 +28,8 @@ from .property_history import PropertyHistory
 from .tree_node import XMLNode, XMLNodeBuilder
 
 
-def _get_included_files(root: XMLNode) -> List[Tuple[XMLNode, str]]:
-    included_files: List[Tuple[XMLNode, str]] = []
+def _get_included_files(root: XMLNode) -> list[tuple[XMLNode, str]]:
+    included_files: list[tuple[XMLNode, str]] = []
     for node in root:
         if "file" in node.attrs:
             filename = append_xml(node.attrs["file"].text)
@@ -141,7 +140,7 @@ class Controller:
             return name[len(root_name) + 1 :]
         return name
 
-    def get_xml_trees(self) -> List[XMLNode]:
+    def get_xml_trees(self) -> list[XMLNode]:
         aircraft_path = self.fdm.get_aircraft_path()
         root = XMLNodeBuilder(self.get_relative_path(self.filename), self.filename).root
         if root is None:
@@ -219,10 +218,10 @@ class Controller:
 
         return xml_trees
 
-    def get_property_root(self) -> Optional[FGPropertyNode]:
+    def get_property_root(self) -> FGPropertyNode | None:
         return self.fdm.get_property_manager().get_node()
 
-    def get_property_list(self) -> List[FGPropertyNode]:
+    def get_property_list(self) -> list[FGPropertyNode]:
         pm = self.fdm.get_property_manager()
         names = [
             p.split(" ")[0]
@@ -238,7 +237,7 @@ class Controller:
         return self.property_history.get_property_history(node)
 
     def get_time_snapshot(
-        self, time: float, properties: List[FGPropertyNode]
+        self, time: float, properties: list[FGPropertyNode]
     ) -> np.ndarray:
         step = int(time / self.dt)
         try:

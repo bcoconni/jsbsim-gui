@@ -21,7 +21,7 @@ from itertools import chain
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW, VERTICAL
 from tkinter.messagebox import showerror
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, Literal
 
 import numpy as np
 from jsbsim import FGPropertyNode
@@ -30,7 +30,7 @@ from .edit_actions import SHORTCUT_MODIFIER, EditableFrame, EditAction
 from .widget import TextBox
 
 
-def _natural_sort_key(path: str) -> List[Tuple[str, int]]:
+def _natural_sort_key(path: str) -> list[tuple[str, int]]:
     result = []
     for component in path.split("/"):
         m = re.match(r"^(.*)\[(\d+)\]$", component)
@@ -45,14 +45,14 @@ class HierarchicalTree(EditableFrame):
     def __init__(
         self,
         master: tk.Widget,
-        nodes: List[str],
-        columns_id: List[str],
+        nodes: list[str],
+        columns_id: list[str],
         is_open: bool = True,
     ):
         super().__init__(master)
         self._tree = ttk.Treeview(self, columns=columns_id)
         self._tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self._hidden_items: List[Tuple[str, str, int]] = []
+        self._hidden_items: list[tuple[str, str, int]] = []
         self._num_columns = len(columns_id)
 
         self.create_tree_nodes(nodes, is_open)
@@ -80,7 +80,7 @@ class HierarchicalTree(EditableFrame):
         self.set = self._tree.set
         self.yscrollbar_set = self._yscrollbar.set
 
-    def create_tree_nodes(self, nodes: List[str], is_open: bool = True) -> None:
+    def create_tree_nodes(self, nodes: list[str], is_open: bool = True) -> None:
         for node in nodes:
             parent_id = ""
             for name in node.split("/"):
@@ -110,13 +110,13 @@ class HierarchicalTree(EditableFrame):
 
     def bind(
         self,
-        sequence: Optional[str],
+        sequence: str | None,
         func: Callable[[tk.Event], object],
-        add: Union[bool, Literal["", "+"], None] = None,
+        add: bool | Literal["", "+"] | None = None,
     ) -> None:
         self._tree.bind(sequence, func, add)
 
-    def get_selected_items(self, leaf_only: bool) -> List[str]:
+    def get_selected_items(self, leaf_only: bool) -> list[str]:
         tree = self._tree
         selected_items = []
         for item in tree.selection():
@@ -131,13 +131,13 @@ class HierarchicalTree(EditableFrame):
 
         return selected_items
 
-    def _get_filtered_nodes(self, pattern: str, parent_id: str = "") -> List[str]:
+    def _get_filtered_nodes(self, pattern: str, parent_id: str = "") -> list[str]:
         tree = self._tree
         candidates = tree.get_children(parent_id)
         first_token = True
 
         for token in pattern.split("/"):
-            matching_nodes: List[str] = []
+            matching_nodes: list[str] = []
             for child_id in candidates:
                 if token in tree.item(child_id, "text"):
                     matching_nodes.append(child_id)
@@ -198,7 +198,7 @@ class HierarchicalTree(EditableFrame):
             tree.item(child_id, open=False)
         tree.see(tree.get_children()[0])
 
-    def get_id_from_path(self, path: str) -> Optional[str]:
+    def get_id_from_path(self, path: str) -> str | None:
         parent_id = ""
         for name in path.split("/"):
             for child_id in self._tree.get_children(parent_id):
@@ -210,7 +210,7 @@ class HierarchicalTree(EditableFrame):
 
         return parent_id
 
-    def _copy_selected_items_to_clipboard(self, _event: Optional[tk.Event]) -> str:
+    def _copy_selected_items_to_clipboard(self, _event: tk.Event | None) -> str:
         self.clipboard_clear()
         for item in self.get_selected_items(False):
             self.clipboard_append(item)
@@ -248,7 +248,7 @@ class SearchableTree(EditableFrame):
         self, master: tk.Widget, create_tree: Callable[[tk.Widget], HierarchicalTree]
     ):
         super().__init__(master)
-        self._visible_items: List[str] = []
+        self._visible_items: list[str] = []
 
         search_frame = ttk.Frame(self, padding=(0, 2))
         search_frame.grid(column=0, row=0, sticky=EW)
@@ -305,7 +305,7 @@ class SearchableTree(EditableFrame):
         self.tree.move_to_top()
         self._update_visible_items(None)
 
-    def _update_visible_items(self, _: Optional[tk.Event]) -> None:
+    def _update_visible_items(self, _: tk.Event | None) -> None:
         self._visible_items = []
         tree = self.tree
 
@@ -324,7 +324,7 @@ class SearchableTree(EditableFrame):
 
 class PropertyTree(SearchableTree):
     def __init__(
-        self, master: tk.Widget, properties: List[FGPropertyNode], root: FGPropertyNode
+        self, master: tk.Widget, properties: list[FGPropertyNode], root: FGPropertyNode
     ):
         self._root = root
         common_root, property_pairs = self.get_unified_property_names(properties)
@@ -334,7 +334,7 @@ class PropertyTree(SearchableTree):
             master,
             lambda parent: HierarchicalTree(parent, sorted_names, ["value"], False),
         )
-        self._properties: Dict[str, FGPropertyNode] = {}
+        self._properties: dict[str, FGPropertyNode] = {}
 
         tree = self.tree
         tree.configure_tree(displaycolumns=("value",))  # Hide the node columns
@@ -359,8 +359,8 @@ class PropertyTree(SearchableTree):
             self._rename_indexed_nodes(child_id)
 
     def get_unified_property_names(
-        self, properties: List[FGPropertyNode]
-    ) -> Tuple[FGPropertyNode, List[Tuple[FGPropertyNode, str]]]:
+        self, properties: list[FGPropertyNode]
+    ) -> tuple[FGPropertyNode, list[tuple[FGPropertyNode, str]]]:
         have_common_root = True
         raw_names = []
         root_name = self._root.get_fully_qualified_name()
@@ -391,7 +391,7 @@ class PropertyTree(SearchableTree):
         self._update_visible_items(None)
 
     def _initialize_values(
-        self, properties: List[FGPropertyNode], property_names: List[str]
+        self, properties: list[FGPropertyNode], property_names: list[str]
     ) -> None:
         tree = self.tree
         for node, pname in zip(properties, property_names):
@@ -442,7 +442,7 @@ class PropertyTree(SearchableTree):
         self._properties[item_id].set_double_value(v)
         self.update_values()
 
-    def update_values(self, values: Optional[np.ndarray] = None) -> None:
+    def update_values(self, values: np.ndarray | None = None) -> None:
         tree = self.tree
         if values is None:
             for item_id in self._visible_items:
@@ -452,8 +452,8 @@ class PropertyTree(SearchableTree):
             for item_id, value in zip(self._visible_items, values):
                 tree.set(item_id, "value", value)
 
-    def get_selected_properties(self) -> List[FGPropertyNode]:
-        selected_prop: List[FGPropertyNode] = []
+    def get_selected_properties(self) -> list[FGPropertyNode]:
+        selected_prop: list[FGPropertyNode] = []
         tree = self.tree
 
         def enumerate_children(parent_id: str) -> None:
@@ -469,16 +469,16 @@ class PropertyTree(SearchableTree):
 
         return selected_prop
 
-    def _update_visible_items(self, event: Optional[tk.Event]) -> None:
+    def _update_visible_items(self, event: tk.Event | None) -> None:
         super()._update_visible_items(event)
         self.update_values()
 
-    def get_visible_properties(self) -> List[FGPropertyNode]:
+    def get_visible_properties(self) -> list[FGPropertyNode]:
         return [self._properties[item_id] for item_id in self._visible_items]
 
 
 class FileTree(HierarchicalTree):
-    def __init__(self, master: tk.Widget, elements: List[str]):
+    def __init__(self, master: tk.Widget, elements: list[str]):
         super().__init__(master, sorted(elements), [])
         self._tree.configure(show="tree", selectmode=BROWSE)
         self._tree.tag_configure("modified", foreground="red")
@@ -486,7 +486,7 @@ class FileTree(HierarchicalTree):
     def bind_selection(
         self,
         func: Callable[[str], None],
-        add: Union[bool, Literal["", "+"], None] = None,
+        add: bool | Literal["", "+"] | None = None,
     ) -> None:
         def bind_func(_: tk.Event) -> None:
             selection = self.get_selected_items(True)

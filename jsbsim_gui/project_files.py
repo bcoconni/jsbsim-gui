@@ -10,7 +10,7 @@
 import os
 import tkinter as tk
 from tkinter.messagebox import askyesnocancel, showerror
-from typing import Callable, Dict, Optional
+from typing import Callable
 
 from .controller import Controller
 from .file_state import FileState
@@ -45,7 +45,7 @@ class ProjectFiles(LabeledWidget):
         self._fileview.bind("<ButtonRelease-1>", self._on_file_click, add="+")
         self.set_widget(self._fileview)
 
-    def _load_file_states(self) -> Dict[str, FileState]:
+    def _load_file_states(self) -> dict[str, FileState]:
         file_states = {}
         for xml_tree in self._controller.get_xml_trees():
             for node in xml_tree:
@@ -72,10 +72,10 @@ class ProjectFiles(LabeledWidget):
                 file_state = self._file_states[paths[0]]
                 self._file_selected(file_state)
 
-    def get_file_states(self) -> Dict[str, FileState]:
+    def get_file_states(self) -> dict[str, FileState]:
         return self._file_states
 
-    def get_file_state(self, filepath: str) -> Optional[FileState]:
+    def get_file_state(self, filepath: str) -> FileState | None:
         return self._file_states.get(filepath)
 
     def select_file(self, file_state: FileState) -> None:

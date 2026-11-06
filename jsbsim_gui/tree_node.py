@@ -17,7 +17,6 @@
 import re
 from dataclasses import dataclass
 from xml.parsers import expat
-from typing import Dict, List, Optional
 
 _XML_TAG_PATTERN = re.compile(rb"""<(?:[^>"']|"[^"]*"|'[^']*')*>""")
 _XML_ATTRIBUTE_PATTERN = re.compile(rb"""\s+([^\s=/>]+)\s*=\s*(['"])(.*?)\2""", re.S)
@@ -30,8 +29,8 @@ class _InterruptDescent(Exception):
 class TreeNode:
     def __init__(self, name: str):
         self.name = name
-        self.children: List[TreeNode] = []
-        self._parent: Optional[TreeNode] = None
+        self.children: list[TreeNode] = []
+        self._parent: TreeNode | None = None
 
     @property
     def parent(self):
@@ -47,7 +46,7 @@ class TreeNode:
 
     @property
     def path(self) -> str:
-        names: List[str] = [self.name]
+        names: list[str] = [self.name]
         parent = self._parent
         while parent:
             names.append(parent.name)
@@ -96,7 +95,7 @@ class XMLNode(TreeNode):
     def __init__(
         self,
         name: str,
-        attrs: Dict[str, TextRegion],
+        attrs: dict[str, TextRegion],
         filepath: str,
         column: int,
         line: int,
@@ -106,7 +105,7 @@ class XMLNode(TreeNode):
         self.filepath = filepath
         self.column = column
         self.line = line
-        self.data: List[TextRegion] = []
+        self.data: list[TextRegion] = []
 
     def __str__(self) -> str:
         attrs = [f' {name}="{value.text}"' for name, value in self.attrs.items()]
@@ -115,9 +114,9 @@ class XMLNode(TreeNode):
 
 class XMLNodeBuilder:
     def __init__(self, filename: str, fullpath: str):
-        self.root: Optional[XMLNode] = None
+        self.root: XMLNode | None = None
         self._filename = filename
-        self._parent: Optional[XMLNode] = None
+        self._parent: XMLNode | None = None
         self._parser = expat.ParserCreate()
         self._parser.StartElementHandler = self._start_element
         self._parser.CharacterDataHandler = self._character_data
@@ -128,7 +127,7 @@ class XMLNodeBuilder:
 
         self._parser.Parse(self._source, True)
 
-    def _start_element(self, name: str, attrs: Dict[str, str]) -> None:
+    def _start_element(self, name: str, attrs: dict[str, str]) -> None:
         start_index = self._parser.CurrentByteIndex
         column = self._parser.CurrentColumnNumber
         line = self._parser.CurrentLineNumber

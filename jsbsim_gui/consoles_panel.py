@@ -22,7 +22,7 @@ import tkinter.font as tkfont
 from dataclasses import dataclass
 from tkinter import ttk
 from tkinter.constants import DISABLED, END, NORMAL
-from typing import Callable, ClassVar, List, Optional, Tuple
+from typing import Callable, ClassVar
 
 from jsbsim import FGLogger, LogFormat, LogLevel
 
@@ -38,7 +38,7 @@ class LogColor(str, enum.Enum):
 
 @dataclass
 class LogTags:
-    color: Optional[LogColor] = None
+    color: LogColor | None = None
     underline: bool = False
     bold: bool = False
     BOLD: ClassVar[str] = "log_bold"  # pylint: disable=invalid-name
@@ -57,14 +57,14 @@ class LogTags:
 class LogSegment:
     text: str
     tags: LogTags
-    file_link: Optional[Tuple[str, int]] = None
+    file_link: tuple[str, int] | None = None
 
 
 class Console(TextView):
     def __init__(
         self,
         master: tk.Widget,
-        contents: Optional[str] = None,
+        contents: str | None = None,
         *,
         on_file_link_click: Callable[[str, int], None],
         **kw,
@@ -99,7 +99,7 @@ class Console(TextView):
         self._text.see(END)
         self._text.configure(state=DISABLED)
 
-    def write_formatted(self, segments: List[LogSegment]) -> None:
+    def write_formatted(self, segments: list[LogSegment]) -> None:
         self._text.configure(state=NORMAL)
 
         for segment in segments:
@@ -126,7 +126,7 @@ class ConsoleWithMessagesCounter(Console):
     def __init__(
         self,
         master: tk.Widget,
-        contents: Optional[str],
+        contents: str | None,
         on_count_update: Callable[[int], None],
         on_file_link_click: Callable[[str, int], None],
         **kw,
@@ -146,7 +146,7 @@ class ConsoleWithMessagesCounter(Console):
             self._increment_messages_counter()
             super().write(contents)
 
-    def write_formatted(self, segments: List[LogSegment]) -> None:
+    def write_formatted(self, segments: list[LogSegment]) -> None:
         if segments:
             self._increment_messages_counter()
             super().write_formatted(segments)
@@ -168,7 +168,7 @@ class ConsoleLogger(FGLogger):
         self._output_console = output_console
         self._problems_console = problems_console
         self._get_file_relative_path = get_file_relative_path
-        self._segments: List[LogSegment] = []
+        self._segments: list[LogSegment] = []
         self._tags = LogTags()
 
     def set_level(self, level: LogLevel) -> None:

@@ -17,7 +17,6 @@
 
 import os
 from tkinter.messagebox import showerror
-from typing import Optional, Tuple
 from xml.parsers import expat
 
 from .controller import Controller
@@ -54,7 +53,7 @@ class FileState:
             )
             return False
 
-    def validate_xml(self) -> Optional[Tuple[int, int]]:
+    def validate_xml(self) -> tuple[int, int] | None:
         parser = expat.ParserCreate()
         try:
             parser.Parse(self.content, True)

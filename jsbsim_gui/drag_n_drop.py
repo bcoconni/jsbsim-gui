@@ -10,7 +10,6 @@
 import tkinter as tk
 from abc import ABC, abstractmethod
 from tkinter import ttk
-from typing import List, Optional
 
 from jsbsim import FGPropertyNode
 
@@ -26,7 +25,7 @@ class DragNDropManager(ABC):
         source.bind("<ButtonRelease-1>", self.drop, add=True)
         self.offset_x = 0
         self.offset_y = 0
-        self.dragged_widget_preview: Optional[tk.Widget] = None
+        self.dragged_widget_preview: tk.Widget | None = None
         self.target = target
 
     def select(self, event: tk.Event):
@@ -68,9 +67,9 @@ class DnDTreeItems(DragNDropManager):
     def __init__(self, source: SearchableTree, target: tk.Widget):
         super().__init__(source.tree, target)
         self._source_tree = source
-        self._data_plots: List[FGPropertyNode] | List[CsvData] = []
+        self._data_plots: list[FGPropertyNode] | list[CsvData] = []
 
-    def _create_namelist_widget(self, master: tk.Widget, names: List[str]) -> tk.Widget:
+    def _create_namelist_widget(self, master: tk.Widget, names: list[str]) -> tk.Widget:
         widget_preview = ttk.Frame(master, borderwidth=1)
         for idx, name in enumerate(names):
             if idx < 3:
@@ -88,7 +87,7 @@ class DnDTreeItems(DragNDropManager):
 
 
 class DnDProperties(DnDTreeItems):
-    def create_source_widget(self, master: tk.Widget) -> Optional[tk.Widget]:
+    def create_source_widget(self, master: tk.Widget) -> tk.Widget | None:
         assert isinstance(self._source_tree, PropertyTree)
         self._data_plots = self._source_tree.get_selected_properties()
         if self._data_plots:
@@ -102,7 +101,7 @@ class DnDProperties(DnDTreeItems):
 
 
 class DnDCsvColumns(DnDTreeItems):
-    def create_source_widget(self, master: tk.Widget) -> Optional[tk.Widget]:
+    def create_source_widget(self, master: tk.Widget) -> tk.Widget | None:
         assert isinstance(self._source_tree, CsvTree)
         self._data_plots = self._source_tree.get_selected_csv_columns()
         if self._data_plots:

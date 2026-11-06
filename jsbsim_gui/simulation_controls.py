@@ -20,7 +20,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.constants import EW, NSEW
 from tkinter.messagebox import showerror
-from typing import Callable, Optional
+from typing import Callable
 
 from .controller import Controller
 
@@ -41,7 +41,7 @@ class SimulationControls(ttk.Frame):
         self.controller = controller
         self._on_update = on_update
         self._on_trimmed = on_trimmed
-        self.update_id: Optional[str] = None
+        self.update_id: str | None = None
         self.initial_seconds = 0.0
         self.script_end_reached = False
         self.initialized = False

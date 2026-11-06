@@ -15,8 +15,6 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-from typing import Dict, List
-
 import numpy as np
 from jsbsim import FGPropertyNode
 
@@ -24,9 +22,9 @@ from jsbsim import FGPropertyNode
 class PropertyHistory:
     CHUNK_SIZE = 100
 
-    def __init__(self, properties: List[FGPropertyNode]):
-        self.properties: List[FGPropertyNode] = properties
-        self.property_index: Dict[str, int] = {
+    def __init__(self, properties: list[FGPropertyNode]):
+        self.properties: list[FGPropertyNode] = properties
+        self.property_index: dict[str, int] = {
             prop.get_fully_qualified_name(): i for i, prop in enumerate(properties)
         }
         self.history = [np.full((len(properties), self.CHUNK_SIZE), np.nan)]
@@ -68,7 +66,7 @@ class PropertyHistory:
         return property_history
 
     def get_time_snapshot(
-        self, step: int, properties: List[FGPropertyNode]
+        self, step: int, properties: list[FGPropertyNode]
     ) -> np.ndarray:
         n_full_chunks = len(self.history) - 1
         size = n_full_chunks * self.CHUNK_SIZE + self.step

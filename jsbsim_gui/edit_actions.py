@@ -19,7 +19,6 @@ import sys
 import tkinter as tk
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import List
 
 SHORTCUT_MODIFIER = "Control" if sys.platform != "darwin" else "Command"
 REDO_SHORTCUT = "Control-y" if sys.platform != "darwin" else "Command-y"
@@ -48,8 +47,8 @@ class Command(ABC):
 class EditableFrame(tk.Frame):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self._undo_stack: List[Command] = []
-        self._redo_stack: List[Command] = []
+        self._undo_stack: list[Command] = []
+        self._redo_stack: list[Command] = []
 
     def apply_edit_action(self, action: EditAction) -> None:
         if action == EditAction.UNDO:

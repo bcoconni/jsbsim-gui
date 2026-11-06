@@ -17,14 +17,12 @@
 
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, Optional
+from typing import Callable
 
 from .edit_actions import EditAction, EditableFrame, SHORTCUT_MODIFIER
 
 
-def widget_is_descendant(
-    widget: Optional[tk.Misc], container: Optional[tk.Widget]
-) -> bool:
+def widget_is_descendant(widget: tk.Misc | None, container: tk.Widget | None) -> bool:
     if not (widget and container):
         return False
 
@@ -34,7 +32,7 @@ def widget_is_descendant(
 class AutoClearLabel(ttk.Label):
     def __init__(self, master: tk.Tk, **kw):
         super().__init__(master, **kw)
-        self._clear_timer_id: Optional[str] = None
+        self._clear_timer_id: str | None = None
         self.bind("<Destroy>", self._on_destroy, add="+")
 
     def _on_destroy(self, event: tk.Event) -> None:
@@ -60,10 +58,10 @@ class LabeledWidget(EditableFrame):
         master: tk.Widget,
         label: str,
         collapsable: bool = False,
-        on_toggle: Optional[Callable[[bool], None]] = None,
+        on_toggle: Callable[[bool], None] | None = None,
     ):
         super().__init__(master)
-        self.widget: Optional[EditableFrame] = None
+        self.widget: EditableFrame | None = None
         self._collapsed = False
         self._on_toggle = on_toggle
         if collapsable:

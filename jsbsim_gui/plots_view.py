@@ -19,7 +19,7 @@ import copy
 import math
 import tkinter as tk
 from tkinter import NSEW, font, ttk
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable
 
 import matplotlib.artist
 import numpy as np
@@ -46,11 +46,11 @@ from .plotinfo_list import PlotInfoList, PlotInfoListOptions
 
 class SelectedLine:
     def __init__(self, figure: Figure, **props):
-        self.ax_id: Optional[int] = None
-        self.line_id: Optional[int] = None
+        self.ax_id: int | None = None
+        self.line_id: int | None = None
         self.figure = figure
         self.pick_props = props
-        self.orig_props: Dict[str, Any] = {}
+        self.orig_props: dict[str, Any] = {}
 
     def select(self, ax_id: int, line_id: int) -> None:
         self.deselect()
@@ -67,7 +67,7 @@ class SelectedLine:
         self.ax_id = None
         self.line_id = None
 
-    def get_params(self) -> Optional[Tuple[int, int]]:
+    def get_params(self) -> tuple[int, int] | None:
         if self.ax_id is not None and self.line_id is not None:
             return self.ax_id, self.line_id
         return None
@@ -77,7 +77,7 @@ class PlotCommand(Command):
     def __init__(self, plot_view):
         self._plot_view = plot_view
         self._old_plots = copy.deepcopy(plot_view.plots)
-        self._new_plots: List[PlotInfoList] = []
+        self._new_plots: list[PlotInfoList] = []
 
     def current_plots(self):
         self._new_plots = copy.deepcopy(self._plot_view.plots)
@@ -111,15 +111,15 @@ class PlotsView(EditableFrame):
         pixels = root.winfo_screenwidth()
         width = root.winfo_screenmmwidth()
         self.dpi = 25.4 * pixels / width
-        self.canvas: Optional[FigureCanvasTkAgg] = None
-        self.plots: List[PlotInfoList] = []
+        self.canvas: FigureCanvasTkAgg | None = None
+        self.plots: list[PlotInfoList] = []
         self.bbox = None
-        self.selected_line: Optional[SelectedLine] = None
-        self.label_manager: Optional[PlotLabelManager] = None
+        self.selected_line: SelectedLine | None = None
+        self.label_manager: PlotLabelManager | None = None
         self.pan: bool = False
         self.pan_xref: float = 0.0
-        self.t_hover: Optional[float] = None
-        self.motion_handlers: List[Callable[[MouseEvent], None]] = []
+        self.t_hover: float | None = None
+        self.motion_handlers: list[Callable[[MouseEvent], None]] = []
         get_options().subscribe("plot_info_list", self._update_plot_options)
         self.bind("<Destroy>", self._on_destroy, add="+")
 
@@ -325,7 +325,7 @@ class PlotsView(EditableFrame):
         if self.canvas:
             self.reset_and_redraw()
 
-    def _get_mouse_coords_in_canvas(self) -> Tuple[int, int]:
+    def _get_mouse_coords_in_canvas(self) -> tuple[int, int]:
         assert self.canvas
         tk_widget = self.canvas.get_tk_widget()
         x, y = tk_widget.winfo_pointerxy()
@@ -335,10 +335,10 @@ class PlotsView(EditableFrame):
         y = tk_widget.winfo_height() - (y - tk_widget.winfo_rooty())
         return x, y
 
-    def add_data(self, data: List[FGPropertyNode] | List[CsvData]):
+    def add_data(self, data: list[FGPropertyNode] | list[CsvData]):
         # Check if the data plots are dropped on a subplot
         canvas = self.canvas
-        target_ax_id: Optional[int] = None
+        target_ax_id: int | None = None
         if canvas:
             target_ax = canvas.inaxes(self._get_mouse_coords_in_canvas())
             if target_ax:

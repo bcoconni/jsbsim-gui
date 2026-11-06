@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jsbsim-gui"
-dynamic = ["version"]
+version = "0.2.0"
 description = "A Graphical User Interface for JSBSim"
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -23,7 +23,7 @@ dependencies = [
     "platformdirs",
     "pygments",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.urls]
 Homepage = "https://github.com/bcoconni/jsbsim-gui"

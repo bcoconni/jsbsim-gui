@@ -23,7 +23,7 @@ import tkinter as tk
 from dataclasses import asdict, dataclass
 from tkinter import ttk
 from tkinter.messagebox import showerror
-from typing import Dict, Iterator, List, Set, Union
+from typing import Iterator, Set
 
 import numpy as np
 from jsbsim import FGPropertyNode
@@ -128,7 +128,7 @@ class _PropertyPlotInfo(PlotInfo):
 class PlotInfoList:
     def __init__(self, controller: Controller):
         self._controller = controller
-        self._plotinfos: List[PlotInfo] = []
+        self._plotinfos: list[PlotInfo] = []
 
     def __deepcopy__(self, memo):
         plist_copy = PlotInfoList(self._controller)
@@ -163,7 +163,7 @@ class PlotInfoList:
 
     def _update_csv_names(self) -> None:
         csv_infos = [p for p in self._plotinfos if isinstance(p, _CsvPlotInfo)]
-        name_to_paths: Dict[str, Set[str]] = {}
+        name_to_paths: dict[str, Set[str]] = {}
 
         for p in csv_infos:
             name_to_paths.setdefault(p.default_name, set()).add(p.csv_path)
@@ -182,14 +182,14 @@ class PlotInfoList:
         for pinfo in self._plotinfos:
             pinfo.refresh()
 
-    def add_properties(self, props: List[FGPropertyNode]) -> None:
+    def add_properties(self, props: list[FGPropertyNode]) -> None:
         if props:
             self._plotinfos.extend(
                 [_PropertyPlotInfo(p, self._controller) for p in props]
             )
             self._update_property_names()
 
-    def add_csv_columns(self, cols_data: List[CsvData]) -> None:
+    def add_csv_columns(self, cols_data: list[CsvData]) -> None:
         if cols_data:
             self._plotinfos.extend([_CsvPlotInfo(data) for data in cols_data])
             self._update_csv_names()
@@ -221,7 +221,7 @@ class PlotInfoListOptions:
 
 
 class PlotInfoListOptionsTab(OptionsTab):
-    def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
+    def __init__(self, master: tk.Tk | tk.Toplevel, **kw):
         super().__init__(master, padding=10, **kw)
 
         ttk.Label(self, text="Plots samples").grid(

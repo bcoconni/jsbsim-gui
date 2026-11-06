@@ -21,7 +21,7 @@ import tkinter as tk
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tkinter import ttk
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable
 
 import platformdirs
 
@@ -30,7 +30,7 @@ class Options:
     def __init__(self, file_name: str = "options.json"):
         self._file_path = Path(platformdirs.user_config_dir("jsbsim-gui")) / file_name
         self._options: dict[str, Any] = {"version": "0.1"}
-        self._subscribers: dict[str, List[Callable[[], None]]] = {}
+        self._subscribers: dict[str, list[Callable[[], None]]] = {}
         self._load()
 
     def get(self, name: str) -> Any:
@@ -71,7 +71,7 @@ class Options:
 
 
 class OptionsTab(ttk.Frame, ABC):
-    def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
+    def __init__(self, master: tk.Tk | tk.Toplevel, **kw):
         super().__init__(master, **kw)
 
     @abstractmethod
@@ -85,7 +85,7 @@ class OptionsTab(ttk.Frame, ABC):
 
 
 class OptionsWindow(tk.Toplevel):
-    def __init__(self, master: Union[tk.Tk, tk.Toplevel], **kw):
+    def __init__(self, master: tk.Tk | tk.Toplevel, **kw):
         super().__init__(master, **kw)
         self.title("Options")
         self.resizable(False, False)
@@ -138,7 +138,7 @@ class OptionsWindow(tk.Toplevel):
         self._notebook.add(option_tab, text=title)
 
 
-_global_options: Optional[Options] = None
+_global_options: Options | None = None
 
 
 def get_options() -> Options:
@@ -148,6 +148,6 @@ def get_options() -> Options:
     return _global_options
 
 
-def set_options(options: Optional[Options]) -> None:
+def set_options(options: Options | None) -> None:
     global _global_options
     _global_options = options

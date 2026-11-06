@@ -23,7 +23,7 @@ from xml.parsers.expat import ExpatError
 from tkinter import ttk
 from tkinter.constants import EW, NSEW
 from tkinter.messagebox import askyesno, showerror
-from typing import Callable, Dict, Optional
+from typing import Callable
 
 from PIL import Image, ImageTk
 
@@ -48,18 +48,18 @@ from .widget import AutoClearLabel, LabeledWidget, widget_is_descendant
 
 
 class App(tk.Tk):
-    def __init__(self, root_dir: Optional[str] = None):
+    def __init__(self, root_dir: str | None = None):
         super().__init__()
-        self._consoles_panel: Optional[ConsolesPanel] = None
-        self._controller: Optional[Controller] = None
+        self._consoles_panel: ConsolesPanel | None = None
+        self._controller: Controller | None = None
         self._console_sash = tk.PanedWindow(
             self, orient=tk.VERTICAL, sashwidth=4, sashrelief=tk.RAISED
         )
         self._statusbar = AutoClearLabel(self)
         self.main: ttk.Frame | ttk.Label | None = None
-        self.editor: Optional[SourceEditor] = None
-        self.project_files: Optional[ProjectFiles] = None
-        self._find_window: Optional[FindWindow] = None
+        self.editor: SourceEditor | None = None
+        self.project_files: ProjectFiles | None = None
+        self._find_window: FindWindow | None = None
         self.title(f"JSBSim GUI {__version__}")
         self.resizable(False, False)
         style = ttk.Style()
@@ -260,7 +260,7 @@ class App(tk.Tk):
             )
         return self._find_window
 
-    def _find_property(self, _: Optional[tk.Event]) -> str:
+    def _find_property(self, _: tk.Event | None) -> str:
         names = self.property_tree.get_selected_property_names(False)
         find_window = self._open_find_window()
         if len(names) == 1:
@@ -291,7 +291,7 @@ class App(tk.Tk):
         self._statusbar.set_text(f"Simulated time: {sim_time:.3f}s")
 
     def edit(self) -> None:
-        add_options: Dict[str, int | ConsolesPanel] = {}
+        add_options: dict[str, int | ConsolesPanel] = {}
         self._close_find_window()
         if self.main:
             if isinstance(self.main, ttk.Frame):
@@ -428,7 +428,7 @@ class App(tk.Tk):
         filename: str,
         aircraft_name: str,
         load_file: Callable[[Controller, str], bool],
-    ) -> Optional[bool]:
+    ) -> bool | None:
         project_files = self.project_files
         if project_files and not project_files.prompt_save_if_modified(
             "You have unsaved changes. Do you want to save them before opening another model?"
