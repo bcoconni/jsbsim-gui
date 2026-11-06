@@ -28,7 +28,7 @@ from jsbsim_gui.find import (
     _node_in_text,
     _nodes_in_text,
     _normalize_attribute_names,
-    _search_property_occurrences,
+    _search_node_occurrences,
 )
 from jsbsim_gui.tree_node import TextRegion, XMLNode, XMLNodeBuilder
 
@@ -189,11 +189,40 @@ class TestPropertyTextSearch(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(_node_in_text(self.tree, text, False), expected)
 
+    def test_numeric_index_wildcard_matches_unindexed_and_indexed_paths(self) -> None:
+        text = "/fdm/engine[#]/rpm"
+        for path in (
+            "/fdm/engine/rpm",
+            "/fdm/engine[0]/rpm",
+            "/fdm/engine[1]/rpm",
+            "/fdm/engine[12]/rpm",
+        ):
+            with self.subTest(path=path):
+                tree = PropertyTreeNode("")
+                tree.add(path)
+                self.assertEqual(_node_in_text(tree, text, False), (0, len(text)))
+
+    def test_numeric_index_wildcard_matches_at_multiple_path_levels(self) -> None:
+        tree = PropertyTreeNode("/fdm[2]/engine[12]/rpm[3]")
+        text = "/fdm[#]/engine[#]/rpm[#]"
+
+        self.assertEqual(_node_in_text(tree, text, False), (0, len(text)))
+
+    def test_numeric_index_wildcard_retry_uses_the_base_name(self) -> None:
+        tree = PropertyTreeNode("")
+        tree.add("/engine[1]/rpm")
+        text = "engine[#]/missing then engine[#]/rpm"
+        expected_start = text.index("engine[#]/rpm")
+
+        self.assertEqual(_node_in_text(tree, text, True), (expected_start, len(text)))
+
     def test_rejects_nonmatching_indices_and_incomplete_paths(self) -> None:
         for text in (
             "/fdm[1]/engine/rpm",
             "/fdm/engine[2]/rpm",
             "/fdm/engine/rpm[1]",
+            "/fdm/engine[a]/rpm",
+            "/fdm/engine[##]/rpm",
             "/fdm/engine",
             "/fdm/engine/rp",
         ):
@@ -279,10 +308,10 @@ class TestSearchPropertyOccurrences(unittest.TestCase):
 
     def test_empty_inputs_and_no_matches(self) -> None:
         node = XMLNode("node", {"attr": TextRegion("unrelated", 4, 2)}, "a.xml", 0, 1)
-        self.assertEqual(_search_property_occurrences(self.tree, None, []), {})
-        self.assertEqual(_search_property_occurrences(self.tree, None, [node]), {})
+        self.assertEqual(_search_node_occurrences(self.tree, None, []), {})
+        self.assertEqual(_search_node_occurrences(self.tree, None, [node]), {})
         self.assertEqual(
-            _search_property_occurrences(PropertyTreeNode(""), None, [node]), {}
+            _search_node_occurrences(PropertyTreeNode(""), None, [node]), {}
         )
 
     def test_attributes_data_children_and_multiline_positions(self) -> None:
@@ -301,7 +330,7 @@ class TestSearchPropertyOccurrences(unittest.TestCase):
         )
         child.parent = root
         self.assertEqual(
-            _search_property_occurrences(self.tree, None, [root]),
+            _search_node_occurrences(self.tree, None, [root]),
             {
                 "a.xml": [
                     TextRegion("/fdm/engine/rpm", 3, 5),
@@ -317,10 +346,22 @@ class TestSearchPropertyOccurrences(unittest.TestCase):
         node = XMLNode(
             "node", {"attr": TextRegion("relative/value", 4, 7)}, "a.xml", 0, 1
         )
-        self.assertEqual(_search_property_occurrences(self.tree, None, [node]), {})
+        self.assertEqual(_search_node_occurrences(self.tree, None, [node]), {})
         self.assertEqual(
-            _search_property_occurrences(self.tree, self.relative_root, [node]),
+            _search_node_occurrences(self.tree, self.relative_root, [node]),
             {"a.xml": [TextRegion("relative/value", 4, 7)]},
+        )
+
+    def test_relative_root_matches_numeric_index_wildcard(self) -> None:
+        root = PropertyTreeNode("")
+        root.add("/engine[12]/rpm")
+        node = XMLNode(
+            "node", {"attr": TextRegion("engine[#]/rpm", 4, 7)}, "a.xml", 0, 1
+        )
+
+        self.assertEqual(
+            _search_node_occurrences(PropertyTreeNode(""), root, [node]),
+            {"a.xml": [TextRegion("engine[#]/rpm", 4, 7)]},
         )
 
     def test_occurrences_preserve_text_order_across_branches(self) -> None:
@@ -329,7 +370,7 @@ class TestSearchPropertyOccurrences(unittest.TestCase):
         tree.add("/b")
         node = XMLNode("node", {"attr": TextRegion("/b /a /a[0]", 5, 3)}, "a.xml", 0, 1)
         self.assertEqual(
-            _search_property_occurrences(tree, None, [node]),
+            _search_node_occurrences(tree, None, [node]),
             {
                 "a.xml": [
                     TextRegion("/b", 5, 3),
@@ -350,7 +391,7 @@ class TestSearchPropertyOccurrences(unittest.TestCase):
             "earlier", {"a": TextRegion("/fdm/engine/rpm", 2, 1)}, "a.xml", 0, 1
         )
         self.assertEqual(
-            _search_property_occurrences(self.tree, None, [later, other, earlier]),
+            _search_node_occurrences(self.tree, None, [later, other, earlier]),
             {
                 "a.xml": [
                     TextRegion("/fdm/engine/rpm", 2, 1),
@@ -375,7 +416,7 @@ class TestSearchPropertyOccurrences(unittest.TestCase):
             self.assertIsNotNone(root)
             assert root is not None
             self.assertEqual(
-                _search_property_occurrences(self.tree, None, [root]),
+                _search_node_occurrences(self.tree, None, [root]),
                 {
                     "model.xml": [
                         TextRegion("/fdm/engine/rpm", 19, 1),
@@ -545,7 +586,7 @@ class TestNormalizeAttributeNames(unittest.TestCase):
         root = PropertyTreeNode("")
         root.add("/fcs/gear-up")
 
-        occurrences = _search_property_occurrences(
+        occurrences = _search_node_occurrences(
             property_tree, root, _normalize_attribute_names([channel])
         )
 

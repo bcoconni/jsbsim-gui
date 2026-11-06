@@ -99,7 +99,7 @@ class PropertyTreeNode(TreeNode):
 
 
 def _node_in_text(
-    tree: PropertyTreeNode,
+    tree: TreeNode,
     text: str,
     relative_path: bool,
     match_start: int = -1,
@@ -107,21 +107,36 @@ def _node_in_text(
 ) -> Optional[Tuple[int, int]]:
     earliest: Optional[Tuple[int, int]] = None
     for child in tree.children:
-        assert isinstance(child, PropertyTreeNode)
         name = child.name if relative_path else "/" + child.name
-        if match_end == -1:
-            column = text.find(name)
+        index_start = name.find("[")
+
+        if index_start >= 0:
+            base_name = name[:index_start]
+            index = name[index_start:]
         else:
-            column = match_end if text.startswith(name, match_end) else -1
+            base_name = name
+            index = None
+
+        if match_end == -1:
+            column = text.find(base_name)
+        else:
+            column = match_end if text.startswith(base_name, match_end) else -1
 
         while column >= 0:
-            end_column = column + len(name)
+            end_column = column + len(base_name)
             valid_index = True
-            if name[-1] != "]" and text.startswith("[", end_column):
+
+            if text.startswith("[#]", end_column):
+                end_column += 3
+            elif index is None:
                 if text.startswith("[0]", end_column):
                     end_column += 3
                 else:
-                    valid_index = False
+                    valid_index = not text.startswith("[", end_column)
+            elif text.startswith(index, end_column):
+                end_column += len(index)
+            else:
+                valid_index = False
 
             if valid_index:
                 start_column = column if match_start == -1 else match_start
@@ -138,13 +153,14 @@ def _node_in_text(
 
             if match_end != -1:
                 break
-            column = text.find(name, column + 1)
+
+            column = text.find(base_name, column + 1)
 
     return earliest
 
 
 def _nodes_in_text(
-    tree: PropertyTreeNode, text: str, relative_path: bool
+    tree: TreeNode, text: str, relative_path: bool
 ) -> List[Tuple[int, int]]:
     matching_positions: List[Tuple[int, int]] = []
     position = _node_in_text(tree, text, relative_path)
@@ -162,12 +178,10 @@ def _nodes_in_text(
     return matching_positions
 
 
-def _search_property_occurrences(
-    property_tree: PropertyTreeNode,
-    root: Optional[PropertyTreeNode],
-    xml_trees: List[XMLNode],
+def _search_node_occurrences(
+    tree: TreeNode, sub_tree: Optional[TreeNode], xml_trees: List[XMLNode]
 ) -> Dict[str, List[TextRegion]]:
-    results: Dict[str, List[TextRegion]] = {}
+    occurrences: Dict[str, List[TextRegion]] = {}
 
     for xml_tree in xml_trees:
         for node in xml_tree:
@@ -178,9 +192,9 @@ def _search_property_occurrences(
                 else:
                     text = region.text
 
-                paths = _nodes_in_text(property_tree, text, False)
-                if root is not None:
-                    paths += _nodes_in_text(root, text, True)
+                paths = _nodes_in_text(tree, text, False)
+                if sub_tree is not None:
+                    paths += _nodes_in_text(sub_tree, text, True)
 
                 for column_start, column_end in paths:
                     property_name = region.text[column_start:column_end]
@@ -196,14 +210,14 @@ def _search_property_occurrences(
                     property_region = TextRegion(
                         property_name, property_column, property_line
                     )
-                    if node.filepath in results:
-                        results[node.filepath].append(property_region)
+                    if node.filepath in occurrences:
+                        occurrences[node.filepath].append(property_region)
                     else:
-                        results[node.filepath] = [property_region]
+                        occurrences[node.filepath] = [property_region]
 
     return {
         file_path: sorted(regions, key=lambda r: r.line)
-        for file_path, regions in results.items()
+        for file_path, regions in occurrences.items()
     }
 
 
@@ -219,6 +233,19 @@ def _compute_substitute_text(
     return alt_region
 
 
+_ENGINE_SPECIAL_FUNCTION_NAMES = (
+    ("turboprop_engine", "EnginePowerVC"),
+    ("turbine_engine", "IdleThrust"),
+    ("turbine_engine", "MilThrust"),
+    ("turbine_engine", "AugThrust"),
+    ("turbine_engine", "Injection"),
+    ("turbine_engine", "N1SpoolUp"),
+    ("turbine_engine", "N1SpoolDown"),
+    ("turbine_engine", "N2SpoolUp"),
+    ("turbine_engine", "N2SpoolDown"),
+)
+
+
 def _normalize_attribute_names(xml_trees: List[XMLNode]) -> List[XMLNode]:
     trees = copy.deepcopy(xml_trees)
     for tree in trees:
@@ -227,6 +254,7 @@ def _normalize_attribute_names(xml_trees: List[XMLNode]) -> List[XMLNode]:
             assert isinstance(node, XMLNode)
             attr_name = node.attrs.get("name")
             rename: Optional[Callable[[str], str]] = None
+            p = node.parent
 
             if node.name == "function":
                 rename = lambda s: s.replace(" ", "-")
@@ -239,17 +267,24 @@ def _normalize_attribute_names(xml_trees: List[XMLNode]) -> List[XMLNode]:
                             child_node.attrs["name"] = _compute_substitute_text(
                                 child_name_attr, rename
                             )
+
+                if p and attr_name:
+                    function_name = attr_name.text
+                    if (p.name, function_name) in _ENGINE_SPECIAL_FUNCTION_NAMES:
+                        rename = lambda s: "propulsion/engine[#]/" + s
             else:
                 if attr_name is None:
                     continue
 
+                name = attr_name.text
+
                 if node.name == "table":
                     table_type = node.attrs.get("type")
-                    if table_type is None or table_type.text != "internal":
+                    if p and p.name == "turboprop_engine" and name == "EnginePowerVC":
+                        rename = lambda s: "propulsion/engine[#]/" + s
+                    elif table_type is None or table_type.text != "internal":
                         rename = lambda s: s.replace(" ", "-")
                 else:  # FGFCSComponents
-                    p = node.parent
-                    name = attr_name.text
                     if p and name and p.name == "channel" and name.find("/") == -1:
                         rename = lambda s: "fcs/" + s.replace(" ", "-").lower()
 
@@ -333,9 +368,7 @@ class PropertyOccurrencesTree(SearchableTree):
         property_tree, root = self._find_matching_properties(property_path)
         occurrences: Dict[str, List[TextRegion]] = {}
         if property_tree.children:
-            occurrences = _search_property_occurrences(
-                property_tree, root, self._xml_trees
-            )
+            occurrences = _search_node_occurrences(property_tree, root, self._xml_trees)
 
         self.set_occurrences(occurrences)
         self._entries = sorted(self._occurrence_data.keys())
@@ -344,7 +377,7 @@ class PropertyOccurrencesTree(SearchableTree):
 
     def _find_matching_properties(
         self, property_path: str
-    ) -> Tuple[PropertyTreeNode, Optional[PropertyTreeNode]]:
+    ) -> Tuple[TreeNode, Optional[TreeNode]]:
 
         search_pattern: List[str] = []
         for item in property_path.split("/"):
@@ -370,12 +403,8 @@ class PropertyOccurrencesTree(SearchableTree):
             return (property_tree, None)
 
         root_name = property_root.get_fully_qualified_name()
-        root = copy.deepcopy(property_tree).find(root_name)
-        if root is not None:
-            assert isinstance(root, PropertyTreeNode)
-            root.parent = None
-            root.name = ""
-        return property_tree, root
+        relative_property_tree = property_tree.find(root_name)
+        return property_tree, relative_property_tree
 
     def _on_entry_selected(self, _event: Optional[tk.Event]) -> None:
         selection = self.tree.selection()
