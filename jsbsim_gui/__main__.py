@@ -21,6 +21,7 @@ from pathlib import Path
 from . import __version__
 from .app import App
 from .controller import Controller
+from .menu_bar import RecentFiles, open_file
 
 
 def run():
@@ -33,22 +34,50 @@ def run():
     parser.add_argument(
         "--root",
         metavar="<path>",
+        type=str,
         help="specifies the JSBSim root directory (where aircraft/, engine/, etc. reside)",
     )
-    parser.add_argument(
-        "--model", metavar="<aircraft_name>", help="load an aircraft model"
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--model", metavar="<aircraft_name>", type=str, help="load an aircraft model"
     )
-    parser.add_argument("--script", metavar="<script_name>", help="load a script")
+    group.add_argument(
+        "--script", metavar="<script_name>", type=str, help="load a script"
+    )
+    group.add_argument(
+        "--resume",
+        type=int,
+        nargs="?",
+        const=0,
+        default=None,
+        metavar="<index>",
+        help="XXX resume from recent files by index (0 is the most recent)",
+    )
+    group.add_argument(
+        "--list-recent-files",
+        action="store_true",
+        help="Display the list of recent files and exit",
+    )
     args = parser.parse_args()
 
-    app = App(Path(args.root) if args.root is not None else None)
-
-    if args.model:
-        app.load_model_from_cmdline(args.model)
-    elif args.script:
-        app.load_script_from_cmdline(args.script)
+    if args.list_recent_files:
+        file_list = RecentFiles().pretty_list()
+        for i, file in enumerate(file_list):
+            print(f"{i:2}: {file}")
+        return
+    elif args.resume is not None:
+        recent_file = RecentFiles()[args.resume]
+        app = App(recent_file[1])
+        open_file(app, recent_file[0])
     else:
-        app.display_logo()
+        app = App(Path(args.root) if args.root is not None else None)
+
+        if args.model:
+            app.load_model_from_cmdline(args.model)
+        elif args.script:
+            app.load_script_from_cmdline(args.script)
+        else:
+            app.display_logo()
 
     app.mainloop()
 

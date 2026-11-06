@@ -37,11 +37,12 @@ from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
 from .file_state import FileState
 from .find import FindWindow
 from .hierarchical_tree import PropertyTree
-from .menu_bar import MenuBar, RecentFiles
+from .menu_bar import MenuBar
 from .options import OptionsWindow
 from .plotinfo_list import PlotInfoListOptionsTab
 from .plots_view import PlotsView
 from .project_files import ProjectFiles
+from .recent_files import RecentFiles
 from .simulation_controls import SimulationControls
 from .source_editor import SourceEditor
 from .textview import TextViewOptionsTab
