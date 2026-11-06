@@ -15,21 +15,22 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import os
+import importlib.resources
 import sys
 import tkinter as tk
-import xml.etree.ElementTree as et
-from xml.parsers.expat import ExpatError
+from pathlib import Path
 from tkinter import ttk
 from tkinter.constants import EW, NSEW
 from tkinter.messagebox import askyesno, showerror
 from typing import Callable
+import xml.etree.ElementTree as et
+from xml.parsers.expat import ExpatError
 
 from PIL import Image, ImageTk
 
 from . import __version__
 from .consoles_panel import ConsolesPanel
-from .controller import Controller, get_path_relative_to_root
+from .controller import Controller
 from .csv_tree import CsvTree
 from .drag_n_drop import DnDCsvColumns, DnDProperties
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
@@ -48,7 +49,7 @@ from .widget import AutoClearLabel, LabeledWidget, widget_is_descendant
 
 
 class App(tk.Tk):
-    def __init__(self, root_dir: str | None = None):
+    def __init__(self, root_dir: Path | None = None):
         super().__init__()
         self._consoles_panel: ConsolesPanel | None = None
         self._controller: Controller | None = None
@@ -68,7 +69,7 @@ class App(tk.Tk):
 
         if root_dir:
             self.root_dir = root_dir
-            if not os.path.exists(self.root_dir):
+            if not self.root_dir.exists():
                 self.display_logo()
                 showerror(
                     "Error", message=f'The directory "{self.root_dir}" does not exist'
@@ -82,8 +83,8 @@ class App(tk.Tk):
                 showerror("Error", message=str(e))
                 sys.exit(1)
 
-        self.root_dir = os.path.realpath(self.root_dir)
-        self.menubar = MenuBar(self, self.root_dir)
+        self.root_dir = self.root_dir.resolve()
+        self.menubar = MenuBar(self)
         self.config(menu=self.menubar)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.bind_all(
@@ -114,20 +115,19 @@ class App(tk.Tk):
     def display_logo(self) -> None:
         self.menubar.update_save_menu_state(False)
 
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(base_dir, "resources", "logo_JSBSIM_globe_410x429.bmp")
-        with Image.open(logo_path) as image:
-            resized_image = Image.new("RGB", size=(600, image.height), color="white")
-            resized_image.paste(image, ((600 - image.width) // 2, 0))
-            logo_image = ImageTk.PhotoImage(resized_image)
-            self.main = ttk.Label(self, image=logo_image)
-            self.main.image = logo_image
-            self.main.grid()
+        with importlib.resources.path("jsbsim_gui", "resources") as base_dir:
+            with Image.open(str(base_dir / "logo_JSBSIM_globe_410x429.bmp")) as image:
+                resized_image = Image.new(
+                    "RGB", size=(600, image.height), color="white"
+                )
+                resized_image.paste(image, ((600 - image.width) // 2, 0))
+                logo_image = ImageTk.PhotoImage(resized_image)
+                self.main = ttk.Label(self, image=logo_image)
+                self.main.image = logo_image
+                self.main.grid()
 
     def load_model_from_cmdline(self, model_name: str) -> None:
-        filename = os.path.join(
-            self.root_dir, "aircraft", model_name, model_name + ".xml"
-        )
+        filename = self.root_dir / "aircraft" / model_name / (model_name + ".xml")
         success = self.open_file(filename, model_name, Controller.load_aircraft)
         if success:
             self.menubar.enable_menus()
@@ -137,7 +137,7 @@ class App(tk.Tk):
         showerror("Error", message=f'"{model_name}" is not an aircraft model')
 
     def load_script_from_cmdline(self, script_name: str) -> None:
-        filename = os.path.join(self.root_dir, script_name)
+        filename = self.root_dir / script_name
         try:
             success = self.open_file(filename, script_name, Controller.load_script)
             if success:
@@ -368,7 +368,7 @@ class App(tk.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-    def _on_file_link_click(self, rel_path: str, line: int) -> None:
+    def _on_file_link_click(self, rel_path: Path, line: int) -> None:
         if self.editor is None or self.project_files is None:
             return
         file_state = self.project_files.get_file_state(rel_path)
@@ -392,7 +392,7 @@ class App(tk.Tk):
         if self.project_files is not None:
             self.project_files.save_all()
 
-    def load_csv(self, path: str) -> None:
+    def load_csv(self, path: Path) -> None:
         if self.editor is None:
             showerror(
                 "Error",
@@ -425,9 +425,9 @@ class App(tk.Tk):
 
     def open_file(
         self,
-        filename: str,
+        filename: Path,
         aircraft_name: str,
-        load_file: Callable[[Controller, str], bool],
+        load_file: Callable[[Controller, Path], bool],
     ) -> bool | None:
         project_files = self.project_files
         if project_files and not project_files.prompt_save_if_modified(
@@ -445,7 +445,7 @@ class App(tk.Tk):
             self._console_sash.add(self._consoles_panel, stretch="never")
 
         console_logger = self._consoles_panel.get_logger(
-            lambda name: get_path_relative_to_root(name, self.root_dir)
+            lambda name: name.relative_to(self.root_dir)
         )
 
         old_controller = self._controller

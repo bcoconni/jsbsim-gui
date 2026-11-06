@@ -15,18 +15,20 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import os
 import tkinter as tk
 import xml.etree.ElementTree as et
 from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog as fd
 from tkinter.messagebox import showerror
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from .controller import Controller
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
 from .options import Options, get_options
+
+if TYPE_CHECKING:
+    from .app import App
 
 FILE_MANAGEMENT_KEY = "file_management"
 RECENT_FILES_KEY = "recent_files"
@@ -44,9 +46,9 @@ class RecentFiles(Options):
         self._file_options = FileManagementOptions(**options)
         super().__init__("recent_files.json")
 
-    def add_recent_file(self, file_path: str, root_dir: str):
+    def add_recent_file(self, file_path: Path, root_dir: Path):
         num_recent_files = self._file_options.num_recent_files
-        new_entry = [file_path, root_dir]
+        new_entry = (file_path, root_dir)
         recent_files = self.get(RECENT_FILES_KEY)
         try:
             index = recent_files.index(new_entry)
@@ -68,8 +70,14 @@ class RecentFiles(Options):
         self.set(RECENT_FILES_KEY, recent_files)
         self._save()
 
-    def get(self, name: str) -> list[list[str]]:
-        return self._options.get(name, [])
+    def set(self, name: str, recent_files: list[tuple[Path, Path]]):
+        super().set(name, [[str(entry[0]), str(entry[1])] for entry in recent_files])
+
+    def get(self, name: str) -> list[tuple[Path, Path]]:
+        return [
+            (Path(entry[0]).resolve(), Path(entry[1]).resolve())
+            for entry in self._options.get(name, [])
+        ]
 
     def _load(self) -> None:
         super()._load()
@@ -80,13 +88,14 @@ class RecentFiles(Options):
             self.set(RECENT_FILES_KEY, recent_files[:num_recent_files])
 
     def get_menu(
-        self, master: tk.Widget, open_file: Callable[[str, str], None]
+        self, master: tk.Widget, open_file: Callable[[Path, Path], None]
     ) -> tk.Menu:
         menu = tk.Menu(master, tearoff=False)
 
-        def generate_menu_command(file: list[str]):  # Capture the value of `file`
+        def generate_menu_command(file: tuple[Path, Path]):
+            # Capture the value of `file`
             def menu_command(
-                menu: tk.Menu, file_name: Path, open_file: Callable[[str, str], None]
+                menu: tk.Menu, file_name: Path, open_file: Callable[[Path, Path], None]
             ):
                 menu.add_command(label=str(file_name), command=lambda: open_file(*file))
 
@@ -108,9 +117,8 @@ class RecentFiles(Options):
 
 
 class MenuBar(tk.Menu):
-    def __init__(self, master: tk.Tk, root_dir: str):
+    def __init__(self, master: "App"):
         super().__init__(master)
-        self._root_dir = root_dir
 
         self._file_menu = tk.Menu(self, tearoff=False)
         self._file_menu.add_command(label="Root...", command=self._set_root_dir)
@@ -186,9 +194,12 @@ class MenuBar(tk.Menu):
         self.entryconfig("Edit", state=tk.DISABLED)
 
     def _select_script_file(self) -> None:
+        from .app import App
+
+        assert isinstance(self.master, App)
         filename = fd.askopenfilename(
             title="Open a script, aircraft or CSV file",
-            initialdir=self._root_dir,
+            initialdir=self.master.root_dir,
             filetypes=(
                 ("script and aircraft files", "*.xml"),
                 ("CSV files", "*.csv"),
@@ -197,18 +208,24 @@ class MenuBar(tk.Menu):
         if not filename:
             return
 
+        file_path = Path(filename).resolve()
         if filename.lower().endswith(".csv"):
-            self.master.load_csv(filename)
+            self.master.load_csv(file_path)
             return
 
-        self._open_file(filename)
+        self._open_file(file_path)
 
-    def _open_recent_file(self, filename: str, root_dir: str) -> None:
-        self._root_dir = root_dir
+    def _open_recent_file(self, filename: Path, root_dir: Path) -> None:
+        from .app import App
+
+        assert isinstance(self.master, App)
         self.master.root_dir = root_dir
         self._open_file(filename)
 
-    def _open_file(self, filename: str) -> None:
+    def _open_file(self, filename: Path) -> None:
+        from .app import App
+
+        assert isinstance(self.master, App)
         root = et.parse(filename).getroot()
         success = False
         if root.tag == "runscript":
@@ -219,7 +236,7 @@ class MenuBar(tk.Menu):
                     filename, aircraft_name, Controller.load_script
                 )
         elif root.tag == "fdm_config":
-            aircraft_name = os.path.splitext(os.path.basename(filename))[0]
+            aircraft_name = filename.stem
             success = self.master.open_file(
                 filename, aircraft_name, Controller.load_aircraft
             )
@@ -229,20 +246,22 @@ class MenuBar(tk.Menu):
         if success:
             self.enable_menus()
         else:
-            name = os.path.relpath(filename, self._root_dir)
+            name = filename.relative_to(self.master.root_dir)
             showerror(
                 "Error",
                 message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
             )
 
     def _set_root_dir(self) -> None:
+        from .app import App
+
+        assert isinstance(self.master, App)
         directory = fd.askdirectory(
             title="Select Root Directory",
-            initialdir=self._root_dir,
+            initialdir=self.master.root_dir,
         )
         if directory:
-            self._root_dir = directory
-            self.master.root_dir = directory
+            self.master.root_dir = Path(directory).resolve()
 
     def enable_menus(self):
         assert self._reload_menu_index is not None

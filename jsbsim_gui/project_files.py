@@ -7,14 +7,15 @@
 # Foundation; either version 3 of the License, or (at your option) any later
 # version.
 
-import os
 import tkinter as tk
+from pathlib import Path
 from tkinter.messagebox import askyesnocancel, showerror
 from typing import Callable
 
 from .controller import Controller
 from .file_state import FileState
 from .hierarchical_tree import FileTree
+from .tree_node import XMLNode
 from .widget import LabeledWidget
 
 
@@ -45,22 +46,21 @@ class ProjectFiles(LabeledWidget):
         self._fileview.bind("<ButtonRelease-1>", self._on_file_click, add="+")
         self.set_widget(self._fileview)
 
-    def _load_file_states(self) -> dict[str, FileState]:
+    def _load_file_states(self) -> dict[Path, FileState]:
         file_states = {}
         for xml_tree in self._controller.get_xml_trees():
             for node in xml_tree:
+                assert isinstance(node, XMLNode)
                 filepath = node.filepath
                 if filepath not in file_states:
-                    with open(
-                        os.path.join(self._root_dir, filepath), encoding="utf-8"
-                    ) as f:
+                    with open(self._root_dir / filepath, encoding="utf-8") as f:
                         contents = f.read()
                     if contents.endswith("\n"):
                         contents = contents[:-1]
                     file_states[filepath] = FileState(filepath, contents)
         return file_states
 
-    def _bind_selection(self, filepath: str) -> None:
+    def _bind_selection(self, filepath: Path) -> None:
         file_state = self._file_states[filepath]
         self._file_selected(file_state)
 
@@ -69,13 +69,13 @@ class ProjectFiles(LabeledWidget):
         if selected and self._fileview.identify_row(event.y) == selected[0]:
             paths = self._fileview.get_selected_items(True)
             if paths:
-                file_state = self._file_states[paths[0]]
+                file_state = self._file_states[Path(paths[0])]
                 self._file_selected(file_state)
 
-    def get_file_states(self) -> dict[str, FileState]:
+    def get_file_states(self) -> dict[Path, FileState]:
         return self._file_states
 
-    def get_file_state(self, filepath: str) -> FileState | None:
+    def get_file_state(self, filepath: Path) -> FileState | None:
         return self._file_states.get(filepath)
 
     def select_file(self, file_state: FileState) -> None:
@@ -83,7 +83,7 @@ class ProjectFiles(LabeledWidget):
             self.current_file.content = self._get_editor_content()
             self.current_file = file_state
 
-    def show_file(self, filepath: str) -> None:
+    def show_file(self, filepath: Path) -> None:
         file_id = self._fileview.get_id_from_path(filepath)
         assert file_id is not None
         self._fileview.see(file_id)
@@ -106,7 +106,9 @@ class ProjectFiles(LabeledWidget):
         self._file_states = file_states
         self.current_file = file_states[current_path]
         self._fileview.clear()
-        self._fileview.create_tree_nodes(sorted(file_states))
+        self._fileview.create_tree_nodes(
+            sorted(str(file_name) for file_name in file_states)
+        )
 
     def save_file(self) -> bool:
         if not self.current_file.is_modified:

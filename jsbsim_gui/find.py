@@ -20,6 +20,7 @@ import re
 import tkinter as tk
 from dataclasses import asdict
 from itertools import chain
+from pathlib import Path
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW
 from typing import Callable
@@ -35,7 +36,7 @@ class XMLTree(SearchableTree):
         self,
         master: tk.Widget,
         xml_trees: list[XMLNode],
-        file_states: dict[str, FileState],
+        file_states: dict[Path, FileState],
         move_cursor: Callable[[FileState, int, int], None],
     ):
         super().__init__(master, lambda parent: HierarchicalTree(parent, [], [], False))
@@ -180,8 +181,8 @@ def _nodes_in_text(
 
 def _search_node_occurrences(
     tree: TreeNode, sub_tree: TreeNode | None, xml_trees: list[XMLNode]
-) -> dict[str, list[TextRegion]]:
-    occurrences: dict[str, list[TextRegion]] = {}
+) -> dict[Path, list[TextRegion]]:
+    occurrences: dict[Path, list[TextRegion]] = {}
 
     for xml_tree in xml_trees:
         for node in xml_tree:
@@ -302,7 +303,7 @@ class PropertyOccurrencesTree(SearchableTree):
         master: tk.Widget,
         controller: Controller,
         xml_trees: list[XMLNode],
-        file_states: dict[str, FileState],
+        file_states: dict[Path, FileState],
         select_text: Callable[[str, FileState, int, int], None],
     ):
         super().__init__(
@@ -333,19 +334,19 @@ class PropertyOccurrencesTree(SearchableTree):
         )
         buttons_frame.grid(column=0, row=3)
 
-    def set_occurrences(self, occurrences: dict[str, list[TextRegion]]) -> None:
+    def set_occurrences(self, occurrences: dict[Path, list[TextRegion]]) -> None:
         self._occurrence_data = {}
         self.tree.clear()
 
         input_files: list[str] = []
         for file_path in occurrences.keys():
             if file_path not in input_files:
-                input_files.append(file_path)
+                input_files.append(str(file_path))
 
         self.tree.create_tree_nodes(input_files)
 
         for file_path, node_occurrences in occurrences.items():
-            file_id = self.tree.get_id_from_path(file_path)
+            file_id = self.tree.get_id_from_path(str(file_path))
             if file_id is None:
                 continue
 
@@ -368,7 +369,7 @@ class PropertyOccurrencesTree(SearchableTree):
             return
 
         property_tree, root = self._find_matching_properties(property_path)
-        occurrences: dict[str, list[TextRegion]] = {}
+        occurrences: dict[Path, list[TextRegion]] = {}
         if property_tree.children:
             occurrences = _search_node_occurrences(property_tree, root, self._xml_trees)
 
@@ -443,7 +444,7 @@ class FindWindow(tk.Toplevel):
         self,
         master: tk.Tk | tk.Toplevel,
         controller: Controller,
-        file_states: dict[str, FileState],
+        file_states: dict[Path, FileState],
         select_text: Callable[[str, FileState, int, int], None],
         move_cursor: Callable[[FileState, int, int], None],
     ):

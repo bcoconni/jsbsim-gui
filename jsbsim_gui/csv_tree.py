@@ -16,9 +16,9 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import csv
-import os
 import tkinter as tk
 from dataclasses import dataclass
+from pathlib import Path
 from tkinter.messagebox import showerror
 
 import numpy as np
@@ -28,7 +28,7 @@ from .hierarchical_tree import HierarchicalTree, SearchableTree
 
 @dataclass
 class CsvData:
-    path: str
+    path: Path
     name: str
     time: np.ndarray
     data: np.ndarray
@@ -42,12 +42,12 @@ class CsvTree(SearchableTree):
         )
         self.tree.configure_tree(show="tree", selectmode="extended")
         self._item_id_to_column: dict[str, CsvData] = {}
-        self._loaded_files: list[str] = []
+        self._loaded_files: list[Path] = []
 
     def has_loaded_files(self) -> bool:
         return bool(self._loaded_files)
 
-    def load_csv(self, csv_path: str) -> None:
+    def load_csv(self, csv_path: Path) -> None:
         if csv_path in self._loaded_files:
             return
 
@@ -61,24 +61,19 @@ class CsvTree(SearchableTree):
             return
 
         if len(headers) < 2 or not rows:
-            showerror(
-                "Error loading CSV",
-                f"No data columns found in {os.path.basename(csv_path)}.",
-            )
+            showerror("Error loading CSV", f"No data columns found in {csv_path.name}.")
             return
 
         try:
             data = np.array([[float(v) for v in row] for row in rows])
         except ValueError as exc:
             showerror(
-                "Error loading CSV",
-                f"Non-numeric value in {os.path.basename(csv_path)}: {exc}",
+                "Error loading CSV", f"Non-numeric value in {csv_path.name}: {exc}"
             )
             return
 
         time_array = data[:, 0]
-        filename = os.path.basename(csv_path)
-        file_node_id = self.tree.insert("", tk.END, text=filename, open=True)
+        file_node_id = self.tree.insert("", tk.END, text=csv_path.name, open=True)
         self._loaded_files.append(csv_path)
 
         for col_idx, col_name in enumerate(headers[1:], start=1):

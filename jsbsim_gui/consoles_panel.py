@@ -20,6 +20,7 @@ import enum
 import tkinter as tk
 import tkinter.font as tkfont
 from dataclasses import dataclass
+from pathlib import Path
 from tkinter import ttk
 from tkinter.constants import DISABLED, END, NORMAL
 from typing import Callable, ClassVar
@@ -57,7 +58,7 @@ class LogTags:
 class LogSegment:
     text: str
     tags: LogTags
-    file_link: tuple[str, int] | None = None
+    file_link: tuple[Path, int] | None = None
 
 
 class Console(TextView):
@@ -66,7 +67,7 @@ class Console(TextView):
         master: tk.Widget,
         contents: str | None = None,
         *,
-        on_file_link_click: Callable[[str, int], None],
+        on_file_link_click: Callable[[Path, int], None],
         **kw,
     ):
         super().__init__(master, contents, **kw)
@@ -128,7 +129,7 @@ class ConsoleWithMessagesCounter(Console):
         master: tk.Widget,
         contents: str | None,
         on_count_update: Callable[[int], None],
-        on_file_link_click: Callable[[str, int], None],
+        on_file_link_click: Callable[[Path, int], None],
         **kw,
     ):
         super().__init__(master, contents, on_file_link_click=on_file_link_click, **kw)
@@ -162,7 +163,7 @@ class ConsoleLogger(FGLogger):
         self,
         output_console: Console,
         problems_console: Console,
-        get_file_relative_path: Callable[[str], str],
+        get_file_relative_path: Callable[[str], Path],
     ):
         super().__init__()
         self._output_console = output_console
@@ -242,7 +243,7 @@ class ConsoleLogger(FGLogger):
 
 class ConsolesPanel(ttk.Notebook):
     def __init__(
-        self, master: tk.Widget, on_file_link_click: Callable[[str, int], None], **kw
+        self, master: tk.Widget, on_file_link_click: Callable[[Path, int], None], **kw
     ):
         super().__init__(master)
         self._output_console = Console(
@@ -265,9 +266,11 @@ class ConsolesPanel(ttk.Notebook):
         else:
             self.tab(self._problems_console, text="Problems")
 
-    def get_logger(self, get_relative_path: Callable[[str], str]) -> ConsoleLogger:
+    def get_logger(self, get_relative_path: Callable[[Path], Path]) -> ConsoleLogger:
         return ConsoleLogger(
-            self._output_console, self._problems_console, get_relative_path
+            self._output_console,
+            self._problems_console,
+            lambda s: get_relative_path(Path(s).resolve()),
         )
 
     def reset(self):

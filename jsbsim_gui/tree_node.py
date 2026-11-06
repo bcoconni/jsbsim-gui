@@ -16,6 +16,7 @@
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from xml.parsers import expat
 
 _XML_TAG_PATTERN = re.compile(rb"""<(?:[^>"']|"[^"]*"|'[^']*')*>""")
@@ -96,7 +97,7 @@ class XMLNode(TreeNode):
         self,
         name: str,
         attrs: dict[str, TextRegion],
-        filepath: str,
+        filepath: Path,
         column: int,
         line: int,
     ):
@@ -113,7 +114,7 @@ class XMLNode(TreeNode):
 
 
 class XMLNodeBuilder:
-    def __init__(self, filename: str, fullpath: str):
+    def __init__(self, filename: Path, fullpath: Path):
         self.root: XMLNode | None = None
         self._filename = filename
         self._parent: XMLNode | None = None

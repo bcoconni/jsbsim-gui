@@ -36,7 +36,7 @@ class SourceEditor(EditableFrame):
         super().__init__(master)
         self._file_opened = file_opened
         self._current_path = initial_file.filepath
-        self._codeview = LabeledWidget(self, self._current_path)
+        self._codeview = LabeledWidget(self, str(self._current_path))
         self._editor = XMLSourceCodeView(
             self._codeview, initial_file.content, width=80, height=30, wrap=NONE
         )
@@ -57,7 +57,7 @@ class SourceEditor(EditableFrame):
 
     def refresh_model(self, file_state: FileState) -> None:
         self._current_path = file_state.filepath
-        self._codeview.set_label(file_state.filepath)
+        self._codeview.set_label(str(file_state.filepath))
         assert isinstance(self._codeview.widget, XMLSourceCodeView)
         self._codeview.widget.new_content(file_state.content)
 
@@ -69,7 +69,7 @@ class SourceEditor(EditableFrame):
         editor = self._codeview.widget
         assert isinstance(editor, XMLSourceCodeView)
         if file_state.filepath != self._current_path:
-            self._codeview.set_label(file_state.filepath)
+            self._codeview.set_label(str(file_state.filepath))
             editor.new_content(file_state.content)
             self._current_path = file_state.filepath
 

@@ -14,9 +14,8 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import os
-import platform
 import xml.etree.ElementTree as et
+from pathlib import Path
 from xml.parsers.expat import ExpatError
 
 import jsbsim
@@ -38,13 +37,6 @@ def _get_included_files(root: XMLNode) -> list[tuple[XMLNode, str]]:
     return included_files
 
 
-def get_path_relative_to_root(filename: str, root_dir: str) -> str:
-    path = os.path.relpath(os.path.realpath(filename), root_dir)
-    if platform.system() == "Windows":
-        return path.replace("\\", "/")
-    return path
-
-
 def print_console(msg: str) -> None:
     logger = jsbsim.get_logger()
     logger.message(msg)
@@ -57,18 +49,18 @@ class Controller:
         return jsbsim.__version__
 
     @staticmethod
-    def get_default_root_dir() -> str:
-        return jsbsim.get_default_root_dir()
+    def get_default_root_dir() -> Path:
+        return Path(jsbsim.get_default_root_dir()).resolve()
 
-    def __init__(self, root_dir: str, logger: jsbsim.FGLogger):
+    def __init__(self, root_dir: Path, logger: jsbsim.FGLogger):
         self._logger = logger
         self._logger_registered = False
         self.activate_logger()
         self.dt = 1.0 / 120.0
-        self.filename = ""
+        self.filename = Path()
         self.property_history = PropertyHistory([])
-        self.fdm = jsbsim.FGFDMExec(root_dir)
-        self.fdm.set_output_path(os.getcwd())
+        self.fdm = jsbsim.FGFDMExec(str(root_dir))
+        self.fdm.set_output_path(str(Path.cwd()))
 
     def __del__(self):
         self.close()
@@ -82,19 +74,19 @@ class Controller:
             jsbsim.set_logger(jsbsim.DefaultLogger())
             self._logger_registered = False
 
-    def load_script(self, filename: str) -> bool:
+    def load_script(self, filename: Path) -> bool:
         # TODO Validate the script before loading
         self.filename = filename
-        script_name = os.path.relpath(filename, self.fdm.get_root_dir())
-        success = self.fdm.load_script(script_name)
+        script_name = self.get_relative_path(filename)
+        success = self.fdm.load_script(str(script_name))
         if success:
             self.property_history = PropertyHistory(self.get_property_list())
         return success
 
-    def load_aircraft(self, filename: str) -> bool:
+    def load_aircraft(self, filename: Path) -> bool:
         # TODO Validate the aircraft definition before loading
         self.filename = filename
-        aircraft_name = os.path.splitext(os.path.basename(filename))[0]
+        aircraft_name = filename.stem
         success = self.fdm.load_model(aircraft_name, True)
         if success:
             self.property_history = PropertyHistory(self.get_property_list())
@@ -126,11 +118,11 @@ class Controller:
         self.property_history.record()
         return ret
 
-    def get_root_dir(self) -> str:
-        return os.path.realpath(self.fdm.get_root_dir())
+    def get_root_dir(self) -> Path:
+        return Path(self.fdm.get_root_dir()).resolve()
 
-    def get_relative_path(self, filename: str) -> str:
-        return get_path_relative_to_root(filename, self.get_root_dir())
+    def get_relative_path(self, filename: Path) -> Path:
+        return filename.relative_to(self.get_root_dir())
 
     def get_relative_name(self, name: str) -> str:
         root = self.get_property_root()
@@ -141,7 +133,7 @@ class Controller:
         return name
 
     def get_xml_trees(self) -> list[XMLNode]:
-        aircraft_path = self.fdm.get_aircraft_path()
+        aircraft_path = Path(self.fdm.get_aircraft_path()).resolve()
         root = XMLNodeBuilder(self.get_relative_path(self.filename), self.filename).root
         if root is None:
             return []
@@ -150,11 +142,15 @@ class Controller:
 
         if root.name == "runscript":
             for node in root:
-                if node.name == "use":
+                assert isinstance(node, XMLNode)
+                if node.name == "use" and "aircraft" in node.attrs:
                     aircraft_name = node.attrs["aircraft"].text
                     break
-            aircraft_path = os.path.join(aircraft_path, aircraft_name)
-            aircraft_filename = os.path.join(aircraft_path, append_xml(aircraft_name))
+            else:
+                raise RuntimeError(f"Malformed script file: {self.filename}")
+
+            aircraft_path = aircraft_path / aircraft_name
+            aircraft_filename = aircraft_path / append_xml(aircraft_name)
             root = XMLNodeBuilder(
                 self.get_relative_path(aircraft_filename), aircraft_filename
             ).root
@@ -162,39 +158,39 @@ class Controller:
             xml_trees.append(root)
 
             IC_file = node.attrs["initialize"].text
-            fullpath = os.path.join(aircraft_path, append_xml(IC_file))
+            fullpath = aircraft_path / append_xml(IC_file)
             ic_root = XMLNodeBuilder(self.get_relative_path(fullpath), fullpath).root
             assert ic_root
             xml_trees.append(ic_root)
         elif root.name == "fdm_config":
-            aircraft_name = os.path.splitext(os.path.basename(self.filename))[0]
-            aircraft_path = os.path.join(aircraft_path, aircraft_name)
+            aircraft_name = self.filename.stem
+            aircraft_path = aircraft_path / aircraft_name
 
-        engine_path = self.fdm.get_engine_path()
-        systems_path = self.fdm.get_systems_path()
+        engine_path = Path(self.fdm.get_engine_path()).resolve()
+        systems_path = Path(self.fdm.get_systems_path()).resolve()
 
         included_files = _get_included_files(root)
-        included_xml_trees: dict[str, XMLNode] = {}
+        included_xml_trees: dict[Path, XMLNode] = {}
 
         for node, filename in included_files:
-            if os.path.exists(os.path.join(aircraft_path, filename)):
-                fullpath = os.path.join(aircraft_path, filename)
-            elif os.path.exists(os.path.join(aircraft_path, "Systems", filename)):
-                fullpath = os.path.join(aircraft_path, "Systems", filename)
-            elif os.path.exists(os.path.join(aircraft_path, "systems", filename)):
-                fullpath = os.path.join(aircraft_path, "systems", filename)
-            elif os.path.exists(os.path.join(aircraft_path, "Engines", filename)):
-                fullpath = os.path.join(aircraft_path, "Engines", filename)
-            elif os.path.exists(os.path.join(aircraft_path, "engines", filename)):
-                fullpath = os.path.join(aircraft_path, "engines", filename)
-            elif os.path.exists(os.path.join(aircraft_path, "Engine", filename)):
-                fullpath = os.path.join(aircraft_path, "Engine", filename)
-            elif os.path.exists(os.path.join(aircraft_path, "engine", filename)):
-                fullpath = os.path.join(aircraft_path, "engine", filename)
-            elif os.path.exists(os.path.join(engine_path, filename)):
-                fullpath = os.path.join(engine_path, filename)
-            elif os.path.exists(os.path.join(systems_path, filename)):
-                fullpath = os.path.join(systems_path, filename)
+            if (aircraft_path / filename).exists():
+                fullpath = aircraft_path / filename
+            elif (aircraft_path / "Systems" / filename).exists():
+                fullpath = aircraft_path / "Systems" / filename
+            elif (aircraft_path / "systems" / filename).exists():
+                fullpath = aircraft_path / "systems" / filename
+            elif (aircraft_path / "Engines" / filename).exists():
+                fullpath = aircraft_path / "Engines" / filename
+            elif (aircraft_path / "engines" / filename).exists():
+                fullpath = aircraft_path / "engines" / filename
+            elif (aircraft_path / "Engine" / filename).exists():
+                fullpath = aircraft_path / "Engine" / filename
+            elif (aircraft_path / "engine" / filename).exists():
+                fullpath = aircraft_path / "engine" / filename
+            elif (engine_path / filename).exists():
+                fullpath = engine_path / filename
+            elif (systems_path / filename).exists():
+                fullpath = systems_path / filename
             else:
                 raise FileNotFoundError(f"Could not find {filename}")
 
@@ -228,7 +224,8 @@ class Controller:
             for p in self.fdm.query_property_catalog("").split("\n")
             if len(p) != 0
         ]
-        return [pm.get_node(name, False) for name in names]
+        properties = [pm.get_node(name, False) for name in names]
+        return [property for property in properties if property is not None]
 
     def get_property_value(self, property_name: str) -> float:
         return self.fdm[property_name]

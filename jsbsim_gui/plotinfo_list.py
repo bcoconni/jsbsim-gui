@@ -21,6 +21,7 @@ import os
 import platform
 import tkinter as tk
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from tkinter import ttk
 from tkinter.messagebox import showerror
 from typing import Iterator, Set
@@ -163,14 +164,14 @@ class PlotInfoList:
 
     def _update_csv_names(self) -> None:
         csv_infos = [p for p in self._plotinfos if isinstance(p, _CsvPlotInfo)]
-        name_to_paths: dict[str, Set[str]] = {}
+        name_to_paths: dict[str, Set[Path]] = {}
 
         for p in csv_infos:
             name_to_paths.setdefault(p.default_name, set()).add(p.csv_path)
 
         for p in csv_infos:
             if len(name_to_paths[p.default_name]) > 1:
-                csv_filename = os.path.basename(p.csv_path)
+                csv_filename = p.csv_path.name
                 p.name = f"{p.default_name} ({csv_filename})"
             else:
                 p.name = p.default_name

@@ -16,6 +16,7 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import argparse
+from pathlib import Path
 
 from . import __version__
 from .app import App
@@ -40,7 +41,7 @@ def run():
     parser.add_argument("--script", metavar="<script_name>", help="load a script")
     args = parser.parse_args()
 
-    app = App(args.root)
+    app = App(Path(args.root) if args.root is not None else None)
 
     if args.model:
         app.load_model_from_cmdline(args.model)

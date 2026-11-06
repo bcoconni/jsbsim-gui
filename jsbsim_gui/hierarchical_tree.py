@@ -18,6 +18,7 @@
 import re
 import tkinter as tk
 from itertools import chain
+from pathlib import Path
 from tkinter import ttk
 from tkinter.constants import BROWSE, EW, NSEW, VERTICAL
 from tkinter.messagebox import showerror
@@ -478,29 +479,32 @@ class PropertyTree(SearchableTree):
 
 
 class FileTree(HierarchicalTree):
-    def __init__(self, master: tk.Widget, elements: list[str]):
-        super().__init__(master, sorted(elements), [])
+    def __init__(self, master: tk.Widget, file_names: list[Path]):
+        super().__init__(master, sorted(str(path) for path in file_names), [])
         self._tree.configure(show="tree", selectmode=BROWSE)
         self._tree.tag_configure("modified", foreground="red")
 
     def bind_selection(
         self,
-        func: Callable[[str], None],
+        func: Callable[[Path], None],
         add: bool | Literal["", "+"] | None = None,
     ) -> None:
         def bind_func(_: tk.Event) -> None:
             selection = self.get_selected_items(True)
             if selection:
-                func(selection[0])
+                func(Path(selection[0]))
 
         self._tree.bind("<<TreeviewSelect>>", bind_func, add)
 
-    def highlight_file(self, filepath: str) -> None:
+    def get_id_from_path(self, path: Path) -> str | None:
+        return super().get_id_from_path(str(path))
+
+    def highlight_file(self, filepath: Path) -> None:
         item_id = self.get_id_from_path(filepath)
         assert item_id
         self._tree.item(item_id, tags=("modified",))
 
-    def clear_highlight(self, filepath: str) -> None:
+    def clear_highlight(self, filepath: Path) -> None:
         item_id = self.get_id_from_path(filepath)
         assert item_id
         self._tree.item(item_id, tags=())

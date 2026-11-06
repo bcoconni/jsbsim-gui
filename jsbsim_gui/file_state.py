@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import os
+from pathlib import Path
 from tkinter.messagebox import showerror
 from xml.parsers import expat
 
@@ -23,17 +23,16 @@ from .controller import Controller
 
 
 class FileState:
-    def __init__(self, filepath: str, content: str):
+    def __init__(self, filepath: Path, content: str):
         self.filepath = filepath
         self.content = content
         self.is_modified = False
 
-    def write(self, root_dir: str) -> bool:
-        full_path = os.path.realpath(os.path.join(root_dir, self.filepath))
-        default_root = os.path.realpath(Controller.get_default_root_dir())
+    def write(self, root_dir: Path) -> bool:
+        full_path = (root_dir / self.filepath).resolve()
+        default_root = Controller.get_default_root_dir().resolve()
         try:
-            common = os.path.commonpath([full_path, default_root])
-            if os.path.realpath(common) == default_root:
+            if full_path.is_relative_to(default_root):
                 showerror(
                     "Cannot Save File",
                     message=f'Cannot save "{self.filepath}": file is located in the JSBSim default root directory.',
