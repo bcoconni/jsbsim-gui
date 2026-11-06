@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, see <http://www.gnu.org/licenses/>
 
-import json
 import os
 import tkinter as tk
 import xml.etree.ElementTree as et
@@ -25,11 +24,9 @@ from tkinter import filedialog as fd
 from tkinter.messagebox import showerror
 from typing import Callable
 
-import platformdirs
-
 from .controller import Controller
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
-from .options import get_options
+from .options import Options, get_options
 
 FILE_MANAGEMENT_KEY = "file_management"
 RECENT_FILES_KEY = "recent_files"
@@ -41,54 +38,43 @@ class FileManagementOptions:
     num_recent_files: int = 5
 
 
-class RecentFiles:
+class RecentFiles(Options):
     def __init__(self) -> None:
         options = get_options().get(FILE_MANAGEMENT_KEY)
         self._file_options = FileManagementOptions(**options)
-
-        self._recent_files_path = (
-            Path(platformdirs.user_config_dir("jsbsim-gui")) / "recent_files.json"
-        )
-        self._recent_files: list[list[str]] = []
-        self._get_recent_file_list()
+        super().__init__("recent_files.json")
 
     def add_recent_file(self, file_path: str, root_dir: str):
         num_recent_files = self._file_options.num_recent_files
         new_entry = [file_path, root_dir]
+        recent_files = self.get(RECENT_FILES_KEY)
         try:
-            index = self._recent_files.index(new_entry)
+            index = recent_files.index(new_entry)
             if index == 0:
                 return
 
             if index + 1 == num_recent_files:
-                self._recent_files = [new_entry] + self._recent_files[:-1]
+                recent_files = [new_entry] + recent_files[:-1]
             else:
-                before = self._recent_files[:index]
-                after = self._recent_files[index + 1 :]
-                self._recent_files = [new_entry] + before + after
+                before = recent_files[:index]
+                after = recent_files[index + 1 :]
+                recent_files = [new_entry] + before + after
         except ValueError:
-            if len(self._recent_files) >= num_recent_files:
-                self._recent_files = [new_entry] + self._recent_files[:num_recent_files]
+            if len(recent_files) >= num_recent_files:
+                recent_files = [new_entry] + recent_files[:num_recent_files]
             else:
-                self._recent_files = [new_entry] + self._recent_files
+                recent_files = [new_entry] + recent_files
 
-        self._recent_files_path.parent.mkdir(parents=True, exist_ok=True)
-        data = {RECENT_FILES_KEY: self._recent_files}
-        with open(self._recent_files_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
+        self.set(RECENT_FILES_KEY, recent_files)
+        self._save()
 
-    def _get_recent_file_list(self):
-        if not self._recent_files_path.exists():
-            self._recent_files = []
-            return
+    def _load(self):
+        super()._load()
+        recent_files = self.get(RECENT_FILES_KEY)
+        num_recent_files = self._file_options.num_recent_files
 
-        with open(self._recent_files_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                self._recent_files = data[RECENT_FILES_KEY]
-                num_recent_files = self._file_options.num_recent_files
-                if len(self._recent_files) > num_recent_files:
-                    self._recent_files = self._recent_files[:num_recent_files]
+        if len(recent_files) > num_recent_files:
+            self.set(RECENT_FILES_KEY, recent_files[:num_recent_files])
 
     def get_menu(
         self, master: tk.Widget, open_file: Callable[[str, str], None]
@@ -103,7 +89,7 @@ class RecentFiles:
 
             return menu_command
 
-        for file in self._recent_files:
+        for file in self.get(RECENT_FILES_KEY):
             file_name = Path(file[0]).resolve()
             try:
                 home = Path.home()

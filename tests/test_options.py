@@ -40,13 +40,13 @@ class TestOptions(Options):
         self._super_init_completed = True
         self._file_path = file_path
         try:
-            self.load()
+            self._load()
         except json.JSONDecodeError:
             pass
 
-    def load(self):
+    def _load(self):
         if self._super_init_completed:
-            super().load()
+            super()._load()
 
 
 class TestOptionsModel(unittest.TestCase):
@@ -83,7 +83,7 @@ class TestOptionsModel(unittest.TestCase):
         }
 
         options.set("xml_syntax_colors", custom_colors)
-        options.save()
+        options._save()
 
         self.assertTrue(self.config_file.is_file())
         with open(self.config_file, "r", encoding="utf-8") as f:
