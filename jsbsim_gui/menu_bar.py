@@ -39,11 +39,8 @@ class FileManagementOptions:
     num_recent_files: int = 5
 
 
-class MenuBar(tk.Menu):
-    def __init__(self, master: tk.Tk, root_dir: str):
-        super().__init__(master)
-        self._root_dir = root_dir
-
+class RecentFiles:
+    def __init__(self) -> None:
         options = get_options().get(FILE_MANAGEMENT_KEY)
         self._file_options = FileManagementOptions(**options)
 
@@ -52,6 +49,50 @@ class MenuBar(tk.Menu):
         )
         self._recent_files: list[list[str]] = []
         self._get_recent_file_list()
+
+    def add_recent_file(self, file_path: str, root_dir: str):
+        num_recent_files = self._file_options.num_recent_files
+        new_entry = [file_path, root_dir]
+        try:
+            index = self._recent_files.index(new_entry)
+            if index == 0:
+                return
+
+            if index + 1 == num_recent_files:
+                self._recent_files = [new_entry] + self._recent_files[:-1]
+            else:
+                before = self._recent_files[:index]
+                after = self._recent_files[index + 1 :]
+                self._recent_files = [new_entry] + before + after
+        except ValueError:
+            if len(self._recent_files) >= num_recent_files:
+                self._recent_files = [new_entry] + self._recent_files[:num_recent_files]
+            else:
+                self._recent_files = [new_entry] + self._recent_files
+
+        self._recent_files_path.parent.mkdir(parents=True, exist_ok=True)
+        data = {RECENT_FILES_KEY: self._recent_files}
+        with open(self._recent_files_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+
+    def _get_recent_file_list(self):
+        if not self._recent_files_path.exists():
+            self._recent_files = []
+            return
+
+        with open(self._recent_files_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                self._recent_files = data[RECENT_FILES_KEY]
+                num_recent_files = self._file_options.num_recent_files
+                if len(self._recent_files) > num_recent_files:
+                    self._recent_files = self._recent_files[:num_recent_files]
+
+
+class MenuBar(tk.Menu):
+    def __init__(self, master: tk.Tk, root_dir: str):
+        super().__init__(master)
+        self._root_dir = root_dir
 
         self._file_menu = tk.Menu(self, tearoff=False)
         self._file_menu.add_command(label="Root...", command=self._set_root_dir)
@@ -173,44 +214,6 @@ class MenuBar(tk.Menu):
         if directory:
             self._root_dir = directory
             self.master.root_dir = directory
-
-    def add_recent_file(self, file_path: str, root_dir: str):
-        num_recent_files = self._file_options.num_recent_files
-        new_entry = [file_path, root_dir]
-        try:
-            index = self._recent_files.index(new_entry)
-            if index == 0:
-                return
-
-            if index + 1 == num_recent_files:
-                self._recent_files = [new_entry] + self._recent_files[:-1]
-            else:
-                before = self._recent_files[:index]
-                after = self._recent_files[index + 1 :]
-                self._recent_files = [new_entry] + before + after
-        except ValueError:
-            if len(self._recent_files) >= num_recent_files:
-                self._recent_files = [new_entry] + self._recent_files[:num_recent_files]
-            else:
-                self._recent_files = [new_entry] + self._recent_files
-
-        self._recent_files_path.parent.mkdir(parents=True, exist_ok=True)
-        data = {RECENT_FILES_KEY: self._recent_files}
-        with open(self._recent_files_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
-
-    def _get_recent_file_list(self):
-        if not self._recent_files_path.exists():
-            self._recent_files = []
-            return
-
-        with open(self._recent_files_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                self._recent_files = data[RECENT_FILES_KEY]
-                num_recent_files = self._file_options.num_recent_files
-                if len(self._recent_files) > num_recent_files:
-                    self._recent_files = self._recent_files[:num_recent_files]
 
     def enable_menus(self):
         assert self._reload_menu_index is not None
