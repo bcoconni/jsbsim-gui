@@ -26,21 +26,17 @@ from typing import Any, Callable, List, Optional, Union
 import platformdirs
 
 
-def get_options_file_path(app_name: str = "jsbsim-gui") -> Path:
-    return Path(platformdirs.user_config_dir(app_name)) / "options.json"
-
-
 class Options:
-    def __init__(self):
-        self._file_path = get_options_file_path()
+    def __init__(self, file_name: str = "options.json"):
+        self._file_path = Path(platformdirs.user_config_dir("jsbsim-gui")) / file_name
         self._options: dict[str, Any] = {"version": "0.1"}
         self._subscribers: dict[str, List[Callable[[], None]]] = {}
-        self.load()
+        self._load()
 
     def get(self, name: str) -> Any:
         return self._options.get(name, {})
 
-    def set(self, name: str, value: dict[str, Any]) -> None:
+    def set(self, name: str, value: Any) -> None:
         self._options[name] = value
 
         if name in self._subscribers:
@@ -59,7 +55,7 @@ class Options:
         assert name in self._subscribers and callback in self._subscribers[name]
         self._subscribers[name].remove(callback)
 
-    def load(self) -> None:
+    def _load(self) -> None:
         if not self._file_path.is_file():
             return
 
@@ -68,7 +64,7 @@ class Options:
             if isinstance(data, dict):
                 self._options = data
 
-    def save(self) -> None:
+    def _save(self) -> None:
         self._file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self._file_path, "w", encoding="utf-8") as f:
             json.dump(self._options, f, indent=4)
@@ -119,7 +115,7 @@ class OptionsWindow(tk.Toplevel):
         active_tab = self._notebook.nametowidget(self._notebook.select())
         assert isinstance(active_tab, OptionsTab)
         active_tab.apply()
-        get_options().save()
+        get_options()._save()
         self.destroy()
 
     def _apply(self) -> None:

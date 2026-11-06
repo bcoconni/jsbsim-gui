@@ -36,7 +36,7 @@ from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
 from .file_state import FileState
 from .find import FindWindow
 from .hierarchical_tree import PropertyTree
-from .menu_bar import MenuBar
+from .menu_bar import MenuBar, RecentFiles
 from .options import OptionsWindow
 from .plotinfo_list import PlotInfoListOptionsTab
 from .plots_view import PlotsView
@@ -470,4 +470,5 @@ class App(tk.Tk):
             self._console_sash.grid(column=0, row=0, sticky=NSEW)
             self._statusbar.grid(column=0, row=1, sticky=EW)
             self._statusbar.set_text("Ready.")
+            RecentFiles().add_recent_file(filename, self.root_dir)
         return success

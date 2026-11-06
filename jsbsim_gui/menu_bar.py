@@ -18,11 +18,93 @@
 import os
 import tkinter as tk
 import xml.etree.ElementTree as et
+from dataclasses import dataclass
+from pathlib import Path
 from tkinter import filedialog as fd
 from tkinter.messagebox import showerror
+from typing import Callable
 
 from .controller import Controller
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
+from .options import Options, get_options
+
+FILE_MANAGEMENT_KEY = "file_management"
+RECENT_FILES_KEY = "recent_files"
+OPEN_RECENT_MENU_ENTRY = "Open recent"
+
+
+@dataclass
+class FileManagementOptions:
+    num_recent_files: int = 5
+
+
+class RecentFiles(Options):
+    def __init__(self) -> None:
+        options = get_options().get(FILE_MANAGEMENT_KEY)
+        self._file_options = FileManagementOptions(**options)
+        super().__init__("recent_files.json")
+
+    def add_recent_file(self, file_path: str, root_dir: str):
+        num_recent_files = self._file_options.num_recent_files
+        new_entry = [file_path, root_dir]
+        recent_files = self.get(RECENT_FILES_KEY)
+        try:
+            index = recent_files.index(new_entry)
+            if index == 0:
+                return
+
+            if index + 1 == num_recent_files:
+                recent_files = [new_entry] + recent_files[:-1]
+            else:
+                before = recent_files[:index]
+                after = recent_files[index + 1 :]
+                recent_files = [new_entry] + before + after
+        except ValueError:
+            if len(recent_files) >= num_recent_files:
+                recent_files = [new_entry] + recent_files[:num_recent_files]
+            else:
+                recent_files = [new_entry] + recent_files
+
+        self.set(RECENT_FILES_KEY, recent_files)
+        self._save()
+
+    def get(self, name: str) -> list[list[str]]:
+        return self._options.get(name, [])
+
+    def _load(self) -> None:
+        super()._load()
+        recent_files = self.get(RECENT_FILES_KEY)
+        num_recent_files = self._file_options.num_recent_files
+
+        if len(recent_files) > num_recent_files:
+            self.set(RECENT_FILES_KEY, recent_files[:num_recent_files])
+
+    def get_menu(
+        self, master: tk.Widget, open_file: Callable[[str, str], None]
+    ) -> tk.Menu:
+        menu = tk.Menu(master, tearoff=False)
+
+        def generate_menu_command(file: list[str]):  # Capture the value of `file`
+            def menu_command(
+                menu: tk.Menu, file_name: Path, open_file: Callable[[str, str], None]
+            ):
+                menu.add_command(label=str(file_name), command=lambda: open_file(*file))
+
+            return menu_command
+
+        for file in self.get(RECENT_FILES_KEY):
+            file_name = Path(file[0]).resolve()
+            try:
+                home = Path.home()
+                if file_name.is_relative_to(home):
+                    file_name = "~" / file_name.relative_to(home)
+            except RuntimeError:
+                pass
+
+            menu_add_command = generate_menu_command(file)
+            menu_add_command(menu, file_name, open_file)
+
+        return menu
 
 
 class MenuBar(tk.Menu):
@@ -31,8 +113,10 @@ class MenuBar(tk.Menu):
         self._root_dir = root_dir
 
         self._file_menu = tk.Menu(self, tearoff=False)
-        self._file_menu.add_command(label="Root...", command=self.set_root_dir)
-        self._file_menu.add_command(label="Open...", command=self.select_script_file)
+        self._file_menu.add_command(label="Root...", command=self._set_root_dir)
+        self._file_menu.add_command(label="Open...", command=self._select_script_file)
+        sub_menu = RecentFiles().get_menu(self._file_menu, self._open_recent_file)
+        self._file_menu.add_cascade(label=OPEN_RECENT_MENU_ENTRY, menu=sub_menu)
         self._file_menu.add_separator()
         self._file_menu.add_command(
             label="Save",
@@ -101,7 +185,7 @@ class MenuBar(tk.Menu):
         self.add_cascade(label="Edit", menu=edit_menu)
         self.entryconfig("Edit", state=tk.DISABLED)
 
-    def select_script_file(self) -> None:
+    def _select_script_file(self) -> None:
         filename = fd.askopenfilename(
             title="Open a script, aircraft or CSV file",
             initialdir=self._root_dir,
@@ -117,14 +201,23 @@ class MenuBar(tk.Menu):
             self.master.load_csv(filename)
             return
 
+        self._open_file(filename)
+
+    def _open_recent_file(self, filename: str, root_dir: str) -> None:
+        self._root_dir = root_dir
+        self.master.root_dir = root_dir
+        self._open_file(filename)
+
+    def _open_file(self, filename: str) -> None:
         root = et.parse(filename).getroot()
         success = False
         if root.tag == "runscript":
             use_el = root.find("use")
-            aircraft_name = use_el.attrib["aircraft"]
-            success = self.master.open_file(
-                filename, aircraft_name, Controller.load_script
-            )
+            if use_el is not None:
+                aircraft_name = use_el.attrib["aircraft"]
+                success = self.master.open_file(
+                    filename, aircraft_name, Controller.load_script
+                )
         elif root.tag == "fdm_config":
             aircraft_name = os.path.splitext(os.path.basename(filename))[0]
             success = self.master.open_file(
@@ -142,7 +235,7 @@ class MenuBar(tk.Menu):
                 message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
             )
 
-    def set_root_dir(self) -> None:
+    def _set_root_dir(self) -> None:
         directory = fd.askdirectory(
             title="Select Root Directory",
             initialdir=self._root_dir,
@@ -152,8 +245,11 @@ class MenuBar(tk.Menu):
             self.master.root_dir = directory
 
     def enable_menus(self):
+        assert self._reload_menu_index is not None
         self.entryconfig("Edit", state=tk.NORMAL)
         self._file_menu.entryconfig(self._reload_menu_index, state=tk.NORMAL)
+        sub_menu = RecentFiles().get_menu(self._file_menu, self._open_recent_file)
+        self._file_menu.entryconfigure(OPEN_RECENT_MENU_ENTRY, menu=sub_menu)
 
     def update_save_menu_state(self, enable: bool) -> None:
         state = tk.NORMAL if enable else tk.DISABLED
