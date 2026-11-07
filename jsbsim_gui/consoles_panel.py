@@ -19,6 +19,7 @@ import copy
 import enum
 import tkinter as tk
 import tkinter.font as tkfont
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from tkinter import ttk
@@ -30,7 +31,7 @@ from jsbsim import FGLogger, LogFormat, LogLevel
 from .textview import TextView
 
 
-class LogColor(str, enum.Enum):
+class LogColor(enum.StrEnum):
     RED = "log_red"
     BLUE = "log_blue"
     CYAN = "log_cyan"
@@ -74,7 +75,7 @@ class Console(TextView):
         self._on_file_link_click = on_file_link_click
         self._file_link_counter: int = 0
         # Set the text to read only
-        self._text.configure(state=DISABLED)
+        self._text.configure(state=DISABLED, cursor="")
         self._text.tag_configure(LogColor.RED, foreground="#cc0000")
         self._text.tag_configure(LogColor.BLUE, foreground="#0000cc")
         self._text.tag_configure(LogColor.CYAN, foreground="#007080")
@@ -118,9 +119,24 @@ class Console(TextView):
                     "<Button-1>",
                     lambda _, fl=segment.file_link: self._on_file_link_click(*fl),
                 )
+                self._text.tag_bind(
+                    fl_tag, "<Enter>", lambda _, tag=fl_tag: self._on_link_enter(tag)
+                )
+                self._text.tag_bind(
+                    fl_tag, "<Leave>", lambda _, tag=fl_tag: self._on_link_leave(tag)
+                )
 
         self._text.see(END)
         self._text.configure(state=DISABLED)
+
+    def _on_link_enter(self, tag: str) -> None:
+        cursor_name = "pointinghand" if sys.platform == "darwin" else "hand2"
+        self._text.configure(cursor=cursor_name)
+        self._text.tag_configure(tag, background="#e4e4ff")
+
+    def _on_link_leave(self, tag: str) -> None:
+        self._text.configure(cursor="")
+        self._text.tag_configure(tag, background="white")
 
 
 class ConsoleWithMessagesCounter(Console):
@@ -188,9 +204,12 @@ class ConsoleLogger(FGLogger):
 
     def file_location(self, filename: str, line: int) -> None:
         rel_path = self._get_file_relative_path(filename)
-        text = f"In {rel_path}: line {line}\n"
-        tags = LogTags(self._tags.color, bold=self._tags.bold, underline=True)
-        self._segments.append(LogSegment(text, tags, (rel_path, line)))
+        text = f"In {rel_path}: line {line}"
+        link_tag = LogTags(self._tags.color, bold=self._tags.bold, underline=True)
+        self._segments.append(LogSegment(text, link_tag, (rel_path, line)))
+        # Do not apply the link tag to the carriage return or the whole line to the
+        # right of the link will be clickable.
+        self._segments.append(LogSegment("\n", copy.copy(self._tags)))
 
     def message(self, text: str) -> None:
         if self._segments:
