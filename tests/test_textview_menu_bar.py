@@ -64,7 +64,7 @@ class TestEditMenuCommands(unittest.TestCase):
         self.root.destroy()
 
     def test_edit_menu_commands_delegate_to_master_methods(self):
-        menubar = MenuBar(self.root, ".")
+        menubar = MenuBar(self.root)
         edit_menu = menubar.nametowidget(menubar.entrycget("Edit", "menu"))
 
         for index in [0, 1, 3, 4, 5, 6, 8]:

@@ -9,6 +9,7 @@ import os
 import tempfile
 import time
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -27,7 +28,7 @@ class TestWorkspace(unittest.TestCase):
     def setUp(self):
         self.app = App()
         self.app.withdraw()
-        filename = os.path.join(self.app.root_dir, "aircraft", "c172p", "c172p.xml")
+        filename = Path(self.app.root_dir) / "aircraft" / "c172p" / "c172p.xml"
         self.assertTrue(self.app.open_file(filename, "c172p", Controller.load_aircraft))
         self.editor = self.app.editor
         assert isinstance(self.editor, SourceEditor)
@@ -116,7 +117,7 @@ class TestWorkspace(unittest.TestCase):
 
     def test_csv_loading_keeps_current_tab(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = os.path.join(directory, "test.csv")
+            path = Path(directory) / "test.csv"
             with open(path, "w", encoding="utf-8") as file:
                 file.write("time,value\n0,1\n1,2\n")
             self.app.load_csv(path)
@@ -164,7 +165,7 @@ class TestWorkspace(unittest.TestCase):
         preview.destroy()
 
         with tempfile.TemporaryDirectory() as directory:
-            path = os.path.join(directory, "test.csv")
+            path = Path(directory) / "test.csv"
             with open(path, "w", encoding="utf-8") as file:
                 file.write("time,value\n0,1\n1,2\n")
             self.app.load_csv(path)

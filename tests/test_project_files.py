@@ -9,11 +9,12 @@ import os
 import tempfile
 import tkinter as tk
 import unittest
+from pathlib import Path
 from tkinter import ttk
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from jsbsim_gui.project_files import ProjectFiles
+from jsbsim_gui.tree_node import XMLNode
 
 
 class TestProjectFiles(unittest.TestCase):
@@ -28,11 +29,11 @@ class TestProjectFiles(unittest.TestCase):
             ) as f:
                 f.write(content + "\n")
         controller = Mock()
-        controller.get_root_dir.return_value = self.directory.name
-        controller.filename = os.path.join(self.directory.name, "main.xml")
-        controller.get_relative_path.return_value = "main.xml"
+        controller.get_root_dir.return_value = Path(self.directory.name)
+        controller.filename = Path(self.directory.name) / "main.xml"
+        controller.get_relative_path.return_value = Path("main.xml")
         controller.get_xml_trees.return_value = [
-            [SimpleNamespace(filepath=path) for path in self.paths]
+            [XMLNode(path, {}, Path(path), 0, 1) for path in self.paths]
         ]
         self.editor_content = "<main/>"
         self.on_selected = Mock()
@@ -55,7 +56,7 @@ class TestProjectFiles(unittest.TestCase):
 
     def test_saves_modified_files_after_switching_between_them(self):
         main = self.files.current_file
-        other = self.files.get_file_state("other.xml")
+        other = self.files.get_file_state(Path("other.xml"))
         assert other is not None
         self.editor_content = "<main>changed</main>"
         self.files.mark_current_modified(True)
@@ -76,7 +77,7 @@ class TestProjectFiles(unittest.TestCase):
 
     def test_save_all_validates_every_file_before_writing(self):
         main = self.files.current_file
-        other = self.files.get_file_state("other.xml")
+        other = self.files.get_file_state(Path("other.xml"))
         assert other is not None
         self.editor_content = "<main>changed</main>"
         self.files.mark_current_modified(True)
