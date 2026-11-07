@@ -83,15 +83,6 @@ class RecentFiles(Options):
     ) -> tk.Menu:
         menu = tk.Menu(master, tearoff=False)
 
-        def generate_add_menu_command(file: tuple[Path, Path]):
-            # Capture the value of `file`
-            def menu_command(
-                menu: tk.Menu, file_name: Path, open_file: Callable[[Path, Path], None]
-            ):
-                menu.add_command(label=str(file_name), command=lambda: open_file(*file))
-
-            return menu_command
-
         for file in self.get(RECENT_FILES_KEY):
             file_name = Path(file[0]).resolve()
             try:
@@ -101,8 +92,7 @@ class RecentFiles(Options):
             except RuntimeError:
                 pass
 
-            menu_add_command = generate_add_menu_command(file)
-            menu_add_command(menu, file_name, open_file)
+            menu.add_command(label=str(file_name), command=lambda f=file: open_file(*f))
 
         return menu
 

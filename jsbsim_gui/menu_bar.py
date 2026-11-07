@@ -29,7 +29,11 @@ from .recent_files import RecentFiles
 if TYPE_CHECKING:
     from .app import App
 
-OPEN_RECENT_MENU_ENTRY = "Open recent"
+OPEN_RECENT_MENU_ENTRY = "Open Recent"
+RELOAD_MENU_ENTRY = "Reload"
+SAVE_MENU_ENTRY = "Save"
+SAVE_ALL_MENU_ENTRY = "Save All"
+EDIT_MENU_ENTRY = "Edit"
 
 
 def open_file(app: "App", filename: Path) -> bool | None:
@@ -61,21 +65,20 @@ class MenuBar(tk.Menu):
         self._file_menu.add_cascade(label=OPEN_RECENT_MENU_ENTRY, menu=sub_menu)
         self._file_menu.add_separator()
         self._file_menu.add_command(
-            label="Save",
+            label=RELOAD_MENU_ENTRY,
+            accelerator=f"{SHORTCUT_MODIFIER}+R",
+            command=master.reload_model,
+            state=tk.DISABLED,
+        )
+        self._file_menu.add_command(
+            label=SAVE_MENU_ENTRY,
             accelerator=f"{SHORTCUT_MODIFIER}+S",
             command=master.save_file,
             state=tk.DISABLED,
         )
         self._file_menu.add_command(
-            label="Save All", command=master.save_all, state=tk.DISABLED
+            label=SAVE_ALL_MENU_ENTRY, command=master.save_all, state=tk.DISABLED
         )
-        self._file_menu.add_command(
-            label="Reload",
-            accelerator=f"{SHORTCUT_MODIFIER}+R",
-            command=master.reload_model,
-            state=tk.DISABLED,
-        )
-        self._reload_menu_index = self._file_menu.index(tk.END)
         self._file_menu.add_separator()
         self._file_menu.add_command(
             label="Exit",
@@ -124,8 +127,8 @@ class MenuBar(tk.Menu):
         )
         edit_menu.add_separator()
         edit_menu.add_command(label="Options...", command=lambda: master.show_options())
-        self.add_cascade(label="Edit", menu=edit_menu)
-        self.entryconfig("Edit", state=tk.DISABLED)
+        self.add_cascade(label=EDIT_MENU_ENTRY, menu=edit_menu)
+        self.entryconfig(EDIT_MENU_ENTRY, state=tk.DISABLED)
 
     def _select_script_file(self) -> None:
         from .app import App
@@ -162,9 +165,7 @@ class MenuBar(tk.Menu):
         assert isinstance(self.master, App)
         success = open_file(self.master, filename)
 
-        if success is None:
-            return
-        else:
+        if success is False:
             name = filename.relative_to(self.master.root_dir)
             showerror(
                 "Error",
@@ -183,13 +184,12 @@ class MenuBar(tk.Menu):
             self.master.root_dir = Path(directory).resolve()
 
     def enable_menus(self):
-        assert self._reload_menu_index is not None
-        self.entryconfig("Edit", state=tk.NORMAL)
-        self._file_menu.entryconfig(self._reload_menu_index, state=tk.NORMAL)
+        self.entryconfig(EDIT_MENU_ENTRY, state=tk.NORMAL)
+        self._file_menu.entryconfig(RELOAD_MENU_ENTRY, state=tk.NORMAL)
         sub_menu = RecentFiles().menu(self._file_menu, self._open_recent_file)
         self._file_menu.entryconfigure(OPEN_RECENT_MENU_ENTRY, menu=sub_menu)
 
     def update_save_menu_state(self, enable: bool) -> None:
         state = tk.NORMAL if enable else tk.DISABLED
-        self._file_menu.entryconfig("Save", state=state)
-        self._file_menu.entryconfig("Save All", state=state)
+        self._file_menu.entryconfig(SAVE_MENU_ENTRY, state=state)
+        self._file_menu.entryconfig(SAVE_ALL_MENU_ENTRY, state=state)

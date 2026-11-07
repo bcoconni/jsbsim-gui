@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023 Bertrand Coconnier
+# Copyright (c) 2023-2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -51,7 +51,7 @@ def run():
         const=0,
         default=None,
         metavar="<index>",
-        help="XXX resume from recent files by index (0 is the most recent)",
+        help="resume from recent files by index (0 is the most recent)",
     )
     group.add_argument(
         "--list-recent-files",
@@ -66,9 +66,9 @@ def run():
             print(f"{i:2}: {file}")
         return
     elif args.resume is not None:
-        recent_file = RecentFiles()[args.resume]
-        app = App(recent_file[1])
-        open_file(app, recent_file[0])
+        file_name, root_dir = RecentFiles()[args.resume]
+        app = App(root_dir)
+        open_file(app, file_name)
     else:
         app = App(Path(args.root) if args.root is not None else None)
 
