@@ -34,7 +34,6 @@ from tkinter.constants import (
     VERTICAL,
 )
 from typing import Callable, Literal
-from xml.parsers import expat
 
 from pygments import lex
 from pygments.lexer import Lexer
@@ -478,9 +477,7 @@ class XMLSourceCodeView(SourceCodeView):
         )
 
         self._lexer = get_lexer_by_name("xml")
-        self._parser = self.new_parser()
         if contents:
-            self._parser.Parse(contents)
             self.highlight_text()
 
     def _load_syntax_colors(self):
@@ -512,18 +509,8 @@ class XMLSourceCodeView(SourceCodeView):
             return "XML_data"
         return None
 
-    def new_parser(self) -> expat.XMLParserType:
-        parser = expat.ParserCreate()
-        parser.buffer_text = True
-        return parser
-
     def new_content(self, contents: str) -> None:
         super().new_content(contents)
-        self._parser = self.new_parser()
-        try:
-            self._parser.Parse(contents)
-        except expat.ExpatError:
-            pass
         self.highlight_text()
 
     def extract_tagged_regions(self, tag_name: str) -> list[tuple[int, int, str]]:

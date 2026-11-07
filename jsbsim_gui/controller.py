@@ -16,6 +16,7 @@
 
 import xml.etree.ElementTree as et
 from pathlib import Path
+from typing import Iterable
 from xml.parsers.expat import ExpatError
 
 import jsbsim
@@ -41,6 +42,21 @@ def print_console(msg: str) -> None:
     logger = jsbsim.get_logger()
     logger.message(msg)
     logger.flush()
+
+
+def _find_in_subdirs(
+    root_path: Path, subdirs: Iterable[str], alternate_path: Path, filename: str
+) -> Path:
+    for subdir_name in subdirs:
+        fullpath = root_path / subdir_name / filename
+        if fullpath.exists():
+            return fullpath
+
+    fullpath = alternate_path / filename
+    if fullpath.exists():
+        return fullpath
+
+    return Path()
 
 
 class Controller:
@@ -170,38 +186,34 @@ class Controller:
         systems_path = Path(self.fdm.get_systems_path()).resolve()
 
         included_files = _get_included_files(root)
-        included_xml_trees: dict[Path, XMLNode] = {}
+        parsed_files: dict[Path, XMLNode] = {}
 
         for node, filename in included_files:
+            fullpath = Path()
+
             if (aircraft_path / filename).exists():
                 fullpath = aircraft_path / filename
-            elif (aircraft_path / "Systems" / filename).exists():
-                fullpath = aircraft_path / "Systems" / filename
-            elif (aircraft_path / "systems" / filename).exists():
-                fullpath = aircraft_path / "systems" / filename
-            elif (aircraft_path / "Engines" / filename).exists():
-                fullpath = aircraft_path / "Engines" / filename
-            elif (aircraft_path / "engines" / filename).exists():
-                fullpath = aircraft_path / "engines" / filename
-            elif (aircraft_path / "Engine" / filename).exists():
-                fullpath = aircraft_path / "Engine" / filename
-            elif (aircraft_path / "engine" / filename).exists():
-                fullpath = aircraft_path / "engine" / filename
-            elif (engine_path / filename).exists():
-                fullpath = engine_path / filename
-            elif (systems_path / filename).exists():
-                fullpath = systems_path / filename
-            else:
+            elif node.name in ("engine", "thruster"):
+                subdirs = ("Engines", "engines", "Engine", "engine")
+                fullpath = _find_in_subdirs(
+                    aircraft_path, subdirs, engine_path, filename
+                )
+            elif node.name in ("system", "flight_control", "autopilot"):
+                fullpath = _find_in_subdirs(
+                    aircraft_path, ("Systems", "systems"), systems_path, filename
+                )
+
+            if not fullpath.root:
                 raise FileNotFoundError(f"Could not find {filename}")
 
-            if fullpath in included_xml_trees:
-                root_include = included_xml_trees[fullpath]
+            if fullpath in parsed_files:
+                root_include = parsed_files[fullpath]
             else:
                 root_include = XMLNodeBuilder(
                     self.get_relative_path(fullpath), fullpath
                 ).root
                 assert root_include is not None
-                included_xml_trees[fullpath] = root_include
+                parsed_files[fullpath] = root_include
                 included_files.extend(_get_included_files(root_include))
 
                 if node.name in ("engine", "thruster"):
