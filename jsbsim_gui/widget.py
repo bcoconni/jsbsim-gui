@@ -16,7 +16,8 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 import tkinter as tk
-from tkinter import ttk
+import sys
+from tkinter import colorchooser, ttk
 from typing import Callable
 
 from .edit_actions import EditAction, EditableFrame, SHORTCUT_MODIFIER
@@ -153,3 +154,57 @@ class TextBox(ttk.Entry):
         self.selection_range(0, tk.END)
         # Return break to interrupt the default key binding.
         return "break"
+
+
+class ColorChooser(ttk.Frame):
+    def __init__(
+        self,
+        master: tk.Widget,
+        label: str,
+        color: str,
+        on_color_changed: Callable[[str], None],
+        **kw,
+    ):
+        super().__init__(master, **kw)
+        self._label = label
+        self._color = color
+        self._on_color_changed = on_color_changed
+
+        cursor_name = "pointinghand" if sys.platform == "darwin" else "hand2"
+        ttk.Label(self, text=label).grid(row=0, column=0, sticky=tk.W)
+        self.swatch = tk.Canvas(
+            self,
+            width=36,
+            height=18,
+            background=color,
+            relief="solid",
+            highlightthickness=1,
+            cursor=cursor_name,
+        )
+        self.swatch.grid(row=0, column=1)
+        self.swatch.bind("<Button-1>", lambda _event: self.choose_color())
+
+        self.hex_label = ttk.Label(self, text=color, width=9)
+        self.hex_label.grid(row=0, column=2)
+
+        ttk.Button(self, text="Choose...", command=self.choose_color).grid(
+            row=0, column=3
+        )
+        self.grid_columnconfigure(0, weight=1)
+
+    def set_color(self, color: str) -> None:
+        self._color = color
+        self.swatch.configure(background=color)
+        self.hex_label.configure(text=color)
+
+    def choose_color(self) -> None:
+        label = self._label[0].upper() + self._label[1:]
+        chosen = colorchooser.askcolor(
+            color=self._color,
+            parent=self,
+            title=f"Choose {label} Color",
+        )
+        if chosen and chosen[1]:
+            color = chosen[1]
+            self.set_color(color)
+            self._on_color_changed(color)

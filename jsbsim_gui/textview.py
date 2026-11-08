@@ -17,9 +17,8 @@
 
 from dataclasses import asdict, dataclass
 import re
-import sys
 import tkinter as tk
-from tkinter import colorchooser, font as tkfont, ttk, TclError
+from tkinter import font as tkfont, ttk, TclError
 from tkinter.constants import (
     DISABLED,
     END,
@@ -42,6 +41,7 @@ from pygments.token import Comment, Name, String, Text, _TokenType
 
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction, EditableFrame
 from .options import get_options, OptionsTab
+from .widget import ColorChooser
 
 
 class TextView(EditableFrame):
@@ -180,8 +180,7 @@ class TextView(EditableFrame):
                 pass
         elif action is EditAction.SELECT_ALL:
             self._text.tag_add(tk.SEL, "1.0", "end-1c")
-            self._text.mark_set(tk.INSERT, "1.0")
-            self._text.see(tk.INSERT)
+            self.move_cursor("end", False)
         elif action is EditAction.CUT:
             self._text.event_generate("<<Cut>>")
         elif action is EditAction.COPY:
@@ -204,6 +203,8 @@ class SourceCodeViewOptions:
     selection_color: str = "#c3d9ff"
     highlight_active_line: bool = True
     bold_line_number: bool = True
+    tabulations_spaces: int = 4
+    line_numbers_background: str = "#eeeeee"
 
 
 SOURCE_CODE_VIEW_OPTIONS_KEY = "source_code_view"
@@ -228,7 +229,6 @@ class SourceCodeView(TextView):
             self,
             width=1,
             height=int(self._text.cget("height")),
-            bg="#eeeeee",
             borderwidth=0,
             relief=FLAT,
             wrap=NONE,
@@ -428,10 +428,14 @@ class SourceCodeView(TextView):
                 )
 
     def set_display_options(self, options: SourceCodeViewOptions) -> None:
+        font = tkfont.Font(font=self._text["font"])
+        tab_size = font.measure(" " * options.tabulations_spaces)
         self._text.configure(
             selectbackground=options.selection_color,
             inactiveselectbackground=options.selection_color,
+            tabs=tab_size,
         )
+        self._line_numbers.configure(background=options.line_numbers_background)
         self._active_line_number_font.configure(
             weight="bold" if options.bold_line_number else "normal"
         )
@@ -530,64 +534,10 @@ class XMLSourceCodeView(SourceCodeView):
 
 SAMPLE_XML = """<!-- Example XML script -->
 <channel name="Pitch">
-    <summer name="Pitch Trim">
-        <input>fcs/elevator-cmd-norm</input>
-    </summer>
+\t<summer name="Pitch Trim">
+\t\t<input>fcs/elevator-cmd-norm</input>
+\t</summer>
 </channel>"""
-
-
-class ColorChooser(ttk.Frame):
-    def __init__(
-        self,
-        master: tk.Widget,
-        label: str,
-        color: str,
-        on_color_changed: Callable[[str], None],
-        **kw,
-    ):
-        super().__init__(master, **kw)
-        self._label = label
-        self._color = color
-        self._on_color_changed = on_color_changed
-
-        cursor_name = "pointinghand" if sys.platform == "darwin" else "hand2"
-        ttk.Label(self, text=label).grid(row=0, column=0, sticky=tk.W, padx=5, pady=4)
-        self.swatch = tk.Canvas(
-            self,
-            width=36,
-            height=18,
-            background=color,
-            relief="solid",
-            highlightthickness=1,
-            cursor=cursor_name,
-        )
-        self.swatch.grid(row=0, column=1, padx=8, pady=4)
-        self.swatch.bind("<Button-1>", lambda _event: self.choose_color())
-
-        self.hex_label = ttk.Label(self, text=color, width=9)
-        self.hex_label.grid(row=0, column=2, padx=5, pady=4)
-
-        ttk.Button(self, text="Choose...", command=self.choose_color).grid(
-            row=0, column=3, padx=5, pady=4
-        )
-        self.grid_columnconfigure(0, weight=1)
-
-    def set_color(self, color: str) -> None:
-        self._color = color
-        self.swatch.configure(background=color)
-        self.hex_label.configure(text=color)
-
-    def choose_color(self) -> None:
-        label = self._label[0].upper() + self._label[1:]
-        chosen = colorchooser.askcolor(
-            color=self._color,
-            parent=self,
-            title=f"Choose {label} Color",
-        )
-        if chosen and chosen[1]:
-            color = chosen[1]
-            self.set_color(color)
-            self._on_color_changed(color)
 
 
 class TextViewOptionsTab(OptionsTab):
@@ -600,19 +550,18 @@ class TextViewOptionsTab(OptionsTab):
         self._current_colors = XMLSyntaxColors(**options_colors)
         self._initial_display_options = SourceCodeViewOptions(**options_display)
         self._current_display_options = SourceCodeViewOptions(**options_display)
-
-        settings_frame = ttk.Frame(self)
-        settings_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
-
-        display_frame = ttk.LabelFrame(settings_frame, text="Editor", padding=10)
-        display_frame.pack(fill=tk.X)
-
-        colors_frame = ttk.LabelFrame(settings_frame, text="XML Colors", padding=10)
-        colors_frame.pack(fill=tk.X, pady=(0, 5))
-
         self._color_choosers: dict[str, ColorChooser] = {}
-        self._swatches: dict[str, tk.Canvas] = {}
-        self._hex_labels: dict[str, ttk.Label] = {}
+
+        settings_notebook = ttk.Notebook(self)
+        settings_notebook.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+
+        display_frame = ttk.Frame(settings_notebook, padding=10)
+        display_frame.pack(fill=tk.X)
+        settings_notebook.add(display_frame, text="Editor")
+
+        colors_frame = ttk.Frame(settings_notebook, padding=10)
+        colors_frame.pack(fill=tk.X)
+        settings_notebook.add(colors_frame, text="XML Colors")
 
         tags = asdict(self._current_colors).keys()
         for row_idx, tag in enumerate(tags):
@@ -620,55 +569,79 @@ class TextViewOptionsTab(OptionsTab):
             label_text = tag[0].upper() + tag[1:].replace("_", " ")
             self._add_color_chooser(
                 colors_frame,
-                row_idx,
                 tag,
                 label_text,
                 color,
                 lambda new_color, name=tag: self._set_syntax_color(name, new_color),
-            )
+            ).grid(row=row_idx, column=0, sticky=tk.EW, pady=2)
         colors_frame.grid_columnconfigure(0, weight=1)
 
+        ttk.Label(display_frame, text="Highlight active line").grid(
+            row=0, column=0, sticky=tk.W, pady=2
+        )
         self._highlight_active_line_var = tk.BooleanVar(
             self, value=self._current_display_options.highlight_active_line
         )
         ttk.Checkbutton(
             display_frame,
-            text="Highlight active line",
             variable=self._highlight_active_line_var,
             command=self._update_display_options,
-        ).grid(row=0, column=0, columnspan=4, sticky=tk.W, padx=5, pady=4)
+        ).grid(row=0, column=1, sticky=tk.E, pady=2)
 
+        ttk.Label(display_frame, text="Bold line number").grid(
+            row=1, column=0, sticky=tk.W, pady=2
+        )
         self._bold_line_number_var = tk.BooleanVar(
             self, value=self._current_display_options.bold_line_number
         )
         ttk.Checkbutton(
             display_frame,
-            text="Bold line number",
             variable=self._bold_line_number_var,
             command=self._update_display_options,
-        ).grid(row=1, column=0, columnspan=4, sticky=tk.W, padx=5, pady=4)
-        display_frame.grid_columnconfigure(0, weight=1)
+        ).grid(row=1, column=1, sticky=tk.E, pady=2)
+
+        ttk.Label(display_frame, text="Spaces in tab").grid(
+            row=2, column=0, sticky=tk.W, pady=2
+        )
+        self._tab_size = tk.IntVar(
+            value=self._initial_display_options.tabulations_spaces
+        )
+        ttk.Spinbox(
+            display_frame,
+            from_=1,
+            to=99,
+            textvariable=self._tab_size,
+            wrap=False,
+            command=self._update_display_options,
+            width=2,
+        ).grid(row=2, column=1, sticky=tk.E, pady=2)
 
         self._add_color_chooser(
             display_frame,
-            2,
             "active_line_color",
             "Active line",
             self._current_display_options.active_line_color,
             lambda color: self._set_display_color("active_line_color", color),
-        )
+        ).grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=2)
         self._add_color_chooser(
             display_frame,
-            3,
             "selection_color",
             "Selection",
             self._current_display_options.selection_color,
             lambda color: self._set_display_color("selection_color", color),
-        )
+        ).grid(row=4, column=0, columnspan=2, sticky=tk.EW, pady=2)
+        self._add_color_chooser(
+            display_frame,
+            "line_numbers_background",
+            "Line numbers background",
+            self._current_display_options.line_numbers_background,
+            lambda color: self._set_display_color("line_numbers_background", color),
+        ).grid(row=5, column=0, columnspan=2, sticky=tk.EW, pady=2)
+        display_frame.grid_columnconfigure(0, weight=1)
 
         # Preview section
-        preview_frame = ttk.LabelFrame(self, text="Preview", padding=5)
-        preview_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        preview_frame = ttk.LabelFrame(self, text="Preview", padding=4)
+        preview_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
 
         self._preview = XMLSourceCodeView(preview_frame, SAMPLE_XML, width=45, height=6)
         self._preview._text.configure(state=tk.DISABLED)
@@ -676,21 +649,15 @@ class TextViewOptionsTab(OptionsTab):
 
     def _add_color_chooser(
         self,
-        frame: ttk.LabelFrame,
-        row: int,
+        frame: ttk.Frame,
         name: str,
         label: str,
         color: str,
         on_color_changed: Callable[[str], None],
-    ) -> None:
+    ) -> ttk.Frame:
         chooser = ColorChooser(frame, label, color, on_color_changed)
-        chooser.grid(row=row, column=0, sticky=tk.EW)
         self._color_choosers[name] = chooser
-        self._swatches[name] = chooser.swatch
-        self._hex_labels[name] = chooser.hex_label
-
-    def _choose_color(self, tag: str) -> None:
-        self._color_choosers[tag].choose_color()
+        return chooser
 
     def _set_syntax_color(self, tag: str, color: str) -> None:
         setattr(self._current_colors, tag, color)
@@ -701,12 +668,10 @@ class TextViewOptionsTab(OptionsTab):
         self._preview.set_display_options(self._current_display_options)
 
     def _update_display_options(self) -> None:
-        self._current_display_options.highlight_active_line = (
-            self._highlight_active_line_var.get()
-        )
-        self._current_display_options.bold_line_number = (
-            self._bold_line_number_var.get()
-        )
+        display_options = self._current_display_options
+        display_options.highlight_active_line = self._highlight_active_line_var.get()
+        display_options.bold_line_number = self._bold_line_number_var.get()
+        display_options.tabulations_spaces = self._tab_size.get()
         self._preview.set_display_options(self._current_display_options)
 
     def restore_defaults(self) -> None:
@@ -716,13 +681,14 @@ class TextViewOptionsTab(OptionsTab):
         self._preview.set_syntax_colors(self._current_colors)
 
         self._current_display_options = SourceCodeViewOptions()
-        for name in ("active_line_color", "selection_color"):
+        for name in ("active_line_color", "selection_color", "line_numbers_background"):
             color = getattr(self._current_display_options, name)
             self._color_choosers[name].set_color(color)
         self._highlight_active_line_var.set(
             self._current_display_options.highlight_active_line
         )
         self._bold_line_number_var.set(self._current_display_options.bold_line_number)
+        self._tab_size.set(self._current_display_options.tabulations_spaces)
         self._preview.set_display_options(self._current_display_options)
 
     def apply(self) -> None:
