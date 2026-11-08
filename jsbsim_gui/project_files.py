@@ -49,6 +49,7 @@ class ProjectFiles(LabeledWidget):
         filepath = controller.get_relative_path(controller.filename)
         self.current_file = self._file_states[filepath]
         self._fileview = FileTree(self, list(self._file_states))
+        self.show_file(filepath)
         self._fileview.bind_selection(self._bind_selection)
         self._fileview.bind("<ButtonRelease-1>", self._on_file_click, add="+")
         self.set_widget(self._fileview)

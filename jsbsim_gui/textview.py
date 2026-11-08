@@ -133,6 +133,7 @@ class TextView(EditableFrame):
     def new_content(self, contents: str) -> None:
         self._text.delete("1.0", END)
         self._text.insert("1.0", contents)
+        self.move_cursor("1.0")
         self._text.edit_modified(False)
         self._text.edit_reset()
 
