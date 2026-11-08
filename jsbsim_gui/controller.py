@@ -148,13 +148,13 @@ class Controller:
             return name[len(root_name) + 1 :]
         return name
 
-    def get_xml_trees(self) -> list[XMLNode]:
+    def get_xml_trees(self) -> Iterable[XMLNode]:
         aircraft_path = Path(self.fdm.get_aircraft_path()).resolve()
         root = XMLNodeBuilder(self.get_relative_path(self.filename), self.filename).root
         if root is None:
             return []
 
-        xml_trees = [root]
+        parsed_files = {self.filename: root}
 
         if root.name == "runscript":
             for node in root:
@@ -166,18 +166,16 @@ class Controller:
                 raise RuntimeError(f"Malformed script file: {self.filename}")
 
             aircraft_path = aircraft_path / aircraft_name
-            aircraft_filename = aircraft_path / append_xml(aircraft_name)
-            root = XMLNodeBuilder(
-                self.get_relative_path(aircraft_filename), aircraft_filename
-            ).root
-            assert root
-            xml_trees.append(root)
+            fullpath = aircraft_path / append_xml(aircraft_name)
+            root = XMLNodeBuilder(self.get_relative_path(fullpath), fullpath).root
+            assert root is not None
+            parsed_files[fullpath] = root
 
             IC_file = node.attrs["initialize"].text
             fullpath = aircraft_path / append_xml(IC_file)
             ic_root = XMLNodeBuilder(self.get_relative_path(fullpath), fullpath).root
-            assert ic_root
-            xml_trees.append(ic_root)
+            assert ic_root is not None
+            parsed_files[fullpath] = ic_root
         elif root.name == "fdm_config":
             aircraft_name = self.filename.stem
             aircraft_path = aircraft_path / aircraft_name
@@ -186,7 +184,6 @@ class Controller:
         systems_path = Path(self.fdm.get_systems_path()).resolve()
 
         included_files = _get_included_files(root)
-        parsed_files: dict[Path, XMLNode] = {}
 
         for node, filename in included_files:
             fullpath = Path()
@@ -216,15 +213,12 @@ class Controller:
                 parsed_files[fullpath] = root_include
                 included_files.extend(_get_included_files(root_include))
 
-                if node.name in ("engine", "thruster"):
-                    xml_trees.append(root_include)
-
             if node.name not in ("engine", "thruster"):
                 parent = node.parent
                 node.parent = None
                 root_include.parent = parent
 
-        return xml_trees
+        return parsed_files.values()
 
     def get_property_root(self) -> FGPropertyNode | None:
         return self.fdm.get_property_manager().get_node()
@@ -280,8 +274,6 @@ class Controller:
                 success = self.load_script(self.filename)
             elif root.tag == "fdm_config":
                 success = self.load_aircraft(self.filename)
-            if success:
-                self.get_xml_trees()
         except (OSError, et.ParseError, ExpatError, RuntimeError, ValueError, KeyError):
             self.fdm = old_fdm
             self.property_history = old_history

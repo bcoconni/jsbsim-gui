@@ -1,11 +1,19 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023-2026 Bertrand Coconnier
+# Copyright (c) 2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
 # Foundation; either version 3 of the License, or (at your option) any later
 # version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, see <http://www.gnu.org/licenses/>
 
 import tkinter as tk
 from pathlib import Path
@@ -32,7 +40,6 @@ class ProjectFiles(LabeledWidget):
     ):
         super().__init__(master, "Project Files", True)
         self._controller = controller
-        self._root_dir = controller.get_root_dir()
         self._file_selected = file_selected
         self._get_editor_content = get_editor_content
         self._invalid_file = invalid_file
@@ -47,17 +54,10 @@ class ProjectFiles(LabeledWidget):
         self.set_widget(self._fileview)
 
     def _load_file_states(self) -> dict[Path, FileState]:
+        root_dir = self._controller.get_root_dir()
         file_states = {}
         for xml_tree in self._controller.get_xml_trees():
-            for node in xml_tree:
-                assert isinstance(node, XMLNode)
-                filepath = node.filepath
-                if filepath not in file_states:
-                    with open(self._root_dir / filepath, encoding="utf-8") as f:
-                        contents = f.read()
-                    if contents.endswith("\n"):
-                        contents = contents[:-1]
-                    file_states[filepath] = FileState(filepath, contents)
+            file_states[xml_tree.filepath] = FileState(xml_tree, root_dir)
         return file_states
 
     def _bind_selection(self, filepath: Path) -> None:
@@ -120,7 +120,7 @@ class ProjectFiles(LabeledWidget):
             self._invalid_file(self.current_file, *error)
             return False
 
-        if self.current_file.write(self._root_dir):
+        if self.current_file.write():
             self._fileview.clear_highlight(self.current_file.filepath)
             self._has_dirty_files(self.has_modified_files())
             self._file_updated()
@@ -145,7 +145,7 @@ class ProjectFiles(LabeledWidget):
                 return False
 
         for file_state in modified_files:
-            if not file_state.write(self._root_dir):
+            if not file_state.write():
                 showerror("Error", message=f'Could not save "{file_state.filepath}"')
                 return False
             self._fileview.clear_highlight(file_state.filepath)

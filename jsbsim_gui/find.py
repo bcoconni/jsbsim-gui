@@ -467,7 +467,11 @@ class FindWindow(tk.Toplevel):
         self._type_combo.bind("<<ComboboxSelected>>", self._on_mode_change)
 
         # XML panel
-        xml_trees = controller.get_xml_trees()
+        xml_trees = [
+            file.xml_tree
+            for file in file_states.values()
+            if file.xml_tree.parent is None
+        ]
         self._xml_tree = XMLTree(mode_frame, xml_trees, file_states, move_cursor)
         self._xml_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
 

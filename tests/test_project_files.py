@@ -33,7 +33,7 @@ class TestProjectFiles(unittest.TestCase):
         controller.filename = Path(self.directory.name) / "main.xml"
         controller.get_relative_path.return_value = Path("main.xml")
         controller.get_xml_trees.return_value = [
-            [XMLNode(path, {}, Path(path), 0, 1) for path in self.paths]
+            XMLNode(path, {}, Path(path), 0, 1) for path in self.paths
         ]
         self.editor_content = "<main/>"
         self.on_selected = Mock()

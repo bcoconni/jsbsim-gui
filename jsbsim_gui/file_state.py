@@ -1,6 +1,6 @@
 # A Graphical User Interface for JSBSim
 #
-# Copyright (c) 2023-2024 Bertrand Coconnier
+# Copyright (c) 2023-2026 Bertrand Coconnier
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -20,16 +20,36 @@ from tkinter.messagebox import showerror
 from xml.parsers import expat
 
 from .controller import Controller
+from .tree_node import XMLNode
 
 
 class FileState:
-    def __init__(self, filepath: Path, content: str):
-        self.filepath = filepath
-        self.content = content
-        self.is_modified = False
+    def __init__(self, xml_tree: XMLNode, root_dir: Path):
+        self.xml_tree = xml_tree
+        self.is_modified: bool = False
+        self._root_dir = root_dir
+        self._content: str | None = None
 
-    def write(self, root_dir: Path) -> bool:
-        full_path = (root_dir / self.filepath).resolve()
+    @property
+    def content(self) -> str:
+        if self._content is None:
+            with open(self._root_dir / self.xml_tree.filepath, encoding="utf-8") as f:
+                self._content = f.read()
+            if self._content.endswith("\n"):
+                self._content = self._content[:-1]
+
+        return self._content
+
+    @content.setter
+    def content(self, new_content: str) -> None:
+        self._content = new_content
+
+    @property
+    def filepath(self) -> Path:
+        return self.xml_tree.filepath
+
+    def write(self) -> bool:
+        full_path = (self._root_dir / self.filepath).resolve()
         default_root = Controller.get_default_root_dir().resolve()
         try:
             if full_path.is_relative_to(default_root):

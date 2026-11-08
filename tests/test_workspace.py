@@ -131,7 +131,7 @@ class TestWorkspace(unittest.TestCase):
         update_id = run.update_id
         self.files.current_file.is_modified = True
 
-        def save_file(root_dir):
+        def save_file():
             self.files.current_file.is_modified = False
             return True
 
@@ -269,7 +269,7 @@ class TestWorkspace(unittest.TestCase):
         self.assertTrue(state.is_modified)
         self.assertIn("modified", self.files._fileview.item(item, "tags"))
 
-        def save_file(root_dir):
+        def save_file():
             state.is_modified = False
             return True
 
@@ -387,7 +387,7 @@ class TestWorkspace(unittest.TestCase):
         controller = self.app._controller
         old_fdm = controller.fdm
         old_history = controller.property_history
-        with patch.object(controller, "get_xml_trees", side_effect=OSError("bad file")):
+        with patch.object(controller, "load_aircraft", side_effect=OSError("bad file")):
             with self.assertRaises(OSError):
                 controller.reload()
         self.assertIs(controller.fdm, old_fdm)
