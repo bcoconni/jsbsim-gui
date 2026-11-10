@@ -36,14 +36,11 @@ class SourceEditor(EditableFrame):
         super().__init__(master)
         self._file_opened = file_opened
         self._current_path = initial_file.filepath
-        self._codeview = LabeledWidget(self, str(self._current_path))
         self._editor = XMLSourceCodeView(
-            self._codeview, initial_file.content, width=80, height=30, wrap=NONE
+            self, initial_file.content, width=80, height=30, wrap=NONE
         )
         self._editor.bind_modified_text(file_modified)
-        self._codeview.set_widget(self._editor)
-
-        self._codeview.grid(column=0, row=0, sticky=NSEW)
+        self._editor.grid(column=0, row=0, sticky=NSEW)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -57,40 +54,28 @@ class SourceEditor(EditableFrame):
 
     def refresh_model(self, file_state: FileState) -> None:
         self._current_path = file_state.filepath
-        self._codeview.set_label(str(file_state.filepath))
-        assert isinstance(self._codeview.widget, XMLSourceCodeView)
-        self._codeview.widget.new_content(file_state.content)
+        self._editor.new_content(file_state.content)
 
     def get_content(self) -> str:
-        assert isinstance(self._codeview.widget, XMLSourceCodeView)
-        return self._codeview.widget.get_content()
+        return self._editor.get_content()
 
     def open_source_file(self, file_state: FileState) -> None:
-        editor = self._codeview.widget
-        assert isinstance(editor, XMLSourceCodeView)
         if file_state.filepath != self._current_path:
-            self._codeview.set_label(str(file_state.filepath))
-            editor.new_content(file_state.content)
+            self._editor.new_content(file_state.content)
             self._current_path = file_state.filepath
 
     def move_to(
         self, file_state: FileState, focus: bool, column: int, line: int
     ) -> None:
         self._file_opened(file_state)
-        assert isinstance(self._codeview.widget, XMLSourceCodeView)
-        editor: XMLSourceCodeView = self._codeview.widget
-        editor.move_cursor(f"{line}.{column}", focus)
+        self._editor.move_cursor(f"{line}.{column}", focus)
 
     def select_text(
         self, text: str, file_state: FileState, column: int, line: int
     ) -> None:
         self._file_opened(file_state)
-        assert isinstance(self._codeview.widget, XMLSourceCodeView)
-        editor: XMLSourceCodeView = self._codeview.widget
-        editor.select_text(text, f"{line}.{column}")
+        self._editor.select_text(text, f"{line}.{column}")
 
     def apply_edit_action(self, action: EditAction) -> None:
-        assert isinstance(self._codeview.widget, XMLSourceCodeView)
-        editor = self._codeview.widget
-        editor.focus_text()
-        editor.apply_edit_action(action)
+        self._editor.focus_text()
+        self._editor.apply_edit_action(action)

@@ -220,6 +220,7 @@ class App(tk.Tk):
             self.notebook.select(self.editor)
             self.project_files.select_file(file_state)
             self.editor.open_source_file(file_state)
+            self.notebook.tab(0, text=file_state.filepath.name)
 
     def _on_editor_file_opened(self, file_state: FileState) -> None:
         assert self.project_files is not None
