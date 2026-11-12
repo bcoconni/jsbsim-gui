@@ -484,18 +484,6 @@ class FileTree(HierarchicalTree):
         self._tree.configure(show="tree", selectmode=BROWSE)
         self._tree.tag_configure("modified", foreground="red")
 
-    def bind_selection(
-        self,
-        func: Callable[[Path], None],
-        add: bool | Literal["", "+"] | None = None,
-    ) -> None:
-        def bind_func(_: tk.Event) -> None:
-            selection = self.get_selected_items(True)
-            if selection:
-                func(Path(selection[0]))
-
-        self._tree.bind("<<TreeviewSelect>>", bind_func, add)
-
     def get_id_from_path(self, path: Path) -> str | None:
         return super().get_id_from_path(str(path))
 

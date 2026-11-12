@@ -49,9 +49,8 @@ class ProjectFiles(LabeledWidget):
         filepath = controller.get_relative_path(controller.filename)
         self.current_file = self._file_states[filepath]
         self._fileview = FileTree(self, list(self._file_states))
-        self.show_file(filepath)
-        self._fileview.bind_selection(self._bind_selection)
-        self._fileview.bind("<ButtonRelease-1>", self._on_file_click, add="+")
+        self._select_file(filepath)
+        self._fileview.bind("<<TreeviewSelect>>", lambda _: self._show_file(), add="+")
         self.set_widget(self._fileview)
 
     def _load_file_states(self) -> dict[Path, FileState]:
@@ -61,30 +60,23 @@ class ProjectFiles(LabeledWidget):
             file_states[xml_tree.filepath] = FileState(xml_tree, root_dir)
         return file_states
 
-    def _bind_selection(self, filepath: Path) -> None:
-        file_state = self._file_states[filepath]
-        self._file_selected(file_state)
-
-    def _on_file_click(self, event: tk.Event) -> None:
-        selected = self._fileview.selection()
-        if selected and self._fileview.identify_row(event.y) == selected[0]:
-            paths = self._fileview.get_selected_items(True)
-            if paths:
-                file_state = self._file_states[Path(paths[0])]
-                self._file_selected(file_state)
+    def _show_file(self) -> None:
+        paths = self._fileview.get_selected_items(True)
+        if paths:
+            file_state = self._file_states[Path(paths[0])]
+            if file_state is not self.current_file:
+                self.current_file.content = self._get_editor_content()
+            self._file_selected(file_state)
+            self.current_file = file_state
 
     def get_file_states(self) -> dict[Path, FileState]:
         return self._file_states
 
-    def get_file_state(self, filepath: Path) -> FileState | None:
-        return self._file_states.get(filepath)
+    def select_file(self, filepath: Path) -> None:
+        self._select_file(filepath)
+        self._show_file()
 
-    def select_file(self, file_state: FileState) -> None:
-        if file_state is not self.current_file:
-            self.current_file.content = self._get_editor_content()
-            self.current_file = file_state
-
-    def show_file(self, filepath: Path) -> None:
+    def _select_file(self, filepath: Path) -> None:
         file_id = self._fileview.get_id_from_path(filepath)
         assert file_id is not None
         self._fileview.see(file_id)

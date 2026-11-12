@@ -10,7 +10,6 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -21,7 +20,7 @@ from jsbsim_gui.csv_tree import CsvData
 from jsbsim_gui.edit_actions import EditAction
 from jsbsim_gui.plotinfo_list import PlotInfoList
 from jsbsim_gui.project_files import ProjectFiles
-from jsbsim_gui.source_editor import SourceEditor
+from jsbsim_gui.textview import XMLSourceCodeView
 
 
 class TestWorkspace(unittest.TestCase):
@@ -31,7 +30,7 @@ class TestWorkspace(unittest.TestCase):
         filename = Path(self.app.root_dir) / "aircraft" / "c172p" / "c172p.xml"
         self.assertTrue(self.app.open_file(filename, "c172p", Controller.load_aircraft))
         self.editor = self.app.editor
-        assert isinstance(self.editor, SourceEditor)
+        assert isinstance(self.editor, XMLSourceCodeView)
         self.files = self.app.project_files
         assert isinstance(self.files, ProjectFiles)
         self.app.update()
@@ -103,16 +102,17 @@ class TestWorkspace(unittest.TestCase):
 
     def test_tabs_preserve_editor_and_navigation_selects_editor(self):
         editor = self.editor
-        item = self.files._fileview.get_id_from_path(self.files.current_file.filepath)
-        self.files._fileview.selection_set([item])
-        self.app.update()
+        other_file = next(
+            state
+            for state in self.files.get_file_states().values()
+            if state is not self.files.current_file
+        )
         self.app.notebook.select(self.app.plots_view)
-        with patch.object(self.files._fileview, "identify_row", return_value=item):
-            self.files._on_file_click(SimpleNamespace(y=0))
+        self.files.select_file(other_file.filepath)
         self.assertEqual(self.app.notebook.select(), str(editor))
 
         self.app.notebook.select(self.app.plots_view)
-        self.app._on_file_link_click(self.files.current_file.filepath, 1)
+        self.app._on_file_link_click(other_file.filepath, 1)
         self.assertEqual(self.app.notebook.select(), str(editor))
 
     def test_csv_loading_keeps_current_tab(self):
@@ -211,26 +211,26 @@ class TestWorkspace(unittest.TestCase):
         paths = list(file_states)
         other = next(path for path in paths if path != self.files.current_file.filepath)
         self.app.notebook.select(self.app.plots_view)
-        self.app._select_source_file(file_states[other])
+        self.files.select_file(other)
         self.assertEqual(self.files.current_file.filepath, other)
         self.assertEqual(self.app.notebook.select(), str(self.editor))
-        file_state = self.files.get_file_state(paths[0])
+        file_state = self.files.get_file_states().get(paths[0])
         assert file_state is not None
-        self.editor.move_to(file_state, True, 0, 1)
+        self.app._on_file_link_click(file_state.filepath, 1)
         item = self.files._fileview.get_id_from_path(paths[0])
         self.assertEqual(self.files._fileview.selection(), (item,))
+        self.assertEqual(self.editor._text.index("insert"), "1.0")
 
     def test_switching_files_preserves_unsaved_editor_content(self):
         original = self.files.current_file
         file_states = self.files.get_file_states()
         other_path = next(path for path in file_states if path != original.filepath)
-        editor = self.editor._codeview.widget
-        editor._text.insert("end-1c", "\n<!-- changed -->")
+        self.editor._text.insert("end-1c", "\n<!-- changed -->")
         self.app.update()
         self.assertTrue(original.is_modified)
-        self.app._select_source_file(file_states[other_path])
+        self.files.select_file(other_path)
         self.assertIn("<!-- changed -->", original.content)
-        self.app._select_source_file(original)
+        self.files.select_file(original.filepath)
         self.assertIn("<!-- changed -->", self.editor.get_content())
         self.assertIs(self.files.current_file, original)
 
@@ -239,7 +239,7 @@ class TestWorkspace(unittest.TestCase):
         file_states = self.files.get_file_states()
         other_path = next(path for path in file_states if path != first.filepath)
         self.files.mark_current_modified(True)
-        self.app._select_source_file(file_states[other_path])
+        self.files.select_file(other_path)
         second = self.files.current_file
         self.files.mark_current_modified(True)
         self.app.notebook.select(self.app.plots_view)
@@ -256,15 +256,15 @@ class TestWorkspace(unittest.TestCase):
         with patch("jsbsim_gui.app.FindWindow") as find_window:
             self.app._open_find_window()
         self.assertIs(find_window.call_args.args[2], self.files.get_file_states())
-        self.assertEqual(find_window.call_args.args[3], self.editor.select_text)
-        with patch.object(self.editor, "move_to") as move_to:
-            find_window.call_args.args[4](self.files.current_file, 2, 3)
-        move_to.assert_called_once_with(self.files.current_file, True, 2, 3)
+        self.assertEqual(find_window.call_args.args[3], self.app._select_text)
+        self.assertEqual(find_window.call_args.args[4], self.app._move_cursor)
+        find_window.call_args.args[4](self.files.current_file, 2, 3)
+        self.assertEqual(self.editor._text.index("insert"), "3.2")
 
     def test_file_modified_notifications_update_the_app_file_tree(self):
         state = self.files.current_file
         item = self.files._fileview.get_id_from_path(state.filepath)
-        self.editor._editor._text.insert("end-1c", "\n<!-- changed -->")
+        self.editor._text.insert("end-1c", "\n<!-- changed -->")
         self.app.update()
         self.assertTrue(state.is_modified)
         self.assertIn("modified", self.files._fileview.item(item, "tags"))

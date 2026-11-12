@@ -56,11 +56,11 @@ class TestProjectFiles(unittest.TestCase):
 
     def test_saves_modified_files_after_switching_between_them(self):
         main = self.files.current_file
-        other = self.files.get_file_state(Path("other.xml"))
+        other = self.files.get_file_states().get(Path("other.xml"))
         assert other is not None
         self.editor_content = "<main>changed</main>"
         self.files.mark_current_modified(True)
-        self.files.select_file(other)
+        self.files.select_file(other.filepath)
         self.assertEqual(main.content, "<main>changed</main>")
         self.editor_content = "<other>changed</other>"
         self.files.mark_current_modified(True)
@@ -77,11 +77,11 @@ class TestProjectFiles(unittest.TestCase):
 
     def test_save_all_validates_every_file_before_writing(self):
         main = self.files.current_file
-        other = self.files.get_file_state(Path("other.xml"))
+        other = self.files.get_file_states().get(Path("other.xml"))
         assert other is not None
         self.editor_content = "<main>changed</main>"
         self.files.mark_current_modified(True)
-        self.files.select_file(other)
+        self.files.select_file(other.filepath)
         self.editor_content = "<other>"
         self.files.mark_current_modified(True)
 

@@ -221,7 +221,6 @@ class SourceCodeView(TextView):
         kw["borderwidth"] = 0
         kw["relief"] = FLAT
         super().__init__(master, frame_column=1, undo=True, **kw)
-        self._modified_text_callbacks: list[Callable[[bool], None]] = []
         self._highlight_timer: str | None = None
         self._lexer: Lexer | None = None
 
@@ -287,19 +286,7 @@ class SourceCodeView(TextView):
         display_options = SourceCodeViewOptions(**options)
         self.set_display_options(display_options)
 
-    def bind_modified_text(
-        self, func: Callable[[bool], None], add: bool = False
-    ) -> None:
-        if add:
-            self._modified_text_callbacks.append(func)
-        else:
-            self._modified_text_callbacks = [func]
-
     def _on_text_modified(self, _event: tk.Event) -> None:
-        modified = self._text.edit_modified()
-        for func in self._modified_text_callbacks:
-            func(modified)
-
         self._update_line_numbers()
         self._update_active_line()
 

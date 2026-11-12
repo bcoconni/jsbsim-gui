@@ -44,8 +44,7 @@ from .plots_view import PlotsView
 from .project_files import ProjectFiles
 from .recent_files import RecentFiles
 from .simulation_controls import SimulationControls
-from .source_editor import SourceEditor
-from .textview import TextViewOptionsTab
+from .textview import TextViewOptionsTab, XMLSourceCodeView
 from .widget import AutoClearLabel, LabeledWidget, widget_is_descendant
 
 
@@ -59,7 +58,7 @@ class App(tk.Tk):
         )
         self._statusbar = AutoClearLabel(self)
         self.main: ttk.Frame | ttk.Label | None = None
-        self.editor: SourceEditor | None = None
+        self.editor: XMLSourceCodeView | None = None
         self.project_files: ProjectFiles | None = None
         self._find_window: FindWindow | None = None
         self.title(f"JSBSim GUI {__version__}")
@@ -174,7 +173,7 @@ class App(tk.Tk):
             if success:
                 self._close_find_window()
                 self.project_files.refresh_model()
-                self.editor.refresh_model(self.project_files.current_file)
+                self.editor.new_content(self.project_files.current_file.content)
                 self._create_property_tree()
                 self.plots_view.clear_simulation_plots()
                 self.simulation_controls.reset_for_reload()
@@ -215,34 +214,43 @@ class App(tk.Tk):
         self.dnd_properties = DnDProperties(self.property_tree, self.plots_view)
 
     def _select_source_file(self, file_state: FileState) -> None:
-        assert self.editor is not None and self.project_files is not None
-        if file_state is not None:
-            self.notebook.select(self.editor)
-            self.project_files.select_file(file_state)
-            self.editor.open_source_file(file_state)
+        self.notebook.select(self.editor)
+        assert self.project_files is not None
+        if file_state is not self.project_files.current_file:
+            assert self.editor is not None
+            self.editor.new_content(file_state.content)
             self.notebook.tab(0, text=file_state.filepath.name)
 
-    def _on_editor_file_opened(self, file_state: FileState) -> None:
+    def _on_editor_modified(self, event: tk.Event) -> None:
         assert self.project_files is not None
-        self.project_files.show_file(file_state.filepath)
-        self._select_source_file(file_state)
-
-    def _on_editor_modified(self, modified: bool) -> None:
-        assert self.project_files is not None
-        self.project_files.mark_current_modified(modified)
+        assert isinstance(event.widget, tk.Text)
+        self.project_files.mark_current_modified(event.widget.edit_modified())
 
     def _get_editor_content(self) -> str:
         assert self.editor is not None
         return self.editor.get_content()
 
     def _on_invalid_file(self, file_state: FileState, column: int, line: int) -> None:
-        assert self.editor is not None
-        self.editor.move_to(file_state, True, column, line)
+        assert self.project_files is not None and self.editor is not None
+        self.project_files.select_file(file_state.filepath)
+        self.editor.move_cursor(f"{line}.{column}", True)
 
     def _close_find_window(self) -> None:
         if self._find_window is not None and self._find_window.winfo_exists():
             self._find_window.destroy()
         self._find_window = None
+
+    def _select_text(
+        self, text: str, file_state: FileState, column: int, line: int
+    ) -> None:
+        assert self.project_files is not None and self.editor is not None
+        self.project_files.select_file(file_state.filepath)
+        self.editor.select_text(text, f"{line}.{column}")
+
+    def _move_cursor(self, file_state: FileState, column: int, line: int) -> None:
+        assert self.project_files is not None and self.editor is not None
+        self.project_files.select_file(file_state.filepath)
+        self.editor.move_cursor(f"{line}.{column}", True)
 
     def _open_find_window(self) -> FindWindow:
         assert self._controller is not None
@@ -255,10 +263,8 @@ class App(tk.Tk):
                 self,
                 self._controller,
                 self.project_files.get_file_states(),
-                editor.select_text,
-                lambda file_state, col, line: editor.move_to(
-                    file_state, True, col, line
-                ),
+                self._select_text,
+                self._move_cursor,
             )
         return self._find_window
 
@@ -319,14 +325,13 @@ class App(tk.Tk):
             self._mark_reload_pending,
         )
         self.project_files.grid(column=0, row=0, sticky=NSEW)
-        self.editor = SourceEditor(
-            self.notebook,
-            self.project_files.current_file,
-            self._on_editor_file_opened,
-            self._on_editor_modified,
+        initial_file = self.project_files.current_file
+        self.editor = XMLSourceCodeView(
+            self.notebook, initial_file.content, width=80, height=30, wrap=tk.NONE
         )
         self.editor.bind(f"<{SHORTCUT_MODIFIER}-s>", lambda e: self.save_file())
-        self.notebook.add(self.editor, text="Editor")
+        self.editor.bind("<<Modified>>", self._on_editor_modified)
+        self.notebook.add(self.editor, text=initial_file.filepath.name)
         self.plots_view = PlotsView(self.notebook, self._controller)
         self.notebook.add(self.plots_view, text="Plots")
 
@@ -373,9 +378,8 @@ class App(tk.Tk):
     def _on_file_link_click(self, rel_path: Path, line: int) -> None:
         if self.editor is None or self.project_files is None:
             return
-        file_state = self.project_files.get_file_state(rel_path)
-        if file_state is not None:
-            self.editor.move_to(file_state, True, 0, line)
+        self.project_files.select_file(rel_path)
+        self.editor.move_cursor(f"{line}.0", True)
 
     def mark_title_modified(self, is_modified: bool) -> None:
         current_title = self.title()
