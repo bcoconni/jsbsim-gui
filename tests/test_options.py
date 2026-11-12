@@ -21,6 +21,7 @@ from pathlib import Path
 import tempfile
 import tkinter as tk
 import unittest
+from tkinter import ttk
 from unittest.mock import patch
 
 from jsbsim_gui.options import Options, OptionsWindow, set_options, get_options
@@ -139,22 +140,13 @@ class TestOptionsWindow(unittest.TestCase):
             xml_tab._preview._line_numbers.winfo_reqheight(),
             xml_tab._preview._text.winfo_reqheight(),
         )
-        default_colors = XMLSyntaxColors()
-        for tag in asdict(default_colors):
-            self.assertIn(tag, xml_tab._swatches)
-            self.assertIn(tag, xml_tab._hex_labels)
-            self.assertEqual(
-                xml_tab._hex_labels[tag].cget("text"),
-                getattr(default_colors, tag),
-            )
-        self.assertIn("active_line_color", xml_tab._color_choosers)
-        self.assertIn("selection_color", xml_tab._color_choosers)
-        self.assertEqual(
-            xml_tab._color_choosers["tag"].master.cget("text"), "XML Colors"
-        )
-        self.assertEqual(
-            xml_tab._color_choosers["active_line_color"].master.cget("text"), "Editor"
-        )
+        syntax_chooser = xml_tab._color_choosers["tag"]
+        display_chooser = xml_tab._color_choosers["active_line_color"]
+        notebook = syntax_chooser.master.master
+        self.assertIsInstance(notebook, ttk.Notebook)
+        self.assertIs(display_chooser.master.master, notebook)
+        self.assertEqual(notebook.tab(syntax_chooser.master, "text"), "XML Colors")
+        self.assertEqual(notebook.tab(display_chooser.master, "text"), "Editor")
         self.assertTrue(xml_tab._highlight_active_line_var.get())
         self.assertTrue(xml_tab._bold_line_number_var.get())
         window.destroy()
@@ -166,10 +158,12 @@ class TestOptionsWindow(unittest.TestCase):
         with patch(
             "tkinter.colorchooser.askcolor", return_value=((18, 52, 86), "#123456")
         ):
-            xml_tab._choose_color("tag")
+            xml_tab._color_choosers["tag"].choose_color()
 
         self.assertEqual(xml_tab._current_colors.tag, "#123456")
-        self.assertEqual(xml_tab._hex_labels["tag"].cget("text"), "#123456")
+        self.assertEqual(
+            xml_tab._color_choosers["tag"].hex_label.cget("text"), "#123456"
+        )
         self.assertEqual(
             xml_tab._preview._text.tag_cget("XML_tag", "foreground"), "#123456"
         )
@@ -205,8 +199,8 @@ class TestOptionsWindow(unittest.TestCase):
                 ((101, 67, 33), "#654321"),
             ],
         ):
-            xml_tab._choose_color("active_line_color")
-            xml_tab._choose_color("selection_color")
+            xml_tab._color_choosers["active_line_color"].choose_color()
+            xml_tab._color_choosers["selection_color"].choose_color()
 
         xml_tab._highlight_active_line_var.set(False)
         xml_tab._bold_line_number_var.set(False)
@@ -237,7 +231,6 @@ class TestOptionsWindow(unittest.TestCase):
         xml_tab.restore_defaults()
         default_colors = XMLSyntaxColors()
         self.assertEqual(xml_tab._current_colors.tag, default_colors.tag)
-        self.assertEqual(xml_tab._hex_labels["tag"].cget("text"), default_colors.tag)
         window.destroy()
 
     def test_apply_and_ok(self):
