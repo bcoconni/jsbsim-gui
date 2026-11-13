@@ -18,11 +18,12 @@
 import copy
 import math
 import tkinter as tk
-from tkinter import NSEW, font, ttk
+from tkinter import font
 from typing import Any, Callable
 
 import matplotlib.artist
 import numpy as np
+import ttkbootstrap as ttk
 from jsbsim import FGPropertyNode
 from matplotlib.backend_bases import (
     DrawEvent,
@@ -103,7 +104,7 @@ class PlotsView(EditableFrame):
             foreground="gray",
             font=helper_font,
         )
-        self._helper_message.grid(column=0, row=0, sticky=NSEW)
+        self._helper_message.grid(column=0, row=0, sticky=tk.NSEW)
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
@@ -389,7 +390,7 @@ class PlotsView(EditableFrame):
             self.selected_line = SelectedLine(
                 self.canvas.figure, linewidth=4, color="red"
             )
-            self.canvas.get_tk_widget().grid(column=0, row=0, sticky=NSEW)
+            self.canvas.get_tk_widget().grid(column=0, row=0, sticky=tk.NSEW)
             self.columnconfigure(0, weight=1)
             self.rowconfigure(0, weight=1)
 

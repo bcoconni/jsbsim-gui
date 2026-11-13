@@ -18,22 +18,10 @@
 from dataclasses import asdict, dataclass
 import re
 import tkinter as tk
-from tkinter import font as tkfont, ttk, TclError
-from tkinter.constants import (
-    DISABLED,
-    END,
-    EW,
-    FLAT,
-    HORIZONTAL,
-    MOVETO,
-    NONE,
-    NORMAL,
-    NS,
-    NSEW,
-    VERTICAL,
-)
+from tkinter import font as tkfont, TclError
 from typing import Callable, Literal
 
+import ttkbootstrap as ttk
 from pygments import lex
 from pygments.lexer import Lexer
 from pygments.lexers import get_lexer_by_name
@@ -55,25 +43,32 @@ class TextView(EditableFrame):
         **kw,
     ):
         super().__init__(master)
-        self._text = tk.Text(self, **kw)
+        self._text = ttk.Text(self, font="TkFixedFont", **kw)
         self._focus_timer: str | None = None
         self._text.bind("<Destroy>", self._cancel_pending_focus, add="+")
-        self._text.grid(column=frame_column, row=0, sticky=NSEW)
+        self._text.grid(column=frame_column, row=0, sticky=tk.NSEW)
+        if "highlightthickness" in kw:
+            self._text.configure(highlightthickness=kw["highlightthickness"])
+        if "pady" in kw:
+            self._text.configure(pady=kw["pady"])
 
         # Vertical scrollbar
         self._yscrollbar = ttk.Scrollbar(
-            self, orient=VERTICAL, command=self._text.yview
+            self, orient=tk.VERTICAL, command=self._text.yview
         )
-        self._yscrollbar.grid(column=frame_column + 1, row=0, sticky=NS)
+        self._yscrollbar.grid(column=frame_column + 1, row=0, sticky=tk.NS)
         self._text["yscrollcommand"] = self._yscrollbar.set
 
         # Horizontal scrollbar if the text is not wrapped
-        if "wrap" in kw and kw["wrap"] == NONE:
+        if "wrap" in kw and kw["wrap"] == tk.NONE:
             self.xscrollbar: ttk.Scrollbar | None = ttk.Scrollbar(
-                self, orient=HORIZONTAL, command=self._text.xview
+                self, orient=tk.HORIZONTAL, command=self._text.xview
             )
-            self.xscrollbar.grid(column=frame_column, row=1, sticky=EW)
+            self.xscrollbar.grid(column=frame_column, row=1, sticky=tk.EW)
             self._text["xscrollcommand"] = self.xscrollbar.set
+            ttk.Frame(self, bootstyle="@chrome").grid(
+                column=frame_column + 1, row=1, sticky=tk.NSEW
+            )
         else:
             self.xscrollbar = None
 
@@ -131,7 +126,7 @@ class TextView(EditableFrame):
         return "break"
 
     def new_content(self, contents: str) -> None:
-        self._text.delete("1.0", END)
+        self._text.delete("1.0", tk.END)
         self._text.insert("1.0", contents)
         self.move_cursor("1.0")
         self._text.edit_modified(False)
@@ -219,22 +214,28 @@ class SourceCodeView(TextView):
     def __init__(self, master: tk.Widget, contents: str | None = None, **kw):
         # Override parameters defined upstream
         kw["borderwidth"] = 0
-        kw["relief"] = FLAT
+        kw["relief"] = tk.FLAT
+        kw["pady"] = 0
+        kw["highlightthickness"] = 0
         super().__init__(master, frame_column=1, undo=True, **kw)
+        ttk.Frame.configure(self, borderwidth=0)
         self._highlight_timer: str | None = None
         self._lexer: Lexer | None = None
 
-        self._line_numbers = tk.Text(
+        self._line_numbers = ttk.Text(
             self,
             width=1,
             height=int(self._text.cget("height")),
-            borderwidth=0,
-            relief=FLAT,
-            wrap=NONE,
+            font=self._text.cget("font"),
+            borderwidth=kw["borderwidth"],
+            relief=kw["relief"],
+            wrap=tk.NONE,
         )
+        self._line_numbers.configure(highlightthickness=0, pady=0)
         # Even when empty, the first line is where the cursor is so we need a number
         self._line_numbers.insert("1.0", "1")
-        self._line_numbers.grid(column=0, row=0, sticky=NS)
+        self._line_numbers.grid(column=0, row=0, sticky=tk.NS)
+        ttk.Frame(self, bootstyle="@chrome").grid(column=0, row=1, sticky=tk.NSEW)
         self._active_line_number_font = tkfont.nametofont(
             self._line_numbers.cget("font")
         ).copy()
@@ -255,7 +256,7 @@ class SourceCodeView(TextView):
         self._line_numbers.bind("<MouseWheel>", self._on_line_numbers_scroll)
         self._line_numbers.bind("<Button-4>", self._on_line_numbers_scroll)
         self._line_numbers.bind("<Button-5>", self._on_line_numbers_scroll)
-        self._line_numbers.configure(state=DISABLED)
+        self._line_numbers.configure(state=tk.DISABLED)
 
         self._text.bind("<KeyRelease>", self._update_active_line, add="+")
         self._text.bind("<ButtonRelease-1>", self._update_active_line, add="+")
@@ -263,6 +264,12 @@ class SourceCodeView(TextView):
         self._yscrollbar.configure(command=self._yview)
         self._modified_event_id = self._text.bind(
             "<<Modified>>", self._on_text_modified
+        )
+        self._text.bind(
+            "<FocusIn>", lambda _: ttk.Frame.configure(self, bootstyle="secondary")
+        )
+        self._text.bind(
+            "<FocusOut>", lambda _: ttk.Frame.configure(self, bootstyle="@chrome")
         )
         self._text.bind("<Destroy>", self._cancel_highlighting, add="+")
 
@@ -309,7 +316,7 @@ class SourceCodeView(TextView):
 
         content = self.get_content()
         for tag in self._get_highlight_tags():
-            self._text.tag_remove(tag, "1.0", END)
+            self._text.tag_remove(tag, "1.0", tk.END)
 
         line, col = 1, 0
         for token, value in lex(content, self._lexer):
@@ -339,7 +346,7 @@ class SourceCodeView(TextView):
 
     def _move_line_numbers(self, first: float, last: float) -> None:
         self._yscrollbar.set(first, last)
-        self._line_numbers.yview(MOVETO, first)
+        self._line_numbers.yview(tk.MOVETO, first)
 
     def _yview(self, *args) -> None:
         self._line_numbers.yview(*args)
@@ -368,9 +375,11 @@ class SourceCodeView(TextView):
         return "break"
 
     def _update_line_numbers(self) -> None:
-        num_text_lines = int(self._text.index(END).split(".", maxsplit=1)[0])
-        num_line_numbers = int(self._line_numbers.index(END).split(".", maxsplit=1)[0])
-        self._line_numbers.configure(state=NORMAL)
+        num_text_lines = int(self._text.index(tk.END).split(".", maxsplit=1)[0])
+        num_line_numbers = int(
+            self._line_numbers.index(tk.END).split(".", maxsplit=1)[0]
+        )
+        self._line_numbers.configure(state=tk.NORMAL)
 
         # Adjust the width of the line numbers widget based on the number of digits
         # required to display the last line number
@@ -385,15 +394,15 @@ class SourceCodeView(TextView):
             self._text.configure(width=text_width)
             # Empty the line numbers widget because we are modifying the text layout.
             num_line_numbers = 1
-            self._line_numbers.delete("1.0", END)
+            self._line_numbers.delete("1.0", tk.END)
 
         if num_text_lines < num_line_numbers:
-            self._line_numbers.delete(f"{num_text_lines}.0", END)
+            self._line_numbers.delete(f"{num_text_lines}.0", tk.END)
         elif num_text_lines > num_line_numbers:
             if num_line_numbers > 1:
-                self._line_numbers.insert(END, "\n")
+                self._line_numbers.insert(tk.END, "\n")
             self._line_numbers.insert(
-                END,
+                tk.END,
                 "\n".join(
                     [
                         str(i).rjust(required_width)
@@ -401,12 +410,12 @@ class SourceCodeView(TextView):
                     ]
                 ),
             )
-        self._line_numbers.configure(state=DISABLED)
+        self._line_numbers.configure(state=tk.DISABLED)
 
     def _update_active_line(self, _event: tk.Event | None = None) -> None:
         line = self._text.index(f"{tk.INSERT} linestart").split(".", maxsplit=1)[0]
         for widget in (self._text, self._line_numbers):
-            widget.tag_remove(self.ACTIVE_LINE_TAG, "1.0", END)
+            widget.tag_remove(self.ACTIVE_LINE_TAG, "1.0", tk.END)
             if not self._text.tag_ranges(tk.SEL):
                 widget.tag_add(
                     self.ACTIVE_LINE_TAG,
@@ -420,7 +429,7 @@ class SourceCodeView(TextView):
         self._text.configure(
             selectbackground=options.selection_color,
             inactiveselectbackground=options.selection_color,
-            tabs=tab_size,
+            tabs=str(tab_size),
         )
         self._line_numbers.configure(background=options.line_numbers_background)
         self._active_line_number_font.configure(
@@ -573,6 +582,7 @@ class TextViewOptionsTab(OptionsTab):
             display_frame,
             variable=self._highlight_active_line_var,
             command=self._update_display_options,
+            bootstyle="round toggle",
         ).grid(row=0, column=1, sticky=tk.E, pady=2)
 
         ttk.Label(display_frame, text="Bold line number").grid(
@@ -585,6 +595,7 @@ class TextViewOptionsTab(OptionsTab):
             display_frame,
             variable=self._bold_line_number_var,
             command=self._update_display_options,
+            bootstyle="round toggle",
         ).grid(row=1, column=1, sticky=tk.E, pady=2)
 
         ttk.Label(display_frame, text="Spaces in tab").grid(

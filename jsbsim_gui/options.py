@@ -20,10 +20,10 @@ import tkinter as tk
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from tkinter import ttk
 from typing import Any, Callable
 
 import platformdirs
+import ttkbootstrap as ttk
 
 
 class Options:
@@ -84,10 +84,9 @@ class OptionsTab(ttk.Frame, ABC):
     def restore_defaults(self) -> None: ...
 
 
-class OptionsWindow(tk.Toplevel):
+class OptionsWindow(ttk.Toplevel):
     def __init__(self, master: tk.Tk | tk.Toplevel, **kw):
-        super().__init__(master, **kw)
-        self.title("Options")
+        super().__init__("Options", **kw)
         self.resizable(False, False)
 
         self._notebook = ttk.Notebook(self)
@@ -107,7 +106,7 @@ class OptionsWindow(tk.Toplevel):
         ttk.Button(button_frame, text="Apply", command=self._apply).pack(
             side=tk.RIGHT, padx=5
         )
-        ttk.Button(button_frame, text="OK", command=self._ok).pack(
+        ttk.Button(button_frame, text="OK", command=self._ok, bootstyle="primary").pack(
             side=tk.RIGHT, padx=5
         )
 

@@ -20,6 +20,8 @@ import tkinter as tk
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 
+import ttkbootstrap as ttk
+
 SHORTCUT_MODIFIER = "Control" if sys.platform != "darwin" else "Command"
 REDO_SHORTCUT = "Control-y" if sys.platform != "darwin" else "Command-y"
 
@@ -44,7 +46,7 @@ class Command(ABC):
         pass
 
 
-class EditableFrame(tk.Frame):
+class EditableFrame(ttk.Frame):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self._undo_stack: list[Command] = []

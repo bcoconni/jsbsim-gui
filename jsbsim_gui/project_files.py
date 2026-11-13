@@ -17,13 +17,13 @@
 
 import tkinter as tk
 from pathlib import Path
-from tkinter.messagebox import askyesnocancel, showerror
 from typing import Callable
+
+import ttkbootstrap as ttk
 
 from .controller import Controller
 from .file_state import FileState
 from .hierarchical_tree import FileTree
-from .tree_node import XMLNode
 from .widget import LabeledWidget
 
 
@@ -139,7 +139,9 @@ class ProjectFiles(LabeledWidget):
 
         for file_state in modified_files:
             if not file_state.write():
-                showerror("Error", message=f'Could not save "{file_state.filepath}"')
+                ttk.Messagebox.show_error(
+                    f'Could not save "{file_state.filepath}"', "Error"
+                )
                 return False
             self._fileview.clear_highlight(file_state.filepath)
 
@@ -149,10 +151,10 @@ class ProjectFiles(LabeledWidget):
 
     def prompt_save_if_modified(self, message: str) -> bool:
         if self.has_modified_files():
-            result = askyesnocancel("Unsaved Changes", message=message)
-            if result is None:
+            result = ttk.Messagebox.yesnocancel(message, "Unsaved Changes")
+            if result is None or result == ttk.L("Cancel"):
                 return False
-            elif result:
+            elif result == ttk.L("Yes"):
                 if not self.save_all():
                     return False
         return True

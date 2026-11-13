@@ -9,8 +9,8 @@
 
 import tkinter as tk
 from abc import ABC, abstractmethod
-from tkinter import ttk
 
+import ttkbootstrap as ttk
 from jsbsim import FGPropertyNode
 
 from .csv_tree import CsvData, CsvTree

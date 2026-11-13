@@ -21,9 +21,9 @@ import tkinter as tk
 from dataclasses import asdict
 from itertools import chain
 from pathlib import Path
-from tkinter import ttk
-from tkinter.constants import BROWSE, EW, NSEW
 from typing import Callable
+
+import ttkbootstrap as ttk
 
 from .controller import Controller
 from .file_state import FileState
@@ -44,7 +44,7 @@ class XMLTree(SearchableTree):
         self._move_cursor = move_cursor
         self.nodes: dict[str, XMLNode] = {}
         tree = self.tree
-        tree.configure_tree(show="tree", selectmode=BROWSE)
+        tree.configure_tree(show="tree", selectmode=tk.BROWSE)
 
         for xml_tree in xml_trees:
             node_ids = {}
@@ -317,22 +317,24 @@ class PropertyOccurrencesTree(SearchableTree):
         self._entries: list[str] = []
         self._num_entries = 0
         self._selected_entry = -1
-        self.tree.configure_tree(show="tree headings", selectmode=BROWSE)
+        self.tree.configure_tree(show="tree headings", selectmode=tk.BROWSE)
         self.tree.heading("#0", text="Location")
         self.tree.heading("content", text="Content")
-        self.tree.grid(column=0, row=1, sticky=NSEW)
+        self.tree.grid(column=0, row=1, sticky=tk.NSEW)
         self.tree.bind("<<TreeviewSelect>>", self._on_entry_selected)
 
         self._label = ttk.Label(self)
-        self._label.grid(column=0, row=2, sticky=tk.W)
-        buttons_frame = ttk.Frame(self, padding=(0, 2))
+        self._label.grid(column=0, row=2, sticky=tk.EW)
+        buttons_frame = ttk.Frame(self, padding=(100, 2))
         ttk.Button(buttons_frame, text="Previous", command=self._prev_entry).grid(
-            column=0, row=0, padx=1
+            column=0, row=0, padx=4, sticky=tk.EW
         )
         ttk.Button(buttons_frame, text="Next", command=self._next_entry).grid(
-            column=1, row=0, padx=1
+            column=1, row=0, padx=4, sticky=tk.EW
         )
-        buttons_frame.grid(column=0, row=3)
+        buttons_frame.columnconfigure(0, weight=1, uniform="controls")
+        buttons_frame.columnconfigure(1, weight=1, uniform="controls")
+        buttons_frame.grid(column=0, row=3, sticky=tk.NSEW)
 
     def set_occurrences(self, occurrences: dict[Path, list[TextRegion]]) -> None:
         self._occurrence_data = {}
@@ -352,8 +354,12 @@ class PropertyOccurrencesTree(SearchableTree):
 
             file_state = self._file_states[file_path]
             lines = file_state.content.split("\n")
+            xml_icon = ttk.Icon(
+                "file-earmark-code", size=self.tree.font_size, color="primary"
+            )
 
             for occurence in node_occurrences:
+                self.tree.item(file_id, image=xml_icon)
                 occurrence_id = self.tree.insert(
                     file_id,
                     tk.END,
@@ -439,7 +445,7 @@ class PropertyOccurrencesTree(SearchableTree):
         self._cycle_entries()
 
 
-class FindWindow(tk.Toplevel):
+class FindWindow(ttk.Toplevel):
     def __init__(
         self,
         master: tk.Tk | tk.Toplevel,
@@ -448,13 +454,12 @@ class FindWindow(tk.Toplevel):
         select_text: Callable[[str, FileState, int, int], None],
         move_cursor: Callable[[FileState, int, int], None],
     ):
-        super().__init__(master)
-        self.title("Find")
+        super().__init__("Find")
         self.transient(master)
 
         # Search mode selector
         mode_frame = ttk.Frame(self)
-        mode_frame.grid(column=0, row=0, sticky=NSEW, padx=5, pady=5)
+        mode_frame.grid(column=0, row=0, sticky=tk.NSEW, padx=5, pady=5)
         ttk.Label(mode_frame, text="Type:").grid(column=0, row=0, padx=10, sticky=tk.W)
         self._type_combo = ttk.Combobox(
             mode_frame,
@@ -463,7 +468,7 @@ class FindWindow(tk.Toplevel):
             width=12,
         )
         self._type_combo.current(0)
-        self._type_combo.grid(column=1, row=0, sticky=EW)
+        self._type_combo.grid(column=1, row=0, sticky=tk.EW)
         self._type_combo.bind("<<ComboboxSelected>>", self._on_mode_change)
 
         # XML panel
@@ -473,13 +478,13 @@ class FindWindow(tk.Toplevel):
             if file.xml_tree.parent is None
         ]
         self._xml_tree = XMLTree(mode_frame, xml_trees, file_states, move_cursor)
-        self._xml_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
+        self._xml_tree.grid(column=0, row=1, columnspan=2, sticky=tk.NSEW)
 
         # Property panel
         self._occurrences_tree = PropertyOccurrencesTree(
             mode_frame, controller, xml_trees, file_states, select_text
         )
-        self._occurrences_tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
+        self._occurrences_tree.grid(column=0, row=1, columnspan=2, sticky=tk.NSEW)
         self._xml_tree.tkraise()
         self._xml_tree.focus_search()
 

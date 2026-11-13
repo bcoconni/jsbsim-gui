@@ -16,8 +16,9 @@
 # this program; if not, see <http://www.gnu.org/licenses/>
 
 from pathlib import Path
-from tkinter.messagebox import showerror
 from xml.parsers import expat
+
+import ttkbootstrap as ttk
 
 from .controller import Controller
 from .tree_node import XMLNode
@@ -53,9 +54,9 @@ class FileState:
         default_root = Controller.get_default_root_dir().resolve()
         try:
             if full_path.is_relative_to(default_root):
-                showerror(
+                ttk.Messagebox.show_error(
+                    f'Cannot save "{self.filepath}": file is located in the JSBSim default root directory.',
                     "Cannot Save File",
-                    message=f'Cannot save "{self.filepath}": file is located in the JSBSim default root directory.',
                 )
                 return False
         except ValueError:
@@ -67,8 +68,8 @@ class FileState:
             self.is_modified = False
             return True
         except IOError as e:
-            showerror(
-                "Save Error", message=f'Could not save "{self.filepath}":\n{str(e)}'
+            ttk.Messagebox.show_error(
+                f'Could not save "{self.filepath}":\n{str(e)}', "Save Error"
             )
             return False
 
@@ -78,8 +79,8 @@ class FileState:
             parser.Parse(self.content, True)
             return None
         except expat.ExpatError as e:
-            showerror(
+            ttk.Messagebox.show_error(
+                f'XML error in "{self.filepath}" at line {e.lineno}, column {e.offset}:\n{str(e)}',
                 "XML Validation Error",
-                message=f'XML error in "{self.filepath}" at line {e.lineno}, column {e.offset}:\n{str(e)}',
             )
             return e.offset, e.lineno

@@ -22,11 +22,10 @@ import platform
 import tkinter as tk
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from tkinter import ttk
-from tkinter.messagebox import showerror
 from typing import Iterator, Set
 
 import numpy as np
+import ttkbootstrap as ttk
 from jsbsim import FGPropertyNode
 
 from .controller import Controller
@@ -243,7 +242,7 @@ class PlotInfoListOptionsTab(OptionsTab):
             self._current_pinfo.samples = samples
             get_options().set("plot_info_list", asdict(self._current_pinfo))
         except tk.TclError as e:
-            showerror("Error", f"{str(e)}")
+            ttk.Messagebox.show_error(f"{str(e)}", "Error")
 
     def cancel(self) -> None:
         get_options().set("plot_info_list", asdict(self._initial_pinfo))

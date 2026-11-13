@@ -19,9 +19,9 @@ import csv
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-from tkinter.messagebox import showerror
 
 import numpy as np
+import ttkbootstrap as ttk
 
 from .hierarchical_tree import HierarchicalTree, SearchableTree
 
@@ -57,18 +57,20 @@ class CsvTree(SearchableTree):
                 headers = next(reader)
                 rows = list(reader)
         except (OSError, csv.Error) as exc:
-            showerror("Error loading CSV", str(exc))
+            ttk.Messagebox.show_error(str(exc), "Error loading CSV")
             return
 
         if len(headers) < 2 or not rows:
-            showerror("Error loading CSV", f"No data columns found in {csv_path.name}.")
+            ttk.Messagebox.show_error(
+                f"No data columns found in {csv_path.name}.", "Error loading CSV"
+            )
             return
 
         try:
             data = np.array([[float(v) for v in row] for row in rows])
         except ValueError as exc:
-            showerror(
-                "Error loading CSV", f"Non-numeric value in {csv_path.name}: {exc}"
+            ttk.Messagebox.show_error(
+                f"Non-numeric value in {csv_path.name}: {exc}", "Error loading CSV"
             )
             return
 

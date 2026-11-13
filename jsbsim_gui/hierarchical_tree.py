@@ -17,14 +17,13 @@
 
 import re
 import tkinter as tk
+from tkinter import font as tkfont
 from itertools import chain
 from pathlib import Path
-from tkinter import ttk
-from tkinter.constants import BROWSE, EW, NSEW, VERTICAL
-from tkinter.messagebox import showerror
 from typing import Callable, Literal
 
 import numpy as np
+import ttkbootstrap as ttk
 from jsbsim import FGPropertyNode
 
 from .edit_actions import SHORTCUT_MODIFIER, EditableFrame, EditAction
@@ -51,16 +50,19 @@ class HierarchicalTree(EditableFrame):
         is_open: bool = True,
     ):
         super().__init__(master)
-        self._tree = ttk.Treeview(self, columns=columns_id)
+        self._tree = ttk.Treeview(self, columns=columns_id, bootstyle="secondary[100]")
         self._tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._hidden_items: list[tuple[str, str, int]] = []
         self._num_columns = len(columns_id)
 
+        style_name = self._tree.cget("style") or "Treeview"
+        font_spec = ttk.Style().lookup(style_name, "font")
+        self.font_size = tkfont.Font(root=self._tree, font=font_spec).actual("size")
         self.create_tree_nodes(nodes, is_open)
 
         # Vertical scrollbar
         self._yscrollbar = ttk.Scrollbar(
-            self, orient=VERTICAL, command=self._tree.yview
+            self, orient=tk.VERTICAL, command=self._tree.yview
         )
         self._yscrollbar.pack(side=tk.LEFT, fill=tk.Y)
         self._tree["yscrollcommand"] = self._yscrollbar.set
@@ -82,6 +84,7 @@ class HierarchicalTree(EditableFrame):
         self.yscrollbar_set = self._yscrollbar.set
 
     def create_tree_nodes(self, nodes: list[str], is_open: bool = True) -> None:
+        folder_icon = ttk.Icon("folder-fill", size=self.font_size, color="warning")
         for node in nodes:
             parent_id = ""
             for name in node.split("/"):
@@ -94,6 +97,7 @@ class HierarchicalTree(EditableFrame):
                         parent_id,
                         tk.END,
                         text=name,
+                        image=folder_icon,
                         values=[""] * self._num_columns,
                         open=is_open,
                     )
@@ -252,22 +256,18 @@ class SearchableTree(EditableFrame):
         self._visible_items: list[str] = []
 
         search_frame = ttk.Frame(self, padding=(0, 2))
-        search_frame.grid(column=0, row=0, sticky=EW)
+        search_frame.grid(column=0, row=0, sticky=tk.EW)
         self._search_pattern = tk.StringVar()
         self._search_pattern.trace_add("write", lambda *_: self._search())
         self._search_box = TextBox(
             search_frame, textvariable=self._search_pattern, hint_message="Search"
         )
-        self._search_box.grid(column=0, row=0, sticky=EW)
+        self._search_box.grid(column=0, row=0, sticky=tk.EW)
         self.tree = create_tree(self)
-        self.tree.grid(column=0, row=1, columnspan=2, sticky=NSEW)
+        self.tree.grid(column=0, row=1, columnspan=2, sticky=tk.NSEW)
 
-        ttk.Style().configure("Search.TButton", padding=0)
         ttk.Button(
-            search_frame,
-            text="Collapse",
-            command=self.collapse,
-            style="Search.TButton",
+            search_frame, text="Collapse", icon="arrows-collapse", command=self.collapse
         ).grid(column=1, row=0, padx=(2, 0))
 
         # Widget layout
@@ -394,11 +394,13 @@ class PropertyTree(SearchableTree):
     def _initialize_values(
         self, properties: list[FGPropertyNode], property_names: list[str]
     ) -> None:
+        activity_icon = ttk.Icon("activity", size=self.tree.font_size, color="primary")
         tree = self.tree
         for node, pname in zip(properties, property_names):
             parent_id = self.tree.get_id_from_path(pname)
             assert parent_id is not None
             tree.set(parent_id, "value", node.get_double_value())
+            tree.item(parent_id, image=activity_icon)
 
     def _bind_ids_to_nodes(self, parent_id: str, root: FGPropertyNode) -> None:
         tree = self.tree
@@ -428,8 +430,12 @@ class PropertyTree(SearchableTree):
         #     return
 
         x, y, width, height = tree.bbox(item_id, "value")
+        ttk.Style().configure("Cell.TEntry", padding=0)
         cell_entry = CellEntry(
-            tree, content, lambda value: self._set_value(item_id, value)
+            tree,
+            content,
+            lambda value: self._set_value(item_id, value),
+            style="Cell.TEntry",
         )
         cell_entry.place(x=x, y=y, width=width, height=height)
 
@@ -437,7 +443,7 @@ class PropertyTree(SearchableTree):
         try:
             v = float(value)
         except ValueError:
-            showerror("Error", message=f"'{value}' is not a number")
+            ttk.Messagebox.show_error(f"'{value}' is not a number", "Error")
             return
 
         self._properties[item_id].set_double_value(v)
@@ -481,8 +487,18 @@ class PropertyTree(SearchableTree):
 class FileTree(HierarchicalTree):
     def __init__(self, master: tk.Widget, file_names: list[Path]):
         super().__init__(master, sorted(str(path) for path in file_names), [])
-        self._tree.configure(show="tree", selectmode=BROWSE)
+        self._tree.configure(show="tree", selectmode=tk.BROWSE)
         self._tree.tag_configure("modified", foreground="red")
+
+        xml_icon = ttk.Icon("file-earmark-code", size=self.font_size, color="primary")
+        for node in self._get_filtered_nodes(".xml"):
+            self._tree.item(node, image=xml_icon)
+
+        csv_icon = ttk.Icon(
+            "file-earmark-spreadsheet", size=self.font_size, color="primary"
+        )
+        for node in self._get_filtered_nodes(".csv"):
+            self._tree.item(node, image=csv_icon)
 
     def get_id_from_path(self, path: Path) -> str | None:
         return super().get_id_from_path(str(path))

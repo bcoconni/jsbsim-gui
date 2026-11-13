@@ -17,8 +17,9 @@
 
 import tkinter as tk
 import sys
-from tkinter import colorchooser, ttk
 from typing import Callable
+
+import ttkbootstrap as ttk
 
 from .edit_actions import EditAction, EditableFrame, SHORTCUT_MODIFIER
 
@@ -67,12 +68,12 @@ class LabeledWidget(EditableFrame):
         self._on_toggle = on_toggle
         if collapsable:
             self._label = ttk.Button(
-                self, text=label, style="Flat.TButton", command=self._toggle_widget
+                self, text=label, icon="chevron-down", command=self._toggle_widget
             )
-            self._label.grid(column=0, row=0, sticky="nsew")
+            self._label.grid(column=0, row=0, sticky=tk.NSEW)
         else:
-            self._label = ttk.Label(self, text=label, anchor="center")
-            self._label.grid(column=0, row=0, sticky="nsew", ipadx=5, ipady=5)
+            self._label = ttk.Label(self, text=label, anchor=tk.CENTER)
+            self._label.grid(column=0, row=0, sticky=tk.NSEW, ipady=5)
         self._label.columnconfigure(0, weight=1)
 
     def set_widget(self, widget: EditableFrame) -> None:
@@ -91,11 +92,11 @@ class LabeledWidget(EditableFrame):
             return
 
         if self._collapsed:
-            self._label.config(style="Flat.TButton")
             self.widget.grid()
+            self._label.config(icon="chevron-down")
         else:
-            self._label.config(style="TButton")
             self.widget.grid_remove()
+            self._label.config(icon="chevron-right")
         self._collapsed = not self._collapsed
         if self._on_toggle is not None:
             self._on_toggle(self._collapsed)
@@ -109,17 +110,15 @@ class TextBox(ttk.Entry):
     def __init__(self, master: tk.Widget, hint_message: str = "", **kw):
         if hint_message and "textvariable" not in kw:
             kw["textvariable"] = tk.StringVar(master)
-        super().__init__(master, **kw)
+        super().__init__(master, bootstyle="secondary", **kw)
         self.bind(f"<{SHORTCUT_MODIFIER}-a>", self._select_all)
         if hint_message:
             # The hint is a label laid over the entry so that the entry content
             # (and its textvariable) never contains the default text.
-            field_background = ttk.Style(master).lookup("TEntry", "fieldbackground")
-            self._hint = tk.Label(
+            self._hint = ttk.Label(
                 self,
                 text=hint_message,
-                foreground="gray75",
-                background=field_background or "white",
+                bootstyle="secondary[400]",
                 anchor=tk.W,
                 cursor="xterm",
             )
@@ -199,12 +198,11 @@ class ColorChooser(ttk.Frame):
 
     def choose_color(self) -> None:
         label = self._label[0].upper() + self._label[1:]
-        chosen = colorchooser.askcolor(
-            color=self._color,
-            parent=self,
-            title=f"Choose {label} Color",
+        chosen = ttk.ColorChooserDialog(
+            parent=self, title=f"Choose {label} Color", initialcolor=self._color
         )
-        if chosen and chosen[1]:
-            color = chosen[1]
+        chosen.show()
+        if chosen.result:
+            color = chosen.result.hex
             self.set_color(color)
             self._on_color_changed(color)

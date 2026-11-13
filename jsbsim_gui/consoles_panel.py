@@ -22,10 +22,9 @@ import tkinter.font as tkfont
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from tkinter import ttk
-from tkinter.constants import DISABLED, END, NORMAL
 from typing import Callable, ClassVar
 
+import ttkbootstrap as ttk
 from jsbsim import FGLogger, LogFormat, LogLevel
 
 from .textview import TextView
@@ -71,11 +70,13 @@ class Console(TextView):
         on_file_link_click: Callable[[Path, int], None],
         **kw,
     ):
+        kw["pady"] = 0
+        kw["highlightthickness"] = 0
         super().__init__(master, contents, **kw)
         self._on_file_link_click = on_file_link_click
         self._file_link_counter: int = 0
         # Set the text to read only
-        self._text.configure(state=DISABLED, cursor="")
+        self._text.configure(state=tk.DISABLED, cursor="")
         self._text.tag_configure(LogColor.RED, foreground="#cc0000")
         self._text.tag_configure(LogColor.BLUE, foreground="#0000cc")
         self._text.tag_configure(LogColor.CYAN, foreground="#007080")
@@ -90,23 +91,23 @@ class Console(TextView):
         self._text.tag_configure(LogTags.UNDERLINE, underline=True)
 
     def reset_content(self) -> None:
-        self._text.configure(state=NORMAL)
-        self._text.delete("1.0", END)
-        self._text.configure(state=DISABLED)
+        self._text.configure(state=tk.NORMAL)
+        self._text.delete("1.0", tk.END)
+        self._text.configure(state=tk.DISABLED)
         self._file_link_counter = 0
 
     def write(self, contents: str) -> None:
-        self._text.configure(state=NORMAL)
-        self._text.insert(END, contents)
-        self._text.see(END)
-        self._text.configure(state=DISABLED)
+        self._text.configure(state=tk.NORMAL)
+        self._text.insert(tk.END, contents)
+        self._text.see(tk.END)
+        self._text.configure(state=tk.DISABLED)
 
     def write_formatted(self, segments: list[LogSegment]) -> None:
-        self._text.configure(state=NORMAL)
+        self._text.configure(state=tk.NORMAL)
 
         for segment in segments:
             base = self._text.index("end-1c")
-            self._text.insert(END, segment.text)
+            self._text.insert(tk.END, segment.text)
             end = self._text.index("end-1c")
             for tag in segment.tags:
                 self._text.tag_add(tag, base, end)
@@ -126,8 +127,8 @@ class Console(TextView):
                     fl_tag, "<Leave>", lambda _, tag=fl_tag: self._on_link_leave(tag)
                 )
 
-        self._text.see(END)
-        self._text.configure(state=DISABLED)
+        self._text.see(tk.END)
+        self._text.configure(state=tk.DISABLED)
 
     def _on_link_enter(self, tag: str) -> None:
         cursor_name = "pointinghand" if sys.platform == "darwin" else "hand2"

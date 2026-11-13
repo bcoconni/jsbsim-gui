@@ -18,9 +18,9 @@
 import tkinter as tk
 import xml.etree.ElementTree as et
 from pathlib import Path
-from tkinter import filedialog as fd
-from tkinter.messagebox import showerror
 from typing import TYPE_CHECKING
+
+import ttkbootstrap as ttk
 
 from .controller import Controller
 from .edit_actions import REDO_SHORTCUT, SHORTCUT_MODIFIER, EditAction
@@ -54,11 +54,11 @@ def open_file(app: "App", filename: Path) -> bool | None:
     return success
 
 
-class MenuBar(tk.Menu):
+class MenuBar(ttk.Menu):
     def __init__(self, master: "App"):
         super().__init__(master)
 
-        self._file_menu = tk.Menu(self, tearoff=False)
+        self._file_menu = ttk.Menu(self, tearoff=False)
         self._file_menu.add_command(label="Root...", command=self._set_root_dir)
         self._file_menu.add_command(label="Open...", command=self._select_script_file)
         sub_menu = RecentFiles().menu(self._file_menu, self._open_recent_file)
@@ -87,7 +87,7 @@ class MenuBar(tk.Menu):
         )
         self.add_cascade(label="File", menu=self._file_menu)
 
-        edit_menu = tk.Menu(self, tearoff=False)
+        edit_menu = ttk.Menu(self, tearoff=False)
         edit_menu.add_command(
             label="Undo",
             accelerator=f"{SHORTCUT_MODIFIER}+Z",
@@ -134,8 +134,8 @@ class MenuBar(tk.Menu):
         from .app import App
 
         assert isinstance(self.master, App)
-        filename = fd.askopenfilename(
-            title="Open a script, aircraft or CSV file",
+        filename = ttk.Querybox.get_open_filename(
+            self.master,
             initialdir=self.master.root_dir,
             filetypes=(
                 ("script and aircraft files", "*.xml"),
@@ -167,8 +167,9 @@ class MenuBar(tk.Menu):
 
         if success is False:
             name = filename.relative_to(self.master.root_dir)
-            showerror(
-                "Error",
+            ttk.Messagebox.show_error(
+                parent=self.master,
+                title="Error",
                 message=f'The file "{name}" is neither a JSBSim script nor an aircraft',
             )
 
@@ -176,9 +177,8 @@ class MenuBar(tk.Menu):
         from .app import App
 
         assert isinstance(self.master, App)
-        directory = fd.askdirectory(
-            title="Select Root Directory",
-            initialdir=self.master.root_dir,
+        directory = ttk.Querybox.get_directory(
+            self.master, initialdir=self.master.root_dir
         )
         if directory:
             self.master.root_dir = Path(directory).resolve()

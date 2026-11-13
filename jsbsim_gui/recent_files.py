@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+import ttkbootstrap as ttk
+
 from .options import Options, get_options
 
 FILE_MANAGEMENT_KEY = "file_management"
@@ -80,8 +82,8 @@ class RecentFiles(Options):
 
     def menu(
         self, master: tk.Widget, open_file: Callable[[Path, Path], None]
-    ) -> tk.Menu:
-        menu = tk.Menu(master, tearoff=False)
+    ) -> ttk.Menu:
+        menu = ttk.Menu(master, tearoff=False)
 
         for file in self.get(RECENT_FILES_KEY):
             file_name = Path(file[0]).resolve()

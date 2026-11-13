@@ -17,10 +17,9 @@
 
 import time
 import tkinter as tk
-from tkinter import ttk
-from tkinter.constants import EW, NSEW
-from tkinter.messagebox import showerror
 from typing import Callable
+
+import ttkbootstrap as ttk
 
 from .controller import Controller
 
@@ -47,17 +46,27 @@ class SimulationControls(ttk.Frame):
         self.initialized = False
         self.bind("<Destroy>", self._on_destroy, add="+")
 
-        self.init_button = ttk.Button(self, text="Initialize", command=self.run_ic)
-        self.init_button.grid(column=0, row=0, columnspan=3, sticky=EW)
+        self.init_button = ttk.Button(
+            self,
+            text="Initialize",
+            bootstyle="primary",
+            icon="flag",
+            command=self.run_ic,
+        )
+        self.init_button.grid(column=0, row=0, columnspan=3, sticky=tk.EW)
         self.trim_button = ttk.Button(self, text="Trim", command=self._trim)
-        self.trim_button.grid(column=0, row=1, sticky=EW, padx=(0, 2), pady=4)
+        self.trim_button.grid(column=1, row=1, sticky=tk.EW, padx=(2, 0), pady=4)
         self.trim_options = ttk.Combobox(self, values=["Full Trim", "Ground Trim"])
         self.trim_options.current(0)
-        self.trim_options.grid(column=1, row=1, sticky=NSEW, padx=(2, 0), pady=4)
-        self.step_button = ttk.Button(self, text="Step", command=self.step)
-        self.step_button.grid(column=0, row=2, sticky=EW, padx=(0, 2))
-        self.run_pause_button = ttk.Button(self, text="Run", command=self.run)
-        self.run_pause_button.grid(column=1, row=2, sticky=EW, padx=(2, 0))
+        self.trim_options.grid(column=0, row=1, sticky=tk.NSEW, padx=(0, 2), pady=4)
+        self.run_pause_button = ttk.Button(
+            self, text="Run", command=self.run, icon="play-circle", bootstyle="primary"
+        )
+        self.run_pause_button.grid(column=0, row=2, sticky=tk.EW, padx=(0, 2))
+        self.step_button = ttk.Button(
+            self, text="Step", icon="arrow-90deg-right", command=self.step
+        )
+        self.step_button.grid(column=1, row=2, sticky=tk.EW, padx=(2, 0))
         self.columnconfigure(0, weight=1, uniform="controls")
         self.columnconfigure(1, weight=1, uniform="controls")
         self._set_run_state(False, False)
@@ -77,6 +86,7 @@ class SimulationControls(ttk.Frame):
             state=tk.NORMAL if initialized else tk.DISABLED,
             command=self.pause if running else self.run,
             text="Pause" if running else "Run",
+            icon="pause-circle" if running else "play-circle",
         )
 
     def _on_destroy(self, event: tk.Event) -> None:
@@ -104,7 +114,7 @@ class SimulationControls(ttk.Frame):
 
     def _trim(self) -> None:
         if not self.controller.trim(self.trim_options.current() + 1):
-            showerror("Error", message="Trim failed")
+            ttk.Messagebox.show_error("Trim failed", "Error")
         else:
             self._on_trimmed()
 

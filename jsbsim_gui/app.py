@@ -19,13 +19,11 @@ import importlib.resources
 import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import ttk
-from tkinter.constants import EW, NSEW
-from tkinter.messagebox import askyesno, showerror
 from typing import Callable
 import xml.etree.ElementTree as et
 from xml.parsers.expat import ExpatError
 
+import ttkbootstrap as ttk
 from PIL import Image, ImageTk
 
 from . import __version__
@@ -48,14 +46,12 @@ from .textview import TextViewOptionsTab, XMLSourceCodeView
 from .widget import AutoClearLabel, LabeledWidget, widget_is_descendant
 
 
-class App(tk.Tk):
-    def __init__(self, root_dir: Path | None = None):
-        super().__init__()
+class App(ttk.App):
+    def __init__(self, root_dir: Path | None = None, *args, **kw):
+        super().__init__(*args, **kw)
         self._consoles_panel: ConsolesPanel | None = None
         self._controller: Controller | None = None
-        self._console_sash = tk.PanedWindow(
-            self, orient=tk.VERTICAL, sashwidth=4, sashrelief=tk.RAISED
-        )
+        self._console_sash = ttk.Panedwindow(self, orient=tk.VERTICAL)
         self._statusbar = AutoClearLabel(self)
         self.main: ttk.Frame | ttk.Label | None = None
         self.editor: XMLSourceCodeView | None = None
@@ -63,16 +59,15 @@ class App(tk.Tk):
         self._find_window: FindWindow | None = None
         self.title(f"JSBSim GUI {__version__}")
         self.resizable(False, False)
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Flat.TButton", relief=tk.FLAT)
 
         if root_dir:
             self.root_dir = root_dir
             if not self.root_dir.exists():
                 self.display_logo()
-                showerror(
-                    "Error", message=f'The directory "{self.root_dir}" does not exist'
+                ttk.Messagebox.show_error(
+                    f'The directory "{self.root_dir}" does not exist',
+                    "Error",
+                    parent=self,
                 )
                 sys.exit(1)
         else:
@@ -80,7 +75,7 @@ class App(tk.Tk):
                 self.root_dir = Controller.get_default_root_dir()
             except IOError as e:
                 self.display_logo()
-                showerror("Error", message=str(e))
+                ttk.Messagebox.show_error(str(e), "Error", parent=self)
                 sys.exit(1)
 
         self.root_dir = self.root_dir.resolve()
@@ -134,7 +129,9 @@ class App(tk.Tk):
             return
 
         self.display_logo()
-        showerror("Error", message=f'"{model_name}" is not an aircraft model')
+        ttk.Messagebox.show_error(
+            f'"{model_name}" is not an aircraft model', "Error", parent=self
+        )
 
     def load_script_from_cmdline(self, script_name: str) -> None:
         filename = self.root_dir / script_name
@@ -149,19 +146,22 @@ class App(tk.Tk):
             error_msg = f"Could not find file: {filename}"
 
         self.display_logo()
-        showerror("Error", message=error_msg)
+        ttk.Messagebox.show_error(error_msg, "Error", parent=self)
 
     def reload_model(self) -> None:
         assert self._controller is not None and self._consoles_panel is not None
         assert self.editor is not None and self.project_files is not None
         if self.project_files.has_modified_files():
-            showerror("Reload Model", "Save all modified files before reloading.")
+            ttk.Messagebox.show_error(
+                "Save all modified files before reloading.", "Reload Model", parent=self
+            )
             return
         if self.simulation_controls.is_running:
-            if not askyesno(
-                "Reload Model",
+            if ttk.Messagebox.yesno(
                 "Reloading will stop and reset the simulation. Continue?",
-            ):
+                "Reload Model",
+                parent=self,
+            ) == ttk.L("Yes"):
                 return
             self.simulation_controls.pause()
 
@@ -187,14 +187,15 @@ class App(tk.Tk):
         ) as error:
             self._controller.fdm = old_fdm
             self._controller.property_history = old_history
-            showerror("Reload Error", message=str(error))
+            ttk.Messagebox.show_error(str(error), "Reload Error", parent=self)
             return
         if success:
             self._statusbar.set_text("Model reloaded.")
         else:
-            showerror(
+            ttk.Messagebox.show_error(
+                "Failed to reload the model. Please check the console for errors.",
                 "Reload Error",
-                message="Failed to reload the model. Please check the console for errors.",
+                parent=self,
             )
 
     def _mark_reload_pending(self) -> None:
@@ -299,22 +300,17 @@ class App(tk.Tk):
         self._statusbar.set_text(f"Simulated time: {sim_time:.3f}s")
 
     def edit(self) -> None:
-        add_options: dict[str, int | ConsolesPanel] = {}
         self._close_find_window()
         if self.main:
             if isinstance(self.main, ttk.Frame):
                 self._console_sash.remove(self.main)
-                add_options["width"] = self.main.winfo_width()
-                add_options["height"] = self.main.winfo_height()
             self.main.destroy()
 
         assert self._controller is not None
         self.main = ttk.Frame(self._console_sash)
-        self._workspace_sash = tk.PanedWindow(
-            self.main, orient=tk.HORIZONTAL, sashwidth=4, sashrelief=tk.RAISED
-        )
-        self.left_frame = ttk.Frame(self._workspace_sash)
-        self.notebook = ttk.Notebook(self._workspace_sash)
+        self._workspace_sash = ttk.Panedwindow(self.main, orient=tk.HORIZONTAL)
+        self.left_frame = ttk.Frame(self._workspace_sash, padding=(2, 2))
+        self.notebook = ttk.Notebook(self._workspace_sash, padding=(2, 2))
         self.project_files = ProjectFiles(
             self.left_frame,
             self._controller,
@@ -324,11 +320,12 @@ class App(tk.Tk):
             self.mark_title_modified,
             self._mark_reload_pending,
         )
-        self.project_files.grid(column=0, row=0, sticky=NSEW)
+        self.project_files.grid(column=0, row=0, sticky=tk.NSEW)
         initial_file = self.project_files.current_file
         self.editor = XMLSourceCodeView(
             self.notebook, initial_file.content, width=80, height=30, wrap=tk.NONE
         )
+        self.editor.config(padding=(2, 2))
         self.editor.bind(f"<{SHORTCUT_MODIFIER}-s>", lambda e: self.save_file())
         self.editor.bind("<<Modified>>", self._on_editor_modified)
         self.notebook.add(self.editor, text=initial_file.filepath.name)
@@ -336,7 +333,7 @@ class App(tk.Tk):
         self.notebook.add(self.plots_view, text="Plots")
 
         self.property_view = LabeledWidget(self.left_frame, "Property Explorer")
-        self.property_view.grid(column=0, row=1, sticky=NSEW)
+        self.property_view.grid(column=0, row=1, sticky=tk.NSEW)
         self._create_property_tree()
 
         self.csv_view = LabeledWidget(
@@ -344,7 +341,7 @@ class App(tk.Tk):
         )
         self.csv_tree = CsvTree(self.csv_view)
         self.csv_view.set_widget(self.csv_tree)
-        self.csv_view.grid(column=0, row=2, sticky=NSEW)
+        self.csv_view.grid(column=0, row=2, sticky=tk.NSEW)
         self.csv_view.grid_remove()
         self.dnd_csv_columns = DnDCsvColumns(self.csv_tree, self.plots_view)
 
@@ -354,21 +351,19 @@ class App(tk.Tk):
             self._update_simulation,
             lambda: self._update_properties(None),
         )
-        self.simulation_controls.grid(column=0, row=3, sticky=EW, pady=(4, 0))
+        self.simulation_controls.grid(column=0, row=3, sticky=tk.EW, pady=(4, 0))
         self.plots_view.bind_motion_handler(self._update_properties)
 
         self._workspace_sash.add(self.left_frame)
-        self._workspace_sash.add(self.notebook, stretch="always")
-        self._workspace_sash.grid(column=0, row=0, sticky=NSEW)
+        self._workspace_sash.add(self.notebook)
+        self._workspace_sash.grid(column=0, row=0, sticky=tk.NSEW)
         self.left_frame.grid_columnconfigure(0, weight=1)
         self.left_frame.grid_rowconfigure(1, weight=1)
         self.main.grid_columnconfigure(0, weight=1)
         self.main.grid_rowconfigure(0, weight=1)
 
         assert self._consoles_panel
-        self._console_sash.add(
-            self.main, before=self._consoles_panel, stretch="always", **add_options
-        )
+        self._console_sash.insert(0, self.main, weight=1)
         self.menubar.update_save_menu_state(True)
 
         # Window layout
@@ -400,9 +395,10 @@ class App(tk.Tk):
 
     def load_csv(self, path: Path) -> None:
         if self.editor is None:
-            showerror(
+            ttk.Messagebox.show_error(
+                "Please open an aircraft or script before loading a CSV file.",
                 "Error",
-                message="Please open an aircraft or script before loading a CSV file.",
+                parent=self,
             )
             return
         was_empty = not self.csv_tree.has_loaded_files()
@@ -448,7 +444,7 @@ class App(tk.Tk):
                 on_file_link_click=self._on_file_link_click,
                 height=8,
             )
-            self._console_sash.add(self._consoles_panel, stretch="never")
+            self._console_sash.add(self._consoles_panel)
 
         console_logger = self._consoles_panel.get_logger(
             lambda name: name.relative_to(self.root_dir)
@@ -473,8 +469,8 @@ class App(tk.Tk):
             self.resizable(True, True)
             self.title(f"JSBSim GUI {__version__} - {aircraft_name}")
             self.edit()
-            self._console_sash.grid(column=0, row=0, sticky=NSEW)
-            self._statusbar.grid(column=0, row=1, sticky=EW)
+            self._console_sash.grid(column=0, row=0, sticky=tk.NSEW)
+            self._statusbar.grid(column=0, row=1, sticky=tk.EW)
             self._statusbar.set_text("Ready.")
             RecentFiles().add_recent_file(filename, self.root_dir)
         return success
